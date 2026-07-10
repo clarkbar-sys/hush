@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: Bogdanp/setup-racket@v1.11
+      - uses: Bogdanp/setup-racket@v1.15
         with:
           version: stable
       # Byte-compiling is the main "does it even load" gate for Scheme.
@@ -73,7 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: Bogdanp/setup-racket@v1.11
+      - uses: Bogdanp/setup-racket@v1.15
         with:
           version: stable
       - name: Test
