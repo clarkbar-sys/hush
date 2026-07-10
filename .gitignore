@@ -1,0 +1,41 @@
+# ── OS / editor ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+*.code-workspace
+
+# ── Logs & temp ───────────────────────────────────────────────
+*.log
+tmp/
+.cache/
+
+# ── Secrets & local env (never commit these) ─────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── Language-specific: uncomment the section for your stack ───
+#
+# Node:
+# node_modules/
+# dist/
+# coverage/
+# *.tsbuildinfo
+#
+# Python:
+# __pycache__/
+# *.py[cod]
+# .venv/
+# .pytest_cache/
+# .ruff_cache/
+# build/
+# *.egg-info/
+#
+# Go:
+# /bin/
+# *.test
+# *.out

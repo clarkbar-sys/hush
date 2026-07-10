@@ -1,0 +1,82 @@
+name: CI (Scheme)
+
+# Runs only when Scheme sources change (path filter below).
+# Scheme has thin lint/format tooling, so the quality gate here is mostly:
+#   "does it byte-compile cleanly + do the tests pass".
+# Written for Racket (raco) by default — see the commented Guile/Chez notes.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/*.scm"
+      - "**/*.ss"
+      - "**/*.sls"
+      - "**/*.rkt"
+      - ".github/workflows/ci-scheme.yml"
+  pull_request:
+    paths:
+      - "**/*.scm"
+      - "**/*.ss"
+      - "**/*.sls"
+      - "**/*.rkt"
+      - ".github/workflows/ci-scheme.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-scheme-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Preflight: only run the pipeline if this repo actually has Scheme sources.
+  # Keeps CI green on the empty template (and any repo not yet using Scheme).
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      found: ${{ steps.f.outputs.found }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: f
+        run: |
+          if [ -n "$(git ls-files '*.rkt' '*.scm' '*.ss' '*.sls')" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false — skipping Scheme CI" && echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Byte-compile
+    needs: detect
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Bogdanp/setup-racket@v1.11
+        with:
+          version: stable
+      # Byte-compiling is the main "does it even load" gate for Scheme.
+      - name: Compile
+        run: |
+          files=$(git ls-files '*.rkt')
+          [ -z "$files" ] || raco make $files
+      # Guile alternative:
+      #   sudo apt-get install -y guile-3.0
+      #   for f in $(git ls-files '*.scm'); do guild compile -Wunbound-variable "$f"; done
+
+  test:
+    name: Test & coverage
+    needs: [detect, build]
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Bogdanp/setup-racket@v1.11
+        with:
+          version: stable
+      - name: Test
+        run: raco test .
+      # Coverage (Racket): `raco pkg install cover && raco cover -f coveralls .`
+      # Guile tests: SRFI-64 harness, e.g. `guile -L . tests/run-tests.scm`

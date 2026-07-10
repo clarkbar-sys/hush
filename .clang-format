@@ -1,0 +1,57 @@
+# House C/C++ style — K&R braces, enforced in CI via `clang-format --dry-run --Werror`.
+# See STANDARDS.md for the rationale. Applies to *.c *.h *.cpp *.cc *.cxx *.hpp *.hh.
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+# --- Standard -----------------------------------------------------------------
+# Parse newer syntax correctly. C sources build as C11, C++ as C++20 (see flags
+# in STANDARDS.md); this only affects how clang-format tokenizes.
+Standard: c++20
+
+# --- Indentation --------------------------------------------------------------
+# 2 spaces, matching .editorconfig (root default) so the two tools never fight.
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+ContinuationIndentWidth: 4
+ColumnLimit: 100
+
+# --- K&R braces ---------------------------------------------------------------
+# Functions open their brace on the next line; everything else (control
+# statements, structs, enums, namespaces) keeps the brace attached. `else`,
+# `catch`, and do/`while` sit on the same line as the preceding close brace.
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  AfterControlStatement: Never
+  AfterClass: false
+  AfterStruct: false
+  AfterUnion: false
+  AfterEnum: false
+  AfterNamespace: false
+  AfterCaseLabel: false
+  BeforeElse: false
+  BeforeCatch: false
+  BeforeWhile: false
+  IndentBraces: false
+  SplitEmptyFunction: false
+
+# --- Pointers & spacing -------------------------------------------------------
+PointerAlignment: Right          # `int *p;` — pointer binds to the name
+DerivePointerAlignment: false
+SpaceBeforeParens: ControlStatements
+AlwaysBreakAfterReturnType: None
+
+# --- Includes -----------------------------------------------------------------
+SortIncludes: CaseInsensitive
+IncludeBlocks: Regroup
+
+# --- Misc ---------------------------------------------------------------------
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+IndentCaseLabels: true
+InsertNewlineAtEOF: true
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1

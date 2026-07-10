@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # Keep GitHub Actions used in workflows up to date (stack-agnostic — safe to keep).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Uncomment the block matching your stack once you add a dependency manifest:
+  #
+  # - package-ecosystem: "npm"        # package.json / package-lock.json
+  #   directory: "/"
+  #   schedule: { interval: "weekly" }
+  #
+  # - package-ecosystem: "pip"        # requirements.txt / pyproject.toml
+  #   directory: "/"
+  #   schedule: { interval: "weekly" }
+  #
+  # - package-ecosystem: "gomod"      # go.mod
+  #   directory: "/"
+  #   schedule: { interval: "weekly" }

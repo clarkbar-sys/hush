@@ -1,0 +1,106 @@
+# Python project + tooling config for repos created from this template.
+#
+# NEW-REPO TODO: replace the {{PLACEHOLDERS}} in [project] with real values.
+# The [tool.*] sections below are the house standard (ruff, mypy --strict,
+# pytest, coverage floor) and are wired into .github/workflows/ci-python.yml.
+# See STANDARDS.md for the rationale.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "{{PROJECT_NAME}}"
+description = "{{ONE_LINE_DESCRIPTION}}"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-2.0-only"
+dynamic = ["version"]
+dependencies = []
+
+[project.optional-dependencies]
+# Install with `pip install -e '.[dev]'`
+dev = [
+  "ruff",
+  "mypy",
+  "pytest",
+  "pytest-cov",
+  "bandit",
+  "pip-audit",
+]
+
+# release-please owns the version; keep it out of git and let CI/build stamp it.
+[tool.hatch.version]
+path = "src/{{PACKAGE_NAME}}/__init__.py"
+
+# ------------------------------------------------------------------------------
+# Ruff — formatter + linter in one. Replaces black/isort/flake8/pyupgrade.
+# ------------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+# A deliberately broad, high-signal selection. Trim per project if a family is
+# too noisy — but prefer fixing the code.
+select = [
+  "E", "W",    # pycodestyle
+  "F",         # pyflakes
+  "I",         # isort (import ordering)
+  "N",         # pep8-naming
+  "UP",        # pyupgrade (modernize syntax)
+  "B",         # flake8-bugbear (likely bugs)
+  "A",         # flake8-builtins (shadowing)
+  "C4",        # flake8-comprehensions
+  "SIM",       # flake8-simplify
+  "PTH",       # flake8-use-pathlib
+  "RUF",       # ruff-specific rules
+  "S",         # flake8-bandit (security smells)
+]
+ignore = [
+  "E501",      # line length is handled by the formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may use asserts and hard-coded throwaway values.
+"tests/**" = ["S101", "S105", "S106"]
+
+# ------------------------------------------------------------------------------
+# mypy — strict. Everything must be typed; no implicit Any.
+# ------------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_any_generics = true
+no_implicit_reexport = true
+show_error_codes = true
+pretty = true
+files = ["src", "tests"]
+
+# ------------------------------------------------------------------------------
+# pytest + coverage. Floor enforced at 80% (also passed explicitly in CI).
+# ------------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "@(abc\\.)?abstractmethod",
+]

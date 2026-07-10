@@ -1,0 +1,12 @@
+# CODEOWNERS — automatic review requests.
+# https://docs.github.com/articles/about-code-owners
+#
+# Order matters: the LAST matching pattern wins for a given file.
+# Replace the placeholder team/user below with the real owner before use.
+
+# Default owner for everything in the repo:
+* @clarkbar-sys/maintainers
+
+# Example of scoping ownership to a path:
+# /docs/           @clarkbar-sys/docs-team
+# /.github/        @clarkbar-sys/platform

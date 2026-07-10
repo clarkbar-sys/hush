@@ -1,0 +1,31 @@
+# Configures GitHub's auto-generated release notes (the "Generate release notes"
+# button and release-please body). PRs are grouped into sections by their labels.
+# https://docs.github.com/repositories/releasing-projects-on-github/automatically-generated-release-notes
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+    authors:
+      - dependabot
+  categories:
+    - title: 🚀 Features
+      labels:
+        - feature
+        - enhancement
+    - title: 🐛 Bug Fixes
+      labels:
+        - bug
+        - fix
+    - title: 🧹 Maintenance
+      labels:
+        - chore
+        - refactor
+        - ci
+        - build
+    - title: 📚 Documentation
+      labels:
+        - documentation
+        - docs
+    - title: Other Changes
+      labels:
+        - "*"

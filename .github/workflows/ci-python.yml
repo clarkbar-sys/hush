@@ -1,0 +1,127 @@
+name: CI (Python)
+
+# Runs only when Python files change (path filter below).
+# Stage order: static (parallel) -> build -> test+coverage / security.
+# Adjust install/test commands to match your project layout.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/*.py"
+      - "pyproject.toml"
+      - "requirements*.txt"
+      - ".github/workflows/ci-python.yml"
+  pull_request:
+    paths:
+      - "**/*.py"
+      - "pyproject.toml"
+      - "requirements*.txt"
+      - ".github/workflows/ci-python.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-python-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Preflight: only run the pipeline if this repo actually has Python sources.
+  # Keeps CI green on the empty template (and any repo not yet using Python).
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      found: ${{ steps.f.outputs.found }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: f
+        run: |
+          if [ -n "$(git ls-files '*.py')" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false — skipping Python CI" && echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  static:
+    name: Static checks
+    needs: detect
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install ruff mypy
+      - name: Format check
+        run: ruff format --check .
+      - name: Lint
+        run: ruff check .
+      - name: Type-check
+        run: mypy .
+
+  build:
+    name: Build
+    needs: [detect, static]
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build
+      - run: python -m build
+      - name: Upload dist (downloadable from this run / PR)
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-dist
+          path: dist/
+
+  test:
+    name: Test & coverage
+    needs: [detect, build]
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      # TODO: adjust to your install (e.g. `pip install -e '.[dev]'`)
+      - run: pip install -e . pytest pytest-cov
+      # Coverage floor is enforced here (also set in pyproject's
+      # [tool.coverage.report] fail_under). Drops the build if it slips below 80%.
+      - run: pytest --cov --cov-report=term-missing --cov-report=xml --cov-fail-under=80
+      - name: Upload coverage
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-python
+          path: coverage.xml
+
+  security:
+    name: Security
+    needs: [detect, build]
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install bandit pip-audit
+      # These gate. Scope bandit to source (tests are exempted via pyproject's
+      # ruff S-rule per-file-ignores; bandit itself only scans `src` here).
+      - name: Bandit (SAST)
+        run: bandit -r src -q
+      - name: pip-audit (dependency vulns)
+        run: pip-audit

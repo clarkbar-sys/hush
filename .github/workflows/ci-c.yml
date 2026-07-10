@@ -1,0 +1,177 @@
+name: CI (C/C++)
+
+# Runs only when C/C++ sources / build files change (path filter below).
+# Stage order: static (parallel) -> build (gcc + clang matrix)
+#   -> test (ASan/UBSan matrix) + coverage / security (CodeQL).
+# Standard: C sources -> -std=c11, C++ sources -> -std=c++20 (see STANDARDS.md).
+# Replace the `make` placeholders with your real build system (cmake/meson/make).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/*.c"
+      - "**/*.h"
+      - "**/*.cpp"
+      - "**/*.cc"
+      - "**/*.cxx"
+      - "**/*.hpp"
+      - "**/*.hh"
+      - "CMakeLists.txt"
+      - "Makefile"
+      - "meson.build"
+      - ".clang-format"
+      - ".clang-tidy"
+      - ".github/workflows/ci-c.yml"
+  pull_request:
+    paths:
+      - "**/*.c"
+      - "**/*.h"
+      - "**/*.cpp"
+      - "**/*.cc"
+      - "**/*.cxx"
+      - "**/*.hpp"
+      - "**/*.hh"
+      - "CMakeLists.txt"
+      - "Makefile"
+      - "meson.build"
+      - ".clang-format"
+      - ".clang-tidy"
+      - ".github/workflows/ci-c.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-c-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Preflight: only run the pipeline if this repo actually has C sources.
+  # Keeps CI green on the empty template (and any repo not yet using C).
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      found: ${{ steps.f.outputs.found }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: f
+        run: |
+          if [ -n "$(git ls-files '*.c' '*.h' '*.cpp' '*.cc' '*.cxx' '*.hpp' '*.hh')" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false — skipping C/C++ CI" && echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  static:
+    name: Static checks
+    needs: detect
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y clang-format cppcheck
+      - name: Format check
+        run: |
+          files=$(git ls-files '*.c' '*.h' '*.cpp' '*.cc' '*.cxx' '*.hpp' '*.hh')
+          [ -z "$files" ] || clang-format --dry-run --Werror $files
+      - name: cppcheck
+        run: cppcheck --enable=warning,style --error-exitcode=1 --std=c11 --std=c++20 .
+      # clang-tidy uses .clang-tidy but needs a compile_commands.json to know how
+      # each file is compiled. Enable once you have a cmake build that emits one
+      # (cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON), then uncomment:
+      # - run: sudo apt-get install -y clang-tidy
+      # - run: clang-tidy -p build $(git ls-files '*.c' '*.cpp' '*.cc')
+
+  build:
+    name: Build (${{ matrix.cc }})
+    needs: [detect, static]
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    env:
+      CC: ${{ matrix.cc }}
+      # House standard: C11 / C++20, warnings are errors. A conventional
+      # Makefile/cmake picks these up; adjust the var names to your build.
+      CFLAGS: -std=c11 -Wall -Wextra -Werror -pedantic
+      CXXFLAGS: -std=c++20 -Wall -Wextra -Werror -pedantic
+    steps:
+      - uses: actions/checkout@v7
+      # TODO: replace with your build system, e.g.
+      #   cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
+      - name: Build
+        run: make
+
+  test:
+    name: Test (${{ matrix.sanitizer }})
+    needs: [detect, build]
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined]
+    env:
+      # Sanitizer flags carry the house standard too. ASAN_OPTIONS/UBSAN_OPTIONS
+      # make the run abort on the first finding instead of merely logging it.
+      CFLAGS: -std=c11 -fsanitize=${{ matrix.sanitizer }} -g -fno-omit-frame-pointer
+      CXXFLAGS: -std=c++20 -fsanitize=${{ matrix.sanitizer }} -g -fno-omit-frame-pointer
+      LDFLAGS: -fsanitize=${{ matrix.sanitizer }}
+      ASAN_OPTIONS: abort_on_error=1:detect_leaks=1:strict_string_checks=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+    steps:
+      - uses: actions/checkout@v7
+      # TODO: build + run tests under the sanitizer, e.g.
+      #   cmake -B build -DCMAKE_C_FLAGS="$CFLAGS" && cmake --build build \
+      #     && ctest --test-dir build --output-on-failure
+      - name: Test
+        run: make test
+
+  coverage:
+    name: Coverage (>= 80%)
+    needs: [detect, build]
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y gcovr
+      # TODO: build with coverage instrumentation and run the test suite, e.g.
+      #   make clean && make test CFLAGS="--coverage -O0 -g" LDFLAGS="--coverage"
+      - name: Build + test with coverage
+        run: make test CFLAGS="--coverage -O0 -g" LDFLAGS="--coverage"
+      # Enforces the 80% line-coverage floor; fails the job below it.
+      - name: Enforce coverage floor
+        run: gcovr --fail-under-line 80 --exclude tests --print-summary
+      - name: Coverage report (XML)
+        if: always()
+        run: gcovr --xml -o coverage.xml --exclude tests || true
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-c
+          path: coverage.xml
+          if-no-files-found: ignore
+
+  security:
+    name: Security (CodeQL)
+    needs: [detect, build]
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: c-cpp
+      # TODO: your real build so CodeQL can trace compilation
+      - name: Build for analysis
+        run: make
+      - uses: github/codeql-action/analyze@v3
