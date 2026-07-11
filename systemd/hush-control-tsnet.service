@@ -27,7 +27,11 @@ PrivateTmp=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# AF_NETLINK is required: tsnet reads the host's routes/addresses over a netlink
+# socket at startup (route ip+net / netlinkrib). Without it the node fails to
+# come up with "address family not supported by protocol". This mirrors the
+# upstream tailscaled.service allowlist.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 LockPersonality=true
 
 [Install]
