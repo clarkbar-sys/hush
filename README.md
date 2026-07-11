@@ -79,6 +79,31 @@ Every request is gated by Tailscale identity (`WhoIs`). **Prerequisites:**
 your tailnet. The node is served **tailnet-only** — hush never uses Tailscale
 Funnel. See [`docs/DESIGN.md`](./docs/DESIGN.md#run-modes) for details.
 
+## Run as a service
+
+For a box that should keep `hush-agent` or `hush-control` running across
+reboots, [`scripts/install.sh`](./scripts/install.sh) installs systemd units
+under a dedicated, unprivileged `hush` system user (never root):
+
+```bash
+go install github.com/clarkbar-sys/hush/cmd/hush-agent@latest   # build the binary first
+sudo ./scripts/install.sh agent            # hush-agent, systemd-managed
+
+go install github.com/clarkbar-sys/hush/cmd/hush-control@latest
+sudo ./scripts/install.sh control          # hush-control, LAN mode
+sudo ./scripts/install.sh control-tsnet    # — or — hush-control, tsnet mode
+sudo ./scripts/install.sh all              # agent + control (LAN mode), one box
+```
+
+The script creates the `hush` user, copies the binary to
+`/usr/local/bin`, installs the matching unit from [`systemd/`](./systemd), and
+writes an editable environment file to `/etc/hush/*.env` (e.g. the listen
+address, or `TS_AUTHKEY` for tsnet's first run) without ever clobbering one
+that already exists. After editing an env file, apply it with
+`systemctl restart hush-agent` (or `hush-control` / `hush-control-tsnet`).
+It targets systemd + `useradd` distros (Debian, Ubuntu, Fedora, Arch, RHEL,
+openSUSE) — not Alpine (OpenRC) or NixOS, which manage services differently.
+
 ## Components
 
 | Path | What it is |
@@ -88,6 +113,8 @@ Funnel. See [`docs/DESIGN.md`](./docs/DESIGN.md#run-modes) for details.
 | `internal/vitals` | Linux vitals collection (`/proc`, systemd, `nvidia-smi`) |
 | `web/` | the console — a single static page |
 | `docs/mockups/` | interactive UX reference (open directly for the demo fleet) |
+| `systemd/` | unit files for running the binaries as services |
+| `scripts/install.sh` | installs the systemd units under a dedicated `hush` user |
 
 ## Development
 
