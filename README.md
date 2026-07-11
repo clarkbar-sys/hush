@@ -37,6 +37,27 @@ To watch a real fleet, copy `fleet.example.json` to `fleet.json`, list your
 agents' tailnet addresses, and start `hush-control`. In production each
 `hush-agent` binds to the tailnet interface — no public exposure.
 
+### Serve over the tailnet (HTTPS)
+
+The steps above run **LAN mode**: plain HTTP, unauthenticated — trusted
+networks only. For the secure, reach-from-anywhere console, run `hush-control`
+in **tsnet mode**: it joins the tailnet as its own node and serves HTTPS on
+`:443` with a real cert at `https://<hostname>.<tailnet>.ts.net`.
+
+```bash
+# provision the node with an auth key; persist its state in -state-dir
+TS_AUTHKEY=tskey-auth-… go run ./cmd/hush-control -tsnet -hostname hush -state-dir ./tsstate
+
+# optionally restrict to specific operators (repeatable; omit = any tailnet member)
+TS_AUTHKEY=tskey-auth-… go run ./cmd/hush-control -tsnet -allow you@example.com
+```
+
+Every request is gated by Tailscale identity (`WhoIs`). **Prerequisites:**
+[MagicDNS](https://tailscale.com/kb/1081/magicdns) and
+[HTTPS certificates](https://tailscale.com/kb/1153/enabling-https) enabled in
+your tailnet. The node is served **tailnet-only** — hush never uses Tailscale
+Funnel. See [`docs/DESIGN.md`](./docs/DESIGN.md#run-modes) for details.
+
 ## Components
 
 | Path | What it is |

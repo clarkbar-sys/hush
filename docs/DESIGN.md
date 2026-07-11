@@ -80,7 +80,9 @@ build later. No reconciler, no convergence loop.
   and serves the web UI. Config in `fleet.json` (see `fleet.example.json`).
 - **Transport** — the tailnet already provides encrypted transport + identity,
   so `hush` is a thin authenticated RPC, not a reimplementation of SSH. Agents
-  listen only on the tailnet interface; no public exposure.
+  listen only on the tailnet interface; no public exposure. `hush-control` can
+  join the tailnet as its **own node** via `tsnet` (see below) rather than
+  riding the host's Tailscale identity.
 - **Web UI** — a single static page (`web/index.html`), vanilla HTML/CSS/JS.
 
 Language: **Go** across the backend. **Scheme** is reserved for the Workflow DSL
@@ -110,3 +112,43 @@ go run ./cmd/hush-control -listen 127.0.0.1:8080 -web web
 
 Point `hush-control` at a real fleet by copying `fleet.example.json` to
 `fleet.json` and editing the agent addresses.
+
+## Run modes
+
+`hush-control` serves the same console two ways. LAN mode is the Phase 0
+default; tsnet mode is the secure, reach-from-anywhere target.
+
+### LAN mode (default)
+
+Plain HTTP on `-listen`, agents addressed by IP in `fleet.json`. It is
+**unauthenticated** — trusted networks only, never expose agent ports publicly.
+Good for dev and trusted-LAN use; the UI falls back to demo data when
+`/api/fleet` is unreachable.
+
+### tsnet mode (`-tsnet`)
+
+`hush-control` joins the tailnet as its **own node** (default hostname `hush`,
+independent of the host's Tailscale identity) using
+[`tailscale.com/tsnet`](https://pkg.go.dev/tailscale.com/tsnet), and serves the
+console over HTTPS on `:443` with a real auto-provisioned cert — reachable at
+`https://<hostname>.<tailnet>.ts.net`, no warnings on the phone.
+
+```bash
+# auth key provisions the node on first run; state persists in -state-dir
+TS_AUTHKEY=tskey-auth-… ./hush-control -tsnet -hostname hush -state-dir ./tsstate
+
+# restrict to specific operators (repeatable; omit for any tailnet member)
+TS_AUTHKEY=tskey-auth-… ./hush-control -tsnet -allow you@example.com
+```
+
+Every request is gated by Tailscale identity: `tsnet`'s `WhoIs` resolves the
+caller's login from the connection. Reaching the node at all requires tailnet
+membership (network membership *is* the first auth gate); the optional
+`-allow` allowlist narrows that to named logins on top.
+
+**Prerequisites in the tailnet:** [MagicDNS] and [HTTPS certificates] must be
+enabled (Admin console → DNS). The node is served **tailnet-only** — hush never
+uses Tailscale Funnel, so the console is never publicly exposed.
+
+[MagicDNS]: https://tailscale.com/kb/1081/magicdns
+[HTTPS certificates]: https://tailscale.com/kb/1153/enabling-https

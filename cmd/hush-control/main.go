@@ -50,14 +50,36 @@ type Machine struct {
 }
 
 func main() {
-	listen := flag.String("listen", ":8080", "address to serve the console on")
+	listen := flag.String("listen", ":8080", "address to serve the console on (LAN mode)")
 	configPath := flag.String("config", "fleet.json", "path to the fleet config JSON")
 	webDir := flag.String("web", "web", "directory of static UI assets")
+
+	// tsnet mode: join the tailnet as our own node and serve HTTPS on :443.
+	// Off by default — LAN mode is unchanged when -tsnet is unset.
+	useTsnet := flag.Bool("tsnet", false, "join the tailnet as our own node and serve HTTPS on :443")
+	hostname := flag.String("hostname", "hush", "tsnet node hostname (tsnet mode)")
+	stateDir := flag.String("state-dir", "", "directory to persist tsnet node state (tsnet mode; default: OS config dir)")
+	var allow stringList
+	flag.Var(&allow, "allow", "allowed caller login, e.g. login@example.com; repeatable; empty = any tailnet member (tsnet mode)")
 	flag.Parse()
 
 	agents := loadAgents(*configPath)
 	log.Printf("hush-control: %d agent(s) configured", len(agents))
 
+	mux := buildMux(agents, *webDir)
+
+	if *useTsnet {
+		serveTsnet(mux, *hostname, *stateDir, allow)
+		return
+	}
+
+	log.Printf("hush-control serving %s on %s (LAN mode)", *webDir, *listen)
+	log.Fatal(http.ListenAndServe(*listen, mux))
+}
+
+// buildMux wires the console routes: live fleet JSON plus the static UI. It is
+// transport-agnostic, so the same handler serves both LAN and tsnet modes.
+func buildMux(agents []Agent, webDir string) http.Handler {
 	client := &http.Client{Timeout: 2 * time.Second}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/fleet", func(w http.ResponseWriter, r *http.Request) {
@@ -67,10 +89,17 @@ func main() {
 			log.Printf("encode fleet: %v", err)
 		}
 	})
-	mux.Handle("/", http.FileServer(http.Dir(*webDir)))
+	mux.Handle("/", http.FileServer(http.Dir(webDir)))
+	return mux
+}
 
-	log.Printf("hush-control serving %s on %s", *webDir, *listen)
-	log.Fatal(http.ListenAndServe(*listen, mux))
+// stringList is a repeatable string flag (e.g. -allow a -allow b).
+type stringList []string
+
+func (s *stringList) String() string { return strings.Join(*s, ",") }
+func (s *stringList) Set(v string) error {
+	*s = append(*s, v)
+	return nil
 }
 
 // collectFleet queries every agent concurrently, preserving config order.
