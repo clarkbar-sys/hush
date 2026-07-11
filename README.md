@@ -19,17 +19,21 @@ initiative. **Status: Phase 0 — read-only proof of life.**
 
 ## Install
 
-Prebuilt static binaries (linux/darwin, amd64/arm64) ship with every tagged
-release — no Go toolchain required on the target box:
+`install.sh` sets up `hush-agent` and/or `hush-control` as systemd services
+running under a dedicated, unprivileged `hush` system user — no Go toolchain,
+no git clone required on the target box. It **must run as root** (it fails
+loudly otherwise, since there's no way to install a service without it):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh | sudo sh
 ```
 
-That installs both `hush-agent` and `hush-control` to `/usr/local/bin` (falls
-back to `~/.local/bin` if not run as root). Pass `agent` or `control` to
-install just one, e.g. `... | sh -s -- agent`. Override the destination with
-`HUSH_INSTALL_DIR`.
+That installs both `hush-agent` and `hush-control`, each enabled and started.
+Pass `agent`, `control`, or `control-tsnet` to install just one, e.g.
+`... | sudo sh -s -- agent`. It's systemd-only (Linux) — see
+[`scripts/install.sh`](./scripts/install.sh) below for the same install from
+a local clone, and "Prefer building from source" below for running the
+binary yourself without a service (e.g. on macOS, which has no systemd).
 
 Prefer building from source? Both binaries also install with the Go toolchain
 (Go 1.26+):
@@ -94,32 +98,31 @@ Funnel. See [`docs/DESIGN.md`](./docs/DESIGN.md#run-modes) for details.
 
 ## Run as a service
 
-For a box that should keep `hush-agent` or `hush-control` running across
-reboots, [`scripts/install.sh`](./scripts/install.sh) installs systemd units
-under a dedicated, unprivileged `hush` system user (never root). It reads the
-unit files from a local clone, so grab one first — then get the binary onto
-`$PATH` via the root-level `install.sh` (or `go install`) before running it:
+`install.sh` (above) already does this — every install is a systemd service
+under a dedicated `hush` user, enabled and started. It creates the `hush`
+user, installs the binary to `/usr/local/bin`, fetches the matching unit from
+[`systemd/`](./systemd), and writes an editable environment file to
+`/etc/hush/*.env` (e.g. the listen address, or `TS_AUTHKEY` for tsnet's first
+run) without ever clobbering one that already exists. After editing an env
+file, apply it with `systemctl restart hush-agent` (or `hush-control` /
+`hush-control-tsnet`). It targets systemd + `useradd` distros (Debian,
+Ubuntu, Fedora, Arch, RHEL, openSUSE) — not Alpine (OpenRC) or NixOS, which
+manage services differently, and not macOS, which has no systemd.
+
+Working from a clone with an already-built binary instead (no network
+fetch — useful offline, on a fork, or on an unreleased branch)? Use
+[`scripts/install.sh`](./scripts/install.sh), the same install reading local
+files instead:
 
 ```bash
 git clone https://github.com/clarkbar-sys/hush && cd hush
+go build ./cmd/hush-agent ./cmd/hush-control
 
-curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh | sh -s -- agent
 sudo ./scripts/install.sh agent            # hush-agent, systemd-managed
-
-curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh | sh -s -- control
 sudo ./scripts/install.sh control          # hush-control, LAN mode
 sudo ./scripts/install.sh control-tsnet    # — or — hush-control, tsnet mode
 sudo ./scripts/install.sh all              # agent + control (LAN mode), one box
 ```
-
-The script creates the `hush` user, copies the binary to
-`/usr/local/bin`, installs the matching unit from [`systemd/`](./systemd), and
-writes an editable environment file to `/etc/hush/*.env` (e.g. the listen
-address, or `TS_AUTHKEY` for tsnet's first run) without ever clobbering one
-that already exists. After editing an env file, apply it with
-`systemctl restart hush-agent` (or `hush-control` / `hush-control-tsnet`).
-It targets systemd + `useradd` distros (Debian, Ubuntu, Fedora, Arch, RHEL,
-openSUSE) — not Alpine (OpenRC) or NixOS, which manage services differently.
 
 ## Components
 
@@ -131,8 +134,8 @@ openSUSE) — not Alpine (OpenRC) or NixOS, which manage services differently.
 | `web/` | the console — a single static page |
 | `docs/mockups/` | interactive UX reference (open directly for the demo fleet) |
 | `systemd/` | unit files for running the binaries as services |
-| `install.sh` | downloads prebuilt release binaries onto `$PATH` |
-| `scripts/install.sh` | installs the systemd units under a dedicated `hush` user |
+| `install.sh` | installs hush as a systemd service under a dedicated `hush` user (fetches binaries + units over the network; root required) |
+| `scripts/install.sh` | same install, from a local clone with an already-built binary (no network fetch) |
 
 ## Development
 

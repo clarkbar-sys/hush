@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Installs hush-agent and/or hush-control as systemd services, running under
-# a dedicated, unprivileged "hush" system user rather than root.
+# a dedicated, unprivileged "hush" system user rather than root. Same install
+# as the root-level install.sh, but for a local clone with an already-built
+# binary — it reads the unit files and fleet.example.json from disk instead
+# of fetching them over the network, so it works offline / on forks / on
+# unreleased branches.
 #
 # Usage:
 #   sudo ./scripts/install.sh agent           # hush-agent only
