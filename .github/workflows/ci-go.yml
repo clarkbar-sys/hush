@@ -1,22 +1,17 @@
 name: CI (Go)
 
-# Runs only when Go files change (path filter below).
+# Triggers on every push/PR — no path filter. static/build/test are required
+# status checks, and a path-filtered trigger would never queue this workflow
+# (let alone report a status) for PRs that don't touch Go files, permanently
+# blocking their merge. The `detect` job below does the equivalent skip
+# instead, cheaply, while still letting the workflow — and its required
+# checks — report back for every PR.
 # Stage order: static (gofmt + vet) -> build -> test.
 
 on:
   push:
     branches: [main]
-    paths:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
-      - ".github/workflows/ci-go.yml"
   pull_request:
-    paths:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
-      - ".github/workflows/ci-go.yml"
   workflow_dispatch:
 
 permissions:
