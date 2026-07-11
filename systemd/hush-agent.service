@@ -1,0 +1,30 @@
+[Unit]
+Description=hush-agent — fleet vitals agent
+Documentation=https://github.com/clarkbar-sys/hush
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hush
+Group=hush
+EnvironmentFile=-/etc/hush/agent.env
+ExecStart=/usr/local/bin/hush-agent -listen ${HUSH_AGENT_LISTEN}
+Restart=on-failure
+RestartSec=5s
+
+# Sandboxing. The agent only needs to read /proc, /etc/os-release, and talk
+# to systemd/nvidia-smi over their normal unprivileged interfaces — no
+# writable paths required.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

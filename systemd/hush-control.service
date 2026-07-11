@@ -1,0 +1,31 @@
+[Unit]
+Description=hush-control — fleet console control plane (LAN mode)
+Documentation=https://github.com/clarkbar-sys/hush
+Conflicts=hush-control-tsnet.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hush
+Group=hush
+WorkingDirectory=/etc/hush
+EnvironmentFile=-/etc/hush/control.env
+ExecStart=/usr/local/bin/hush-control -listen ${HUSH_CONTROL_LISTEN} -config ${HUSH_CONTROL_CONFIG}
+Restart=on-failure
+RestartSec=5s
+
+# Sandboxing. LAN mode only reads fleet.json and talks HTTP to agents — no
+# writable paths required.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
