@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/clarkbar-sys/hush/compare/v1.1.0...v1.1.1) (2026-07-11)
+
+
+### Bug Fixes
+
+* default install.sh to agent-only, make control opt-in ([#19](https://github.com/clarkbar-sys/hush/issues/19)) ([61a1353](https://github.com/clarkbar-sys/hush/commit/61a13533f3db4ed99b07fbc8537f79edd15a7597))
+
 ## [1.1.0](https://github.com/clarkbar-sys/hush/compare/v1.0.0...v1.1.0) (2026-07-11)
 
 
