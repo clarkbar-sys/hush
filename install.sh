@@ -5,11 +5,16 @@
 # config template straight from GitHub — no Go toolchain, no git clone
 # required on the target box. Must be run as root.
 #
+# Defaults to installing hush-agent alone — the same one-liner is correct on
+# every machine in a fleet (that's most of them). hush-control is a one-off,
+# deliberate install on a single box (e.g. the NAS), so it's opt-in:
+#
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh | sudo sh
-#   curl -fsSL .../install.sh | sudo sh -s -- agent           # hush-agent only
+#   curl -fsSL .../install.sh | sudo sh -s -- agent           # hush-agent (default)
 #   curl -fsSL .../install.sh | sudo sh -s -- control         # hush-control, LAN mode
 #   curl -fsSL .../install.sh | sudo sh -s -- control-tsnet   # hush-control, tsnet mode
+#   curl -fsSL .../install.sh | sudo sh -s -- all             # agent + control, one box
 #
 # Installs binaries to /usr/local/bin, the unit to /etc/systemd/system, and
 # an editable env file to /etc/hush/*.env — never clobbered on re-run, so
@@ -28,7 +33,7 @@ set -eu
 REPO="clarkbar-sys/hush"
 REF="main"
 RAW_BASE="https://raw.githubusercontent.com/$REPO/$REF"
-TARGET="${1:-all}"
+TARGET="${1:-agent}"
 SERVICE_USER="${HUSH_USER:-hush}"
 SERVICE_GROUP="${HUSH_GROUP:-hush}"
 CONFIG_DIR="/etc/hush"

@@ -28,12 +28,16 @@ loudly otherwise, since there's no way to install a service without it):
 curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh | sudo sh
 ```
 
-That installs both `hush-agent` and `hush-control`, each enabled and started.
-Pass `agent`, `control`, or `control-tsnet` to install just one, e.g.
-`... | sudo sh -s -- agent`. It's systemd-only (Linux) — see
-[`scripts/install.sh`](./scripts/install.sh) below for the same install from
-a local clone, and "Prefer building from source" below for running the
-binary yourself without a service (e.g. on macOS, which has no systemd).
+That installs `hush-agent` alone, enabled and started — the same one-liner
+is correct on every machine you want to watch, which is most of your fleet.
+`hush-control` is a single, deliberate install on one box (e.g. the NAS), so
+it's opt-in: pass `control` for LAN mode or `control-tsnet` for the
+[tsnet HTTPS mode](#serve-over-the-tailnet-https), e.g.
+`... | sudo sh -s -- control-tsnet`. Pass `all` to install both on one box.
+It's systemd-only (Linux) — see [`scripts/install.sh`](./scripts/install.sh)
+below for the same install from a local clone, and "Prefer building from
+source" below for running the binary yourself without a service (e.g. on
+macOS, which has no systemd).
 
 Prefer building from source? Both binaries also install with the Go toolchain
 (Go 1.26+):
