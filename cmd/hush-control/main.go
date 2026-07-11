@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/clarkbar-sys/hush/internal/vitals"
+	"github.com/clarkbar-sys/hush/web"
 )
 
 // Agent is one entry in the fleet config.
@@ -52,7 +53,7 @@ type Machine struct {
 func main() {
 	listen := flag.String("listen", ":8080", "address to serve the console on (LAN mode)")
 	configPath := flag.String("config", "fleet.json", "path to the fleet config JSON")
-	webDir := flag.String("web", "web", "directory of static UI assets")
+	webDir := flag.String("web", "", "serve UI assets from this directory instead of the embedded ones (dev)")
 
 	// tsnet mode: join the tailnet as our own node and serve HTTPS on :443.
 	// Off by default — LAN mode is unchanged when -tsnet is unset.
@@ -73,12 +74,13 @@ func main() {
 		return
 	}
 
-	log.Printf("hush-control serving %s on %s (LAN mode)", *webDir, *listen)
+	log.Printf("hush-control serving on %s (LAN mode)", *listen)
 	log.Fatal(http.ListenAndServe(*listen, mux))
 }
 
 // buildMux wires the console routes: live fleet JSON plus the static UI. It is
 // transport-agnostic, so the same handler serves both LAN and tsnet modes.
+// The UI is served from the embedded assets unless webDir is set (dev override).
 func buildMux(agents []Agent, webDir string) http.Handler {
 	client := &http.Client{Timeout: 2 * time.Second}
 	mux := http.NewServeMux()
@@ -89,7 +91,11 @@ func buildMux(agents []Agent, webDir string) http.Handler {
 			log.Printf("encode fleet: %v", err)
 		}
 	})
-	mux.Handle("/", http.FileServer(http.Dir(webDir)))
+	if webDir != "" {
+		mux.Handle("/", http.FileServer(http.Dir(webDir)))
+	} else {
+		mux.Handle("/", http.FileServerFS(web.FS))
+	}
 	return mux
 }
 

@@ -17,25 +17,46 @@ See [`docs/DESIGN.md`](./docs/DESIGN.md) for the design and
 [issue #6](https://github.com/clarkbar-sys/hush/issues/6) for the full
 initiative. **Status: Phase 0 — read-only proof of life.**
 
+## Install
+
+Both binaries install with the Go toolchain (Go 1.26+):
+
+```bash
+# control plane — on the box that serves the console (e.g. the NAS)
+go install github.com/clarkbar-sys/hush/cmd/hush-control@latest
+
+# agent — on each machine you want to watch
+go install github.com/clarkbar-sys/hush/cmd/hush-agent@latest
+```
+
+They land in `$(go env GOBIN)` (or `$(go env GOPATH)/bin`). The console UI is
+embedded in `hush-control`, so the binary is self-contained — nothing else to
+copy. The `hush-agent` binary is stdlib-only and has no runtime dependencies.
+
+> Prebuilt static binaries (no Go toolchain on the target box) will ship with
+> tagged releases. Until then, cross-compile the agent for a Pi/Alpine/NixOS box
+> with e.g. `GOOS=linux GOARCH=arm64 go build ./cmd/hush-agent` and copy it over.
+
 ## Getting started
 
 ```bash
-git clone https://github.com/clarkbar-sys/hush.git
-cd hush
-
 # 1. run an agent on a machine you want to watch
-go run ./cmd/hush-agent -listen 127.0.0.1:8765
+hush-agent -listen 127.0.0.1:8765
 
 # 2. run the control plane serving the UI (defaults to one local agent)
-go run ./cmd/hush-control -listen 127.0.0.1:8080 -web web
+hush-control -listen 127.0.0.1:8080
 
 # 3. open the console
 open http://127.0.0.1:8080
 ```
 
-To watch a real fleet, copy `fleet.example.json` to `fleet.json`, list your
-agents' tailnet addresses, and start `hush-control`. In production each
-`hush-agent` binds to the tailnet interface — no public exposure.
+To watch a real fleet, copy [`fleet.example.json`](./fleet.example.json) to
+`fleet.json`, list your agents' tailnet addresses, and start `hush-control`. In
+production each `hush-agent` binds to the tailnet interface — no public exposure.
+
+Working from a clone instead? Swap `hush-control` for `go run ./cmd/hush-control`
+(and likewise for the agent). Add `-web web` to serve the UI from the on-disk
+`web/` directory when you want to iterate on it live.
 
 ### Serve over the tailnet (HTTPS)
 
@@ -46,10 +67,10 @@ in **tsnet mode**: it joins the tailnet as its own node and serves HTTPS on
 
 ```bash
 # provision the node with an auth key; persist its state in -state-dir
-TS_AUTHKEY=tskey-auth-… go run ./cmd/hush-control -tsnet -hostname hush -state-dir ./tsstate
+TS_AUTHKEY=tskey-auth-… hush-control -tsnet -hostname hush -state-dir ./tsstate
 
 # optionally restrict to specific operators (repeatable; omit = any tailnet member)
-TS_AUTHKEY=tskey-auth-… go run ./cmd/hush-control -tsnet -allow you@example.com
+TS_AUTHKEY=tskey-auth-… hush-control -tsnet -allow you@example.com
 ```
 
 Every request is gated by Tailscale identity (`WhoIs`). **Prerequisites:**
