@@ -137,7 +137,7 @@ jobs:
     if: needs.detect.outputs.found == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y gcovr
       # TODO: build with coverage instrumentation and run the test suite, e.g.
       #   make clean && make test CFLAGS="--coverage -O0 -g" LDFLAGS="--coverage"
