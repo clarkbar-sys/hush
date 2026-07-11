@@ -19,7 +19,20 @@ initiative. **Status: Phase 0 — read-only proof of life.**
 
 ## Install
 
-Both binaries install with the Go toolchain (Go 1.26+):
+Prebuilt static binaries (linux/darwin, amd64/arm64) ship with every tagged
+release — no Go toolchain required on the target box:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh | sh
+```
+
+That installs both `hush-agent` and `hush-control` to `/usr/local/bin` (falls
+back to `~/.local/bin` if not run as root). Pass `agent` or `control` to
+install just one, e.g. `... | sh -s -- agent`. Override the destination with
+`HUSH_INSTALL_DIR`.
+
+Prefer building from source? Both binaries also install with the Go toolchain
+(Go 1.26+):
 
 ```bash
 # control plane — on the box that serves the console (e.g. the NAS)
@@ -32,10 +45,10 @@ go install github.com/clarkbar-sys/hush/cmd/hush-agent@latest
 They land in `$(go env GOBIN)` (or `$(go env GOPATH)/bin`). The console UI is
 embedded in `hush-control`, so the binary is self-contained — nothing else to
 copy. The `hush-agent` binary is stdlib-only and has no runtime dependencies.
-
-> Prebuilt static binaries (no Go toolchain on the target box) will ship with
-> tagged releases. Until then, cross-compile the agent for a Pi/Alpine/NixOS box
-> with e.g. `GOOS=linux GOARCH=arm64 go build ./cmd/hush-agent` and copy it over.
+Both builds are `CGO_ENABLED=0` static binaries, so the `linux/arm64` release
+covers Pi/Alpine/NixOS boxes too — `install.sh` picks it up automatically.
+For any other `GOOS`/`GOARCH`, cross-compile directly:
+`GOOS=linux GOARCH=arm64 go build ./cmd/hush-agent` and copy the binary over.
 
 ## Getting started
 
@@ -83,13 +96,17 @@ Funnel. See [`docs/DESIGN.md`](./docs/DESIGN.md#run-modes) for details.
 
 For a box that should keep `hush-agent` or `hush-control` running across
 reboots, [`scripts/install.sh`](./scripts/install.sh) installs systemd units
-under a dedicated, unprivileged `hush` system user (never root):
+under a dedicated, unprivileged `hush` system user (never root). It reads the
+unit files from a local clone, so grab one first — then get the binary onto
+`$PATH` via the root-level `install.sh` (or `go install`) before running it:
 
 ```bash
-go install github.com/clarkbar-sys/hush/cmd/hush-agent@latest   # build the binary first
+git clone https://github.com/clarkbar-sys/hush && cd hush
+
+curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh | sh -s -- agent
 sudo ./scripts/install.sh agent            # hush-agent, systemd-managed
 
-go install github.com/clarkbar-sys/hush/cmd/hush-control@latest
+curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh | sh -s -- control
 sudo ./scripts/install.sh control          # hush-control, LAN mode
 sudo ./scripts/install.sh control-tsnet    # — or — hush-control, tsnet mode
 sudo ./scripts/install.sh all              # agent + control (LAN mode), one box
@@ -114,6 +131,7 @@ openSUSE) — not Alpine (OpenRC) or NixOS, which manage services differently.
 | `web/` | the console — a single static page |
 | `docs/mockups/` | interactive UX reference (open directly for the demo fleet) |
 | `systemd/` | unit files for running the binaries as services |
+| `install.sh` | downloads prebuilt release binaries onto `$PATH` |
 | `scripts/install.sh` | installs the systemd units under a dedicated `hush` user |
 
 ## Development
@@ -130,7 +148,9 @@ Releases are automated with
 [release-please](https://github.com/googleapis/release-please). Commit using
 [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`,
 `chore:` …) and a **Release PR** is opened and kept up to date automatically —
-it bumps the version and updates [CHANGELOG.md](./CHANGELOG.md).
+it bumps the version and updates [CHANGELOG.md](./CHANGELOG.md). Merging it
+tags the release and cross-compiles + attaches the `install.sh` binaries for
+linux/darwin, amd64/arm64.
 
 ## Contributing
 

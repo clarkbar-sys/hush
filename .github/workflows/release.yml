@@ -27,28 +27,45 @@ jobs:
           manifest-file: .release-please-manifest.json
 
   artifacts:
-    name: Build & attach release artifacts
+    name: Build & attach release artifacts (${{ matrix.os }}/${{ matrix.arch }})
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+          - os: linux
+            arch: arm64
+          - os: darwin
+            arch: amd64
+          - os: darwin
+            arch: arm64
     steps:
       - uses: actions/checkout@v7
-      # TODO: build your program(s) for release into ./out. Examples:
-      #   Python: pip install build && python -m build && cp dist/* out/
-      #   C:      cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
-      #   Scheme: raco exe -o out/app main.rkt   (or raco distribute out app)
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # hush-agent is stdlib-only; hush-control embeds the web/ UI. Both
+      # cross-compile clean with CGO disabled. install.sh expects exactly
+      # this "<binary>_<os>_<arch>.tar.gz" naming on the release.
       - name: Build release artifacts
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
         run: |
           mkdir -p out
-          echo "TODO: produce release artifacts into ./out"
+          for bin in hush-agent hush-control; do
+            go build -trimpath -ldflags="-s -w" -o "out/$bin" "./cmd/$bin"
+            tar -C out -czf "out/${bin}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz" "$bin"
+            rm "out/$bin"
+          done
       - name: Attach to the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ -n "$(ls -A out 2>/dev/null)" ]; then
-            gh release upload "${{ needs.release-please.outputs.tag_name }}" out/* --clobber
-          else
-            echo "No artifacts produced yet — wire up the build step above."
-          fi
+        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" out/*.tar.gz --clobber
