@@ -70,7 +70,7 @@ func main() {
 	mux := buildMux(agents, *webDir)
 
 	if *useTsnet {
-		serveTsnet(mux, *hostname, *stateDir, allow)
+		serveTsnet(mux, *listen, *hostname, *stateDir, allow)
 		return
 	}
 

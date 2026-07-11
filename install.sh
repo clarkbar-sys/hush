@@ -183,6 +183,8 @@ install_control_tsnet() {
     "# hush-control (tsnet mode) environment" \
     "# TS_AUTHKEY provisions the node on first run; state then persists in" \
     "# HUSH_CONTROL_STATE_DIR, so the key can be removed afterwards." \
+    "# Leave TS_AUTHKEY empty to provision from a browser instead: hush-control" \
+    "# serves a one-time setup page on the LAN (:8080) until the node joins." \
     "TS_AUTHKEY=" \
     "HUSH_CONTROL_HOSTNAME=hush" \
     "HUSH_CONTROL_STATE_DIR=/var/lib/hush" \

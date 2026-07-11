@@ -94,6 +94,17 @@ TS_AUTHKEY=tskey-auth-… hush-control -tsnet -hostname hush -state-dir ./tsstat
 TS_AUTHKEY=tskey-auth-… hush-control -tsnet -allow you@example.com
 ```
 
+**First run from your phone (no auth key on the command line).** Starting
+`hush-control -tsnet` with no `TS_AUTHKEY` and no saved node state serves a
+one-time **setup page** on the LAN (`-listen`, default `:8080`) — no SSH, no
+editing env files. Open `http://<box-ip>:8080` in a browser, paste a
+[Tailscale auth key](https://login.tailscale.com/admin/settings/keys) and the
+hostname, and the same process joins the tailnet and bounces you to the HTTPS
+URL. This page is plain HTTP and unauthenticated — it wears a warning banner and
+exists **only until the node is provisioned**, after which it never reappears.
+The `install.sh` `control-tsnet` install ships with an empty `TS_AUTHKEY`, so
+this is the default first-run experience.
+
 Every request is gated by Tailscale identity (`WhoIs`). **Prerequisites:**
 [MagicDNS](https://tailscale.com/kb/1081/magicdns) and
 [HTTPS certificates](https://tailscale.com/kb/1153/enabling-https) enabled in
