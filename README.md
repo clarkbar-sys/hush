@@ -2,6 +2,7 @@
 
 > A tailnet fleet console — see and run your homelab from your phone.
 
+[![CI (Go)](https://github.com/clarkbar-sys/hush/actions/workflows/ci-go.yml/badge.svg)](https://github.com/clarkbar-sys/hush/actions/workflows/ci-go.yml)
 [![License](https://img.shields.io/badge/license-GPL--2.0-blue.svg)](./LICENSE)
 
 ## Overview
