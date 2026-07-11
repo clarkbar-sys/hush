@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/clarkbar-sys/hush/compare/v1.0.0...v1.1.0) (2026-07-11)
+
+
+### Features
+
+* make install.sh always install as a root-owned systemd service ([#17](https://github.com/clarkbar-sys/hush/issues/17)) ([d098c9b](https://github.com/clarkbar-sys/hush/commit/d098c9b0f4fbacbaad7464f22bec8e4c4b712f97))
+
 ## 1.0.0 (2026-07-11)
 
 
