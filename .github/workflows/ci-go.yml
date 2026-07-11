@@ -1,0 +1,91 @@
+name: CI (Go)
+
+# Runs only when Go files change (path filter below).
+# Stage order: static (gofmt + vet) -> build -> test.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/ci-go.yml"
+  pull_request:
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/ci-go.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-go-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Preflight: only run the pipeline if this repo actually has Go sources.
+  # Keeps CI green on the empty template (and any repo not yet using Go).
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      found: ${{ steps.f.outputs.found }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: f
+        run: |
+          if [ -n "$(git ls-files '*.go')" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false — skipping Go CI" && echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  static:
+    name: Static checks
+    needs: detect
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Format check
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-clean:" && echo "$unformatted"
+            exit 1
+          fi
+      - name: Vet
+        run: go vet ./...
+
+  build:
+    name: Build
+    needs: [detect, static]
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go build ./...
+
+  test:
+    name: Test
+    needs: [detect, static]
+    if: needs.detect.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test -race ./...

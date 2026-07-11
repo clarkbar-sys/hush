@@ -1,0 +1,304 @@
+// Package vitals collects host metrics on Linux by reading /proc and shelling
+// out to a couple of well-known tools. Everything is best-effort: on a box
+// without systemd or an NVIDIA GPU the relevant fields just come back empty
+// rather than failing the whole snapshot.
+package vitals
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"os/exec"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+)
+
+// Service is one systemd unit as the fleet console understands it.
+type Service struct {
+	Name  string `json:"name"`
+	State string `json:"state"` // running | failed | stopped
+	Mem   string `json:"mem"`
+}
+
+// Snapshot is a single point-in-time reading of a machine.
+type Snapshot struct {
+	Host     string    `json:"host"`
+	OS       string    `json:"os"`
+	Up       string    `json:"up"`
+	CPU      int       `json:"cpu"`
+	Mem      int       `json:"mem"`
+	Disk     int       `json:"disk"`
+	GPU      *int      `json:"gpu"`
+	VRAM     *int      `json:"vram"`
+	GPUName  string    `json:"gpuName,omitempty"`
+	VRAMText string    `json:"vramText,omitempty"`
+	Load     string    `json:"load"`
+	Services []Service `json:"services"`
+	Status   string    `json:"status"` // good | warn | crit
+}
+
+// --- CPU: sampled in the background so /vitals stays instant -----------------
+
+var (
+	cpuMu               sync.Mutex
+	cpuPct              int
+	prevIdle, prevTotal uint64
+)
+
+// StartSampler primes and begins the 1s CPU sampling loop. Call once at boot.
+func StartSampler() {
+	prevIdle, prevTotal = readCPUTimes()
+	go func() {
+		t := time.NewTicker(time.Second)
+		defer t.Stop()
+		for range t.C {
+			idle, total := readCPUTimes()
+			dt := total - prevTotal
+			pct := 0
+			if dt > 0 {
+				pct = round(float64(dt-(idle-prevIdle)) / float64(dt) * 100)
+			}
+			cpuMu.Lock()
+			cpuPct = clamp(pct)
+			cpuMu.Unlock()
+			prevIdle, prevTotal = idle, total
+		}
+	}()
+}
+
+func cpuUsage() int {
+	cpuMu.Lock()
+	defer cpuMu.Unlock()
+	return cpuPct
+}
+
+func readCPUTimes() (idle, total uint64) {
+	f, err := os.Open("/proc/stat")
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	if sc.Scan() {
+		fields := strings.Fields(sc.Text())
+		if len(fields) >= 5 && fields[0] == "cpu" {
+			for i, s := range fields[1:] {
+				v, _ := strconv.ParseUint(s, 10, 64)
+				total += v
+				if i == 3 || i == 4 { // idle + iowait
+					idle += v
+				}
+			}
+		}
+	}
+	return
+}
+
+// --- Memory / disk / load / uptime / os -------------------------------------
+
+func memUsage() int {
+	info := readMeminfo()
+	total := info["MemTotal"]
+	if total == 0 {
+		return 0
+	}
+	used := total - info["MemAvailable"]
+	return clamp(round(float64(used) / float64(total) * 100))
+}
+
+func readMeminfo() map[string]uint64 {
+	res := map[string]uint64{}
+	f, err := os.Open("/proc/meminfo")
+	if err != nil {
+		return res
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		parts := strings.Fields(sc.Text())
+		if len(parts) >= 2 {
+			v, _ := strconv.ParseUint(parts[1], 10, 64)
+			res[strings.TrimSuffix(parts[0], ":")] = v
+		}
+	}
+	return res
+}
+
+func diskUsage() int {
+	var st syscall.Statfs_t
+	if err := syscall.Statfs("/", &st); err != nil {
+		return 0
+	}
+	used := uint64(st.Blocks) - uint64(st.Bfree)
+	denom := used + uint64(st.Bavail)
+	if denom == 0 {
+		return 0
+	}
+	return clamp(round(float64(used) / float64(denom) * 100))
+}
+
+func loadAvg() string {
+	b, err := os.ReadFile("/proc/loadavg")
+	if err != nil {
+		return "0.0"
+	}
+	if f := strings.Fields(string(b)); len(f) > 0 {
+		return f[0]
+	}
+	return "0.0"
+}
+
+func uptime() string {
+	b, err := os.ReadFile("/proc/uptime")
+	if err != nil {
+		return ""
+	}
+	f := strings.Fields(string(b))
+	if len(f) == 0 {
+		return ""
+	}
+	secs, _ := strconv.ParseFloat(f[0], 64)
+	d := time.Duration(secs) * time.Second
+	days := int(d.Hours()) / 24
+	hrs := int(d.Hours()) % 24
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%dd %dh", days, hrs)
+	case hrs > 0:
+		return fmt.Sprintf("%dh %dm", hrs, int(d.Minutes())%60)
+	default:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+}
+
+func osName() string {
+	f, err := os.Open("/etc/os-release")
+	if err != nil {
+		return runtime.GOOS
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		if line := sc.Text(); strings.HasPrefix(line, "PRETTY_NAME=") {
+			return strings.Trim(strings.TrimPrefix(line, "PRETTY_NAME="), `"`)
+		}
+	}
+	return runtime.GOOS
+}
+
+// --- GPU (NVIDIA via nvidia-smi) --------------------------------------------
+
+func gpuStats() (util, vram *int, name, vramText string) {
+	out, err := exec.Command("nvidia-smi",
+		"--query-gpu=utilization.gpu,memory.used,memory.total,name",
+		"--format=csv,noheader,nounits").Output()
+	if err != nil {
+		return nil, nil, "", ""
+	}
+	line := strings.TrimSpace(string(out))
+	if line == "" {
+		return nil, nil, "", ""
+	}
+	parts := strings.Split(strings.Split(line, "\n")[0], ",")
+	if len(parts) < 4 {
+		return nil, nil, "", ""
+	}
+	u, _ := strconv.Atoi(strings.TrimSpace(parts[0]))
+	usedMB, _ := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+	totMB, _ := strconv.ParseFloat(strings.TrimSpace(parts[2]), 64)
+	uu := clamp(u)
+	vv := 0
+	if totMB > 0 {
+		vv = clamp(round(usedMB / totMB * 100))
+	}
+	return &uu, &vv, strings.TrimSpace(parts[3]),
+		fmt.Sprintf("%.1f / %.0f GB", usedMB/1024, totMB/1024)
+}
+
+// --- systemd services (best-effort) -----------------------------------------
+
+func services() []Service {
+	svcs := []Service{}
+	out, err := exec.Command("systemctl", "list-units", "--type=service",
+		"--state=running,failed", "--no-legend", "--no-pager", "--plain").Output()
+	if err != nil {
+		return svcs
+	}
+	for _, ln := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(ln)
+		if len(fields) < 4 {
+			continue
+		}
+		state := "running"
+		if fields[2] == "failed" || fields[3] == "failed" {
+			state = "failed"
+		} else if fields[3] != "running" {
+			state = "stopped"
+		}
+		svcs = append(svcs, Service{
+			Name:  strings.TrimSuffix(fields[0], ".service"),
+			State: state,
+		})
+		if len(svcs) >= 12 {
+			break
+		}
+	}
+	return svcs
+}
+
+// --- assembly ---------------------------------------------------------------
+
+func deriveStatus(cpu, mem, disk int, vram *int, svcs []Service) string {
+	for _, s := range svcs {
+		if s.State == "failed" {
+			return "crit"
+		}
+	}
+	switch {
+	case disk >= 92 || mem >= 95:
+		return "crit"
+	case cpu >= 88 || mem >= 88 || disk >= 85 || (vram != nil && *vram >= 92):
+		return "warn"
+	default:
+		return "good"
+	}
+}
+
+// Collect takes a full reading of the current host.
+func Collect() Snapshot {
+	host, _ := os.Hostname()
+	gpu, vram, name, vramText := gpuStats()
+	svcs := services()
+	cpu, mem, disk := cpuUsage(), memUsage(), diskUsage()
+	return Snapshot{
+		Host:     host,
+		OS:       osName(),
+		Up:       uptime(),
+		CPU:      cpu,
+		Mem:      mem,
+		Disk:     disk,
+		GPU:      gpu,
+		VRAM:     vram,
+		GPUName:  name,
+		VRAMText: vramText,
+		Load:     loadAvg(),
+		Services: svcs,
+		Status:   deriveStatus(cpu, mem, disk, vram, svcs),
+	}
+}
+
+func clamp(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
+}
+
+func round(f float64) int { return int(f + 0.5) }

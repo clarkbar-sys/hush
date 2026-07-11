@@ -1,43 +1,58 @@
-<!--
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  You are reading the template's own README.                          │
-  │  After clicking "Use this template", delete this comment block and   │
-  │  the "Getting started" section below, then fill in the placeholders. │
-  └─────────────────────────────────────────────────────────────────────┘
--->
+# hush
 
-# {{PROJECT_NAME}}
+> A tailnet fleet console — see and run your homelab from your phone.
 
-> {{ONE_LINE_DESCRIPTION}}
-
-<!-- Keep the badge(s) for the language(s) this repo uses; delete the rest. -->
-[![CI (C/C++)](https://github.com/clarkbar-sys/{{REPO_NAME}}/actions/workflows/ci-c.yml/badge.svg)](https://github.com/clarkbar-sys/{{REPO_NAME}}/actions/workflows/ci-c.yml)
-[![CI (Scheme)](https://github.com/clarkbar-sys/{{REPO_NAME}}/actions/workflows/ci-scheme.yml/badge.svg)](https://github.com/clarkbar-sys/{{REPO_NAME}}/actions/workflows/ci-scheme.yml)
-[![CI (Python)](https://github.com/clarkbar-sys/{{REPO_NAME}}/actions/workflows/ci-python.yml/badge.svg)](https://github.com/clarkbar-sys/{{REPO_NAME}}/actions/workflows/ci-python.yml)
+[![CI (Go)](https://github.com/clarkbar-sys/hush/actions/workflows/ci-go.yml/badge.svg)](https://github.com/clarkbar-sys/hush/actions/workflows/ci-go.yml)
 [![License](https://img.shields.io/badge/license-GPL--2.0-blue.svg)](./LICENSE)
 
 ## Overview
 
-Describe what this project does and who it's for in 2–3 sentences.
+`hush` gives a homelab of [Tailscale](https://tailscale.com) machines a place
+and a face: a phone-first web console where you see every machine at a glance
+and act on them by pointing, not typing. The mental model is *Factorio for your
+homelab* — a legible map of what's running, with everything expressed as one of
+eight constructs (Machine, Service, Job, Task, Workflow, Store, Backup, Link).
+
+See [`docs/DESIGN.md`](./docs/DESIGN.md) for the design and
+[issue #6](https://github.com/clarkbar-sys/hush/issues/6) for the full
+initiative. **Status: Phase 0 — read-only proof of life.**
 
 ## Getting started
 
 ```bash
-# clone
-git clone https://github.com/clarkbar-sys/{{REPO_NAME}}.git
-cd {{REPO_NAME}}
+git clone https://github.com/clarkbar-sys/hush.git
+cd hush
 
-# install dependencies
-# TODO: add install command for your stack
+# 1. run an agent on a machine you want to watch
+go run ./cmd/hush-agent -listen 127.0.0.1:8765
 
-# run
-# TODO: add run command for your stack
+# 2. run the control plane serving the UI (defaults to one local agent)
+go run ./cmd/hush-control -listen 127.0.0.1:8080 -web web
+
+# 3. open the console
+open http://127.0.0.1:8080
 ```
+
+To watch a real fleet, copy `fleet.example.json` to `fleet.json`, list your
+agents' tailnet addresses, and start `hush-control`. In production each
+`hush-agent` binds to the tailnet interface — no public exposure.
+
+## Components
+
+| Path | What it is |
+|---|---|
+| `cmd/hush-agent` | one static Go binary per machine; reports vitals as JSON |
+| `cmd/hush-control` | control plane on the NAS; fans out to agents, serves the UI |
+| `internal/vitals` | Linux vitals collection (`/proc`, systemd, `nvidia-smi`) |
+| `web/` | the console — a single static page |
+| `docs/mockups/` | interactive UX reference (open directly for the demo fleet) |
 
 ## Development
 
 ```bash
-# TODO: lint / test / build commands
+go build ./...   # build everything
+go vet ./...     # vet
+go test ./...    # tests
 ```
 
 ## Releases
@@ -46,8 +61,7 @@ Releases are automated with
 [release-please](https://github.com/googleapis/release-please). Commit using
 [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`,
 `chore:` …) and a **Release PR** is opened and kept up to date automatically —
-it bumps the version and updates [CHANGELOG.md](./CHANGELOG.md). Merge that PR to
-tag the release; `release.yml` then builds and attaches the program artifacts.
+it bumps the version and updates [CHANGELOG.md](./CHANGELOG.md).
 
 ## Contributing
 
@@ -63,28 +77,3 @@ public issue for security reports.
 ## License
 
 Distributed under the terms of the [GNU GPL v2](./LICENSE).
-
----
-
-<details>
-<summary><strong>📋 New-repo checklist (delete this section once done)</strong></summary>
-
-After creating a repo from this template:
-
-- [ ] Replace `{{PROJECT_NAME}}`, `{{ONE_LINE_DESCRIPTION}}`, `{{REPO_NAME}}` above
-- [ ] Keep the CI workflow(s) for your language (`ci-c` / `ci-scheme` / `ci-python`); delete the rest, and delete the badges to match
-- [ ] Fill in the `TODO:` build/test commands in the workflow you kept
-- [ ] Review [STANDARDS.md](./STANDARDS.md); for Python fill in the
-      `{{PLACEHOLDERS}}` in `pyproject.toml`. Configs (`.clang-format`,
-      `.clang-tidy`, `pyproject.toml`) enforce an 80% coverage floor by default
-- [ ] Update `.github/CODEOWNERS` with the real owning team
-- [ ] Uncomment your language's section in `.gitignore` and `dependabot.yml`
-- [ ] Enable branch protection on `main` (require CI + 1 review); add the kept
-      workflow's job as a required status check
-- [ ] Confirm `SECURITY.md` contact is correct
-- [ ] Releases: commit with [Conventional Commits](https://www.conventionalcommits.org/)
-      so release-please can version + changelog automatically; wire the build step
-      in `.github/workflows/release.yml`
-- [ ] Delete the "Getting started" TODOs once real commands exist
-
-</details>

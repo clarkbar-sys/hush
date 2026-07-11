@@ -18,13 +18,17 @@ tmp/
 *.pem
 *.key
 
-# ── Language-specific: uncomment the section for your stack ───
-#
-# Node:
-# node_modules/
-# dist/
-# coverage/
-# *.tsbuildinfo
+# ── Go ────────────────────────────────────────────────────────
+/bin/
+/hush-agent
+/hush-control
+*.test
+*.out
+
+# ── Local fleet config (contains your tailnet addresses) ──────
+/fleet.json
+
+# ── Language-specific: uncomment the section for other stacks ─
 #
 # Python:
 # __pycache__/
@@ -32,10 +36,3 @@ tmp/
 # .venv/
 # .pytest_cache/
 # .ruff_cache/
-# build/
-# *.egg-info/
-#
-# Go:
-# /bin/
-# *.test
-# *.out
