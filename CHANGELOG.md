@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.0 (2026-07-11)
+
+
+### Features
+
+* add curl-installable release binaries ([be89f78](https://github.com/clarkbar-sys/hush/commit/be89f78a53df39b1e9feecdbb23adb0be09dc52d))
+* **control:** add tsnet mode to serve the console over HTTPS on the tailnet ([5c9266a](https://github.com/clarkbar-sys/hush/commit/5c9266a5ff1fbb78a5f038cf4eccc7bb856eb98c))
+* **control:** add tsnet mode to serve the console over HTTPS on the tailnet ([945a9d1](https://github.com/clarkbar-sys/hush/commit/945a9d18691c3e0318c82dc00d7a391b4250e034)), closes [#9](https://github.com/clarkbar-sys/hush/issues/9)
+* **control:** embed console UI and document go install ([6cb4ca6](https://github.com/clarkbar-sys/hush/commit/6cb4ca6801a42caad43a64b02918697f58bc3d03))
+* **control:** embed console UI and document go install ([2ccd687](https://github.com/clarkbar-sys/hush/commit/2ccd687d667fa055997f904d740f2535c92500c5)), closes [#11](https://github.com/clarkbar-sys/hush/issues/11)
+* install hush-agent/hush-control as systemd services ([ea59317](https://github.com/clarkbar-sys/hush/commit/ea5931726532869e830ecb213fc71b9a097b1b0c))
+* scaffold Phase 0 fleet console (agent + control plane + UI) ([c67f364](https://github.com/clarkbar-sys/hush/commit/c67f36462f1fcacfaf2f35288a80be20b65da866))
+* scaffold Phase 0 fleet console (agent + control plane + UI) ([1edc7fb](https://github.com/clarkbar-sys/hush/commit/1edc7fbaf4f3421672966596d9eb614e7983b9bc)), closes [#6](https://github.com/clarkbar-sys/hush/issues/6)
+
+## Changelog
+
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
