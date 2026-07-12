@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/clarkbar-sys/hush/compare/v1.7.0...v1.7.1) (2026-07-12)
+
+
+### Bug Fixes
+
+* **agent:** allow AF_NETLINK so -listen tailnet can resolve its address ([#56](https://github.com/clarkbar-sys/hush/issues/56)) ([fde8783](https://github.com/clarkbar-sys/hush/commit/fde8783f086cd95e049b71e9fb13529a6601cd08))
+
 ## [1.7.0](https://github.com/clarkbar-sys/hush/compare/v1.6.0...v1.7.0) (2026-07-12)
 
 
