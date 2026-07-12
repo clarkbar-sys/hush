@@ -112,7 +112,10 @@ install_updater() {
 install_agent() {
   install_binary hush-agent "${HUSH_AGENT_BIN:-hush-agent}"
   install_unit hush-agent.service
-  install -d -o root -g "$SERVICE_GROUP" -m 0750 "$CONFIG_DIR"
+  # Owned by the service user, not root: this dir is shared with
+  # hush-control (see install_control), which persists fleet.json here and
+  # needs write access to its own state directory.
+  install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 "$CONFIG_DIR"
   install_env_file agent.env \
     "# hush-agent environment — edit, then: systemctl restart hush-agent" \
     "# Bind to the tailnet interface in production, not 127.0.0.1." \
@@ -122,7 +125,10 @@ install_agent() {
 
 install_control() {
   install_binary hush-control "${HUSH_CONTROL_BIN:-hush-control}"
-  install -d -o root -g "$SERVICE_GROUP" -m 0750 "$CONFIG_DIR"
+  # Owned by the service user, not root: hush-control runs as this user and
+  # persists fleet.json here (the web console can add/remove machines), so
+  # it needs write access to its own state directory.
+  install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 "$CONFIG_DIR"
   install_unit hush-control.service
   install_env_file control.env \
     "# hush-control environment — edit, then: systemctl restart hush-control" \
@@ -138,7 +144,10 @@ install_control() {
 
 install_control_tsnet() {
   install_binary hush-control "${HUSH_CONTROL_BIN:-hush-control}"
-  install -d -o root -g "$SERVICE_GROUP" -m 0750 "$CONFIG_DIR"
+  # Owned by the service user, not root: hush-control runs as this user and
+  # persists fleet.json here (the web console can add/remove machines), so
+  # it needs write access to its own state directory.
+  install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 "$CONFIG_DIR"
   install_unit hush-control-tsnet.service
   install_env_file control-tsnet.env \
     "# hush-control (tsnet mode) environment" \
