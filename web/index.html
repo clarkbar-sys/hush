@@ -80,6 +80,10 @@
   .chip.demo .live { background: var(--warn); animation: none; }
   .chip.down { color: var(--crit); border-color: var(--crit-soft); }
   .chip.down .live { background: var(--crit); animation: none; }
+  .chip.ver { text-decoration: none; }
+  .chip.ver.avail { color: var(--good); border-color: var(--good-soft); cursor: pointer; }
+  .chip.ver .up { width:6px; height:6px; border-radius:50%; background:var(--good);
+    box-shadow:0 0 0 0 var(--good); animation: pulse 2.4s infinite; }
 
   /* ---- breadcrumb / summary strip ---- */
   .strip { padding: 14px 16px 6px; display: flex; align-items: center; gap: 10px;
@@ -403,6 +407,7 @@
       <span>fleet console</span>
     </div>
     <div class="spacer"></div>
+    <a class="chip ver" id="verChip" href="https://github.com/clarkbar-sys/hush/releases" target="_blank" rel="noopener" hidden></a>
     <div class="chip" id="statusChip"><span class="live"></span>connecting…</div>
   </header>
 
@@ -969,9 +974,34 @@
     clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove("show"), 2600);
   }
 
+  /* ---------- version / update indicator ---------- */
+  async function checkVersion(){
+    const chip = $("#verChip");
+    try {
+      const r = await fetch("api/version", {cache:"no-store"});
+      if(!r.ok) throw new Error("bad status");
+      const v = await r.json();
+      if(!v.current) throw new Error("no version");
+      if(v.updateAvailable && v.latest){
+        chip.className = "chip ver avail";
+        chip.innerHTML = `<span class="up"></span>${v.current} → ${v.latest}`;
+        chip.title = `A newer release (${v.latest}) is available. hush-control auto-updates on its timer; click to view the release.`;
+      } else {
+        chip.className = "chip ver";
+        chip.innerHTML = v.current;
+        chip.title = v.error ? `Update check failed: ${v.error}` : "Running the latest release.";
+      }
+      chip.hidden = false;
+    } catch(e){
+      chip.hidden = true; // no server-side version (demo / file://) — say nothing
+    }
+  }
+
   /* ---------- go ---------- */
   poll();
   setInterval(poll, 2500);
+  checkVersion();
+  setInterval(checkVersion, 15*60*1000);
 })();
 </script>
 </body>
