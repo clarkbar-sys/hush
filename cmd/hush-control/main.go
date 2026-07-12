@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -146,7 +147,13 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 		}
 		added, err := store.Add(a)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusConflict)
+			status := http.StatusInternalServerError
+			if errors.Is(err, errDuplicateAddr) {
+				status = http.StatusConflict
+			} else {
+				log.Printf("add agent: %v", err)
+			}
+			http.Error(w, err.Error(), status)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -289,6 +296,11 @@ func (s *agentStore) Snapshot() []Agent {
 	return out
 }
 
+// errDuplicateAddr marks an Add rejection caused by an address already in
+// the fleet, as opposed to a persistence failure — the HTTP handler uses
+// errors.Is to tell the two apart and pick the right status code.
+var errDuplicateAddr = errors.New("already in the fleet")
+
 // Add appends a new agent and persists the updated fleet to disk. It rejects
 // an address already in the fleet rather than silently duplicating it.
 func (s *agentStore) Add(a Agent) (Agent, error) {
@@ -296,12 +308,12 @@ func (s *agentStore) Add(a Agent) (Agent, error) {
 	defer s.mu.Unlock()
 	for _, existing := range s.agents {
 		if existing.Addr == a.Addr {
-			return Agent{}, fmt.Errorf("%s is already in the fleet", a.Addr)
+			return Agent{}, fmt.Errorf("%s %w", a.Addr, errDuplicateAddr)
 		}
 	}
 	updated := append(s.agents, a)
 	if err := saveAgents(s.path, updated); err != nil {
-		return Agent{}, fmt.Errorf("save %s: %w", s.path, err)
+		return Agent{}, fmt.Errorf("save %s: %w — check that its directory is writable (see the -config flag and the systemd unit's ReadWritePaths)", s.path, err)
 	}
 	s.agents = updated
 	return a, nil
