@@ -98,6 +98,13 @@
   .chip.ver .up { width:6px; height:6px; border-radius:50%; background:var(--good);
     box-shadow:0 0 0 0 var(--good); animation: pulse 2.4s infinite; }
 
+  .cmdbox { display:flex; align-items:center; gap:8px; margin: 4px 0 14px;
+    background: var(--panel-2); border:1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; }
+  .cmdbox code { flex:1; font-family:var(--mono); font-size:12.5px; color:var(--text);
+    overflow-x:auto; white-space:nowrap; }
+  .cmdbox button { flex:none; }
+
   /* ---- breadcrumb / summary strip ---- */
   .strip { padding: 14px 16px 6px; display: flex; align-items: center; gap: 10px;
     flex-wrap: wrap; }
@@ -442,7 +449,7 @@
       <span class="dot-h"></span><b>hush</b>
     </div>
     <div class="spacer"></div>
-    <a class="chip ver" id="verChip" href="https://github.com/clarkbar-sys/hush/releases" target="_blank" rel="noopener" hidden></a>
+    <button class="chip ver" id="verChip" type="button" hidden></button>
     <div class="chip" id="statusChip"><span class="live"></span>connecting…</div>
   </header>
 
@@ -468,6 +475,13 @@
   <div class="sheet" role="dialog" aria-label="Add a machine">
     <div class="grab"></div>
     <div id="addSheetBody"></div>
+  </div>
+</div>
+
+<div class="scrim" id="updateScrim">
+  <div class="sheet" role="dialog" aria-label="Update hush-control">
+    <div class="grab"></div>
+    <div id="updateSheetBody"></div>
   </div>
 </div>
 
@@ -1166,6 +1180,10 @@
   }
 
   /* ---------- version / update indicator ---------- */
+  const updateScrim = $("#updateScrim");
+  const updateBody = $("#updateSheetBody");
+  let lastVersion = null;
+
   async function checkVersion(){
     const chip = $("#verChip");
     try {
@@ -1173,10 +1191,11 @@
       if(!r.ok) throw new Error("bad status");
       const v = await r.json();
       if(!v.current) throw new Error("no version");
+      lastVersion = v;
       if(v.updateAvailable && v.latest){
         chip.className = "chip ver avail";
         chip.innerHTML = `<span class="up"></span>${v.current} → ${v.latest}`;
-        chip.title = `A newer release (${v.latest}) is available. hush-control auto-updates on its timer; click to view the release.`;
+        chip.title = `A newer release (${v.latest}) is available. hush-control auto-updates on its timer; click for a command to update now.`;
       } else {
         chip.className = "chip ver";
         chip.innerHTML = v.current;
@@ -1184,9 +1203,40 @@
       }
       chip.hidden = false;
     } catch(e){
+      lastVersion = null;
       chip.hidden = true; // no server-side version (demo / file://) — say nothing
     }
   }
+
+  $("#verChip").addEventListener("click", ()=>{
+    if(lastVersion && lastVersion.updateAvailable && lastVersion.latest){
+      openUpdateSheet();
+    } else {
+      window.open("https://github.com/clarkbar-sys/hush/releases", "_blank", "noopener");
+    }
+  });
+
+  function openUpdateSheet(){
+    const v = lastVersion;
+    const cmd = "sudo systemctl start hush-control-update.service";
+    updateBody.innerHTML = `
+      <h3>Update available: ${esc(v.latest)}</h3>
+      <p class="sd">running ${esc(v.current)} — hush-control auto-updates within its next daily window, or run this now over SSH:</p>
+      <div class="cmdbox"><code>${esc(cmd)}</code><button class="btn" id="updCopy">Copy</button></div>
+      <div class="field-note">Verifies the release's SHA-256 before swapping the binary, then restarts the service. Safe to run any time.</div>
+      <div class="sheet-actions">
+        <a class="btn ghost" href="https://github.com/clarkbar-sys/hush/releases/tag/${encodeURIComponent(v.latest)}" target="_blank" rel="noopener" style="text-decoration:none;text-align:center">Release notes</a>
+        <button class="btn primary" id="updClose" style="flex:1">Done</button>
+      </div>`;
+    $("#updCopy").addEventListener("click", async ()=>{
+      try { await navigator.clipboard.writeText(cmd); toast("copied to clipboard"); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
+    $("#updClose").addEventListener("click", closeUpdateSheet);
+    updateScrim.classList.add("open");
+  }
+  function closeUpdateSheet(){ updateScrim.classList.remove("open"); }
+  updateScrim.addEventListener("click", e=>{ if(e.target===updateScrim) closeUpdateSheet(); });
 
   /* ---------- go ---------- */
   poll();
