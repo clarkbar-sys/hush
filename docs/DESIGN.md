@@ -77,7 +77,9 @@ build later. No reconciler, no convergence loop.
 - **`hush-agent`** — one static Go binary per machine, no runtime deps. Reports
   vitals over the tailnet interface. Read-only in Phase 0.
 - **`hush-control`** — runs on the NAS; fans out to every agent, aggregates,
-  and serves the web UI. Config in `fleet.json` (see `fleet.example.json`).
+  and serves the web UI. Config in `fleet.json` (see `fleet.example.json`),
+  editable by hand or through the console's "Add machine" flow, which POSTs
+  to `/api/agents` after confirming the address with `/api/agents/test`.
 - **Transport** — the tailnet already provides encrypted transport + identity,
   so `hush` is a thin authenticated RPC, not a reimplementation of SSH. Agents
   listen only on the tailnet interface; no public exposure. `hush-control` can
@@ -93,7 +95,9 @@ Language: **Go** across the backend. **Scheme** is reserved for the Workflow DSL
 Each phase layers on the same map.
 
 - **Phase 0 — Proof of life (read-only).** Fleet map + live vitals + drill into
-  a machine to *see* its services. No button changes anything. ← we are here
+  a machine to *see* its services. No construct button changes anything; the
+  one exception is fleet membership itself — adding a machine through the
+  console. ← we are here
 - **Phase 1 — Actions.** Start / stop / restart Services; live journal tail.
 - **Phase 2 — Creation.** Build new Services and Jobs from the palette.
 - **Phase 3 — Workflows.** The visual blueprint builder (Scheme DSL).
