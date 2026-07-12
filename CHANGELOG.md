@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/clarkbar-sys/hush/compare/v1.6.0...v1.7.0) (2026-07-12)
+
+
+### Features
+
+* **control:** add downloadable fleet report ([#52](https://github.com/clarkbar-sys/hush/issues/52)) ([23e7635](https://github.com/clarkbar-sys/hush/commit/23e7635e5a7a180ae15df80be8c6a08cd67d26f6))
+
+
+### Bug Fixes
+
+* **install:** fall back to a writable bin dir on read-only /usr (SteamOS) ([#49](https://github.com/clarkbar-sys/hush/issues/49)) ([4473de0](https://github.com/clarkbar-sys/hush/commit/4473de054bc2aadb04a82e8470348e181633c1c4))
+
 ## [1.6.0](https://github.com/clarkbar-sys/hush/compare/v1.5.0...v1.6.0) (2026-07-12)
 
 
