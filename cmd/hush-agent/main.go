@@ -11,15 +11,24 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 
+	"github.com/clarkbar-sys/hush/internal/version"
 	"github.com/clarkbar-sys/hush/internal/vitals"
 )
 
 func main() {
 	listen := flag.String("listen", ":8765", "address to listen on (bind to the tailnet interface in production)")
+	showVersion := flag.Bool("version", false, "print the hush-agent version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("hush-agent %s\n", version.Current())
+		os.Exit(0)
+	}
 
 	vitals.StartSampler()
 

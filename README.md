@@ -139,6 +139,33 @@ sudo ./scripts/install.sh control-tsnet    # — or — hush-control, tsnet mode
 sudo ./scripts/install.sh all              # agent + control (LAN mode), one box
 ```
 
+## Staying up to date
+
+`hush-control` knows its own version and checks it against the latest GitHub
+release. Both binaries report it:
+
+```bash
+hush-control -version   # e.g. "hush-control v1.2.0"
+hush-agent  -version
+```
+
+The console shows a version chip in the header; when a newer release exists it
+lights up as `v1.2.0 → v1.3.0` and links to the release notes. The check is
+read-only, cached for an hour, and done **only by hush-control** — one call
+from the one box, never a fleet of agents hammering the API.
+
+**Auto-update (hush-control only).** The `install.sh` `control` /
+`control-tsnet` installs also set up `hush-control-update.timer`, which runs a
+small **root** oneshot (`hush-control -self-update`) daily. It fetches the
+latest release, verifies the asset's SHA-256 against the digest GitHub returns
+over its authenticated API, atomically swaps `/usr/local/bin/hush-control`, and
+restarts the service. The long-running control process stays unprivileged (the
+`hush` user); this oneshot is the only piece that runs as root, and only
+briefly. Trigger one on demand with `sudo systemctl start
+hush-control-update.service`, or pause auto-updates with `sudo systemctl
+disable --now hush-control-update.timer`. Agents are intentionally left out —
+they stay read-only and are updated by re-running the one-line installer.
+
 ## Components
 
 | Path | What it is |

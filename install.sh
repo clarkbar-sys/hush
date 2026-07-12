@@ -155,6 +155,17 @@ enable_service() {
   echo "enabled + started $1" >&2
 }
 
+# install_updater sets up the root-owned self-update path for hush-control:
+# a oneshot that swaps the binary for the latest verified release, plus a
+# timer that runs it. hush-control itself is unprivileged and can't do this.
+install_updater() {
+  fetch_unit hush-control-update.service
+  fetch_unit hush-control-update.timer
+  systemctl daemon-reload
+  systemctl enable --now hush-control-update.timer
+  echo "enabled hush-control-update.timer (auto-update checks)" >&2
+}
+
 install_agent() {
   fetch_binary hush-agent
   fetch_unit hush-agent.service
@@ -174,6 +185,7 @@ install_control() {
     "HUSH_CONTROL_CONFIG=$CONFIG_DIR/fleet.json"
   fetch_fleet_example
   enable_service hush-control.service
+  install_updater
 }
 
 install_control_tsnet() {
@@ -190,6 +202,7 @@ install_control_tsnet() {
     "HUSH_CONTROL_STATE_DIR=/var/lib/hush" \
     "# To restrict callers, add -allow flags with: systemctl edit --full hush-control-tsnet"
   enable_service hush-control-tsnet.service
+  install_updater
 }
 
 require_root

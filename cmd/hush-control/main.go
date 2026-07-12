@@ -6,15 +6,20 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/clarkbar-sys/hush/internal/updater"
+	"github.com/clarkbar-sys/hush/internal/version"
 	"github.com/clarkbar-sys/hush/internal/vitals"
 	"github.com/clarkbar-sys/hush/web"
 )
@@ -62,7 +67,17 @@ func main() {
 	stateDir := flag.String("state-dir", "", "directory to persist tsnet node state (tsnet mode; default: OS config dir)")
 	var allow stringList
 	flag.Var(&allow, "allow", "allowed caller login, e.g. login@example.com; repeatable; empty = any tailnet member (tsnet mode)")
+	showVersion := flag.Bool("version", false, "print the hush-control version and exit")
+	selfUpdate := flag.Bool("self-update", false, "check for a newer release and replace this binary in place, then exit (run as root by hush-control-update.service)")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("hush-control %s\n", version.Current())
+		os.Exit(0)
+	}
+	if *selfUpdate {
+		os.Exit(runSelfUpdate())
+	}
 
 	agents := loadAgents(*configPath)
 	log.Printf("hush-control: %d agent(s) configured", len(agents))
@@ -89,6 +104,13 @@ func buildMux(agents []Agent, webDir string) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(fleet); err != nil {
 			log.Printf("encode fleet: %v", err)
+		}
+	})
+	vc := &versionChecker{client: &http.Client{Timeout: 5 * time.Second}}
+	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(vc.status(r.Context())); err != nil {
+			log.Printf("encode version: %v", err)
 		}
 	})
 	if webDir != "" {
@@ -182,4 +204,93 @@ func loadAgents(path string) []Agent {
 		log.Fatalf("parse %s: %v", path, err)
 	}
 	return agents
+}
+
+// VersionStatus is what /api/version returns, so the console can show the
+// running version and whether a newer release is available.
+type VersionStatus struct {
+	Current         string `json:"current"`             // running version, e.g. "v1.2.0" or "dev"
+	Latest          string `json:"latest,omitempty"`    // latest released version, when the check succeeded
+	UpdateAvailable bool   `json:"updateAvailable"`     // true when Latest is newer than Current
+	CheckedAt       string `json:"checkedAt,omitempty"` // RFC3339 time of the last successful upstream check
+	Error           string `json:"error,omitempty"`     // populated when the upstream check failed
+}
+
+// versionChecker serves /api/version, caching the upstream GitHub lookup so a
+// busy console never hammers the API (and stays clear of its unauthenticated
+// rate limit). Only hush-control performs this check; agents never reach out.
+type versionChecker struct {
+	client *http.Client
+
+	mu       sync.Mutex
+	cached   VersionStatus
+	cachedAt time.Time
+}
+
+// versionTTL is how long a successful check is reused before we ask GitHub again.
+const versionTTL = time.Hour
+
+func (v *versionChecker) status(ctx context.Context) VersionStatus {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	if !v.cachedAt.IsZero() && time.Since(v.cachedAt) < versionTTL && v.cached.Error == "" {
+		return v.cached
+	}
+
+	current, latest, avail, err := updater.Check(ctx, v.client, "hush-control")
+	st := VersionStatus{Current: current, Latest: latest, UpdateAvailable: avail}
+	if err != nil {
+		// Keep serving the last good answer if we have one; just note the error.
+		st.Error = err.Error()
+		if v.cached.Latest != "" {
+			st.Latest, st.UpdateAvailable, st.CheckedAt = v.cached.Latest, v.cached.UpdateAvailable, v.cached.CheckedAt
+		}
+		v.cached = st
+		return st
+	}
+	st.CheckedAt = time.Now().UTC().Format(time.RFC3339)
+	v.cached, v.cachedAt = st, time.Now()
+	return st
+}
+
+// runSelfUpdate performs a one-shot self-update and returns a process exit
+// code. It is the entry point for `hush-control -self-update`, invoked as root
+// by hush-control-update.service. On a successful swap it restarts the running
+// service so the new binary takes over.
+func runSelfUpdate() int {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	client := &http.Client{Timeout: 2 * time.Minute}
+	res, err := updater.SelfUpdate(ctx, client, "hush-control")
+	if err != nil {
+		log.Printf("self-update: %v", err)
+		return 1
+	}
+	if !res.Updated {
+		log.Printf("self-update: already at the latest release (%s)", res.From)
+		return 0
+	}
+	log.Printf("self-update: %s -> %s; restarting service", res.From, res.To)
+	if err := restartService(ctx); err != nil {
+		// The binary is already swapped; the next restart picks it up. Surface
+		// the failure but don't pretend the update didn't happen.
+		log.Printf("self-update: replaced binary but restart failed: %v", err)
+		return 1
+	}
+	return 0
+}
+
+// restartService bounces whichever control unit is active so the freshly
+// swapped binary is what runs. try-restart is a no-op for an inactive unit, so
+// naming both LAN and tsnet units restarts exactly the one that is running.
+func restartService(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "systemctl", "try-restart",
+		"hush-control.service", "hush-control-tsnet.service")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("systemctl try-restart: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
