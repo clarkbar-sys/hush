@@ -39,6 +39,14 @@ below for the same install from a local clone, and "Prefer building from
 source" below for running the binary yourself without a service (e.g. on
 macOS, which has no systemd).
 
+On immutable-root distros — **SteamOS** (Steam Deck), Fedora Silverblue/Kinoite —
+`/usr` is mounted read-only, so the usual `/usr/local/bin` can't be written and
+the install would fail with a "read-only file system" error. The installer
+detects this and falls back to a writable directory (`/opt/hush/bin`, then
+`/var/lib/hush/bin`), rewriting the systemd unit's `ExecStart` to match — no
+extra steps needed. Set `HUSH_BIN_DIR=/some/dir` to force a specific location,
+e.g. `... | sudo HUSH_BIN_DIR=/opt/hush/bin sh`.
+
 Prefer building from source? Both binaries also install with the Go toolchain
 (Go 1.26+):
 
