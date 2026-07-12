@@ -159,6 +159,12 @@
   .node.s-warn { --sev: var(--warn); --sev-soft: var(--warn-soft); }
   .node.s-crit { --sev: var(--crit); --sev-soft: var(--crit-soft); }
   .node.offline { opacity: .62; }
+  .node.pending { opacity: .7; border-style: dashed; }
+  .node.pending::before { background: var(--faint); }
+  .node.new { animation: newpop 900ms ease; }
+  .placeholder-ring { width:44px; height:44px; border-radius:50%; border:3px dashed var(--border);
+    display:grid; place-items:center; font-family:var(--mono); font-size:10px; color:var(--faint); }
+  .badge.pending { color: var(--muted); background: var(--panel-2); border:1px dashed var(--border); }
 
   .node .hd { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
   .node .host { font-family: var(--mono); font-weight: 700; font-size: 15px;
@@ -286,7 +292,40 @@
   .btn.primary { background: var(--accent); border-color: var(--accent);
     color: #04211d; } .btn.primary:hover { filter: brightness(1.06); }
   .btn.danger:hover { border-color: var(--crit); color: var(--crit); }
+  .btn.ghost { background: transparent; }
   .btn:disabled { opacity:.4; cursor:not-allowed; }
+
+  .field { margin-bottom: 14px; }
+  .field label { display:block; font-family:var(--mono); font-size:10.5px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  .field .opt { text-transform:none; letter-spacing:0; color:var(--faint); font-family:var(--sans); }
+  .field input { width:100%; font-family:var(--mono); font-size:14px; color:var(--text);
+    background: var(--panel-2); border:1px solid var(--border); border-radius:9px;
+    padding: 10px 12px; outline:none; }
+  .field input:focus { border-color: var(--accent); }
+  .field input::placeholder { color: var(--faint); }
+  .field .hint { margin-top:5px; font-family:var(--mono); font-size:10.5px; color:var(--faint); }
+
+  .verify-box { border:1px solid var(--border); border-radius:10px; padding:12px; margin: 4px 0 16px;
+    background: var(--panel-2); }
+  .verify-row { display:flex; align-items:center; gap:9px; font-family:var(--mono); font-size:12.5px; }
+  .verify-row + .verify-row { margin-top:8px; }
+  .vdot { width:8px; height:8px; border-radius:50%; flex:none; }
+  .vdot.ok { background: var(--good); box-shadow:0 0 0 3px var(--good-soft); }
+  .preview { display:flex; align-items:center; gap:10px; margin-top:10px; padding-top:10px;
+    border-top:1px solid var(--border-soft); }
+  .preview .gly { width:32px; height:32px; border-radius:8px; background:var(--good-soft); color:var(--good);
+    display:grid; place-items:center; font-size:15px; flex:none; }
+  .preview .pn { font-family:var(--mono); font-weight:700; font-size:13px; }
+  .preview .pm { font-family:var(--mono); font-size:10.5px; color:var(--faint); }
+
+  .field-note { font-family:var(--mono); font-size:10.5px; color:var(--faint); line-height:1.6;
+    background: var(--panel-2); border:1px dashed var(--border); border-radius:9px; padding:9px 11px; margin: 2px 0 18px; }
+  .field-note b { color: var(--muted); }
+  .field-note.err { color: var(--crit); border-color: var(--crit-soft); }
+
+  .sheet-actions { display:flex; gap:9px; }
+  .sheet-actions .btn { flex:1; justify-content:center; }
 
   .logwrap { padding: 12px 14px 16px; }
   .logbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
@@ -338,6 +377,7 @@
   @keyframes pulse { 0%{ box-shadow:0 0 0 0 var(--accent);} 70%{ box-shadow:0 0 0 6px transparent;} 100%{ box-shadow:0 0 0 0 transparent;} }
   @keyframes pulse-good { 0%{ box-shadow:0 0 0 0 var(--good-soft);} 70%{ box-shadow:0 0 0 6px transparent;} 100%{ box-shadow:0 0 0 0 transparent;} }
   @keyframes rise { from{ transform: translateY(30px); opacity:.4;} to{ transform:none; opacity:1;} }
+  @keyframes newpop { 0%{ transform:scale(.94);} 60%{ transform:scale(1.01);} 100%{ transform:scale(1);} }
   @media (prefers-reduced-motion: reduce) {
     *, ::before, ::after { animation-duration: .001ms !important; transition: none !important; }
   }
@@ -359,6 +399,7 @@
 
   <div class="dock">
     <span class="hint" id="dockHint">loading fleet…</span>
+    <button class="btn" id="addMachineBtn">⊕ Add machine</button>
     <button class="btn primary build" id="buildBtn">＋ Build</button>
   </div>
 </div>
@@ -369,6 +410,13 @@
     <h3>Build a construct</h3>
     <p class="sd">the whole vocabulary — eight nouns, nothing else</p>
     <div class="palette" id="palette"></div>
+  </div>
+</div>
+
+<div class="scrim" id="addScrim">
+  <div class="sheet" role="dialog" aria-label="Add a machine">
+    <div class="grab"></div>
+    <div id="addSheetBody"></div>
   </div>
 </div>
 
@@ -408,6 +456,9 @@
   const cpuHist = {};              // id -> rolling cpu samples (live mode)
   const state = { view:"fleet", mid:null, cname:null };
   const byId = id => M.find(m=>m.id===id);
+  let PENDING = [];                // machines just added via the UI, awaiting first check-in
+  const JUST_ARRIVED = new Set();  // ids to pop-highlight for one render after their first check-in
+  function esc(s){ return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
   /* ---------- svg helpers ---------- */
   function ring(pct, size){
@@ -483,13 +534,34 @@
       </div>
       <main>
         <div class="grid">
+          ${PENDING.map(pendingNodeCard).join("")}
           ${M.slice().sort((a,b)=>sevRank[b.status]-sevRank[a.status]).map(nodeCard).join("")}
         </div>
-        ${M.length ? "" : `<p class="note">no machines reporting yet</p>`}
+        ${(M.length+PENDING.length) ? "" : `<p class="note">no machines reporting yet</p>`}
       </main>`;
-    app.querySelectorAll(".node").forEach(el=>{
+    app.querySelectorAll(".node[data-id]").forEach(el=>{
       el.addEventListener("click", ()=>enterMachine(el.dataset.id));
     });
+    JUST_ARRIVED.clear(); // the pop animation above only needs to play once
+  }
+
+  // A machine just added through "Add machine", shown until its first real
+  // /api/fleet entry shows up (see poll()'s PENDING filter below).
+  function pendingNodeCard(p){
+    return `
+      <div class="node pending">
+        <div class="hd">
+          <div>
+            <div class="host"><span class="aura" style="background:var(--faint)"></span>${esc(p.id)}</div>
+            <div class="meta">${esc(p.ip||"")}</div>
+          </div>
+        </div>
+        <div class="rings"><div class="ring"><div class="placeholder-ring">?</div></div></div>
+        <div class="foot">
+          <span class="cons">waiting for first check-in…</span>
+          <span class="badge pending">◌ pairing</span>
+        </div>
+      </div>`;
   }
 
   function nodeCard(m){
@@ -503,7 +575,7 @@
           <div class="ring">${dualRing(m.gpu,m.vram,44)}<span class="v">${m.gpu}%</span><span class="k">gpu</span><span class="k2"><i></i>${m.vram}% vram</span></div>` : "";
     const hist = m.loadHist && m.loadHist.length>1 ? m.loadHist : [m.cpu||0, m.cpu||0];
     return `
-      <button class="node s-${m.status} ${m.online?"":"offline"}" data-id="${m.id}">
+      <button class="node s-${m.status} ${m.online?"":"offline"}${JUST_ARRIVED.has(m.id)?" new":""}" data-id="${m.id}">
         <div class="hd">
           <div>
             <div class="host"><span class="aura"></span>${m.id}</div>
@@ -662,6 +734,13 @@
       m.loadHist = h.slice();
       return m;
     });
+    // a machine added through "Add machine" graduates out of PENDING once its
+    // first real /api/fleet entry shows up, with one pop-in animation.
+    PENDING = PENDING.filter(p => {
+      const arrived = M.some(m => m.id === p.id || (p.ip && m.ip === p.ip));
+      if(arrived) JUST_ARRIVED.add(p.id);
+      return !arrived;
+    });
   }
 
   function setChip(){
@@ -675,7 +754,8 @@
     chip.innerHTML = `<span class="live"></span>${txt}`;
     const crit = M.filter(m=>m.status==="crit").length;
     const warn = M.filter(m=>m.status==="warn").length;
-    $("#dockHint").textContent = `${M.length} machine${M.length===1?"":"s"} · ${crit} critical · ${warn} warning`;
+    const pairing = PENDING.length ? ` · ${PENDING.length} pairing` : "";
+    $("#dockHint").textContent = `${M.length} machine${M.length===1?"":"s"} · ${crit} critical · ${warn} warning${pairing}`;
   }
 
   async function poll(){
@@ -749,6 +829,136 @@
   $("#palette").querySelectorAll(".pitem").forEach(el=>{
     el.addEventListener("click", ()=>{ scrim.classList.remove("open"); toast(`＋ ${el.dataset.c} builder — coming in a later phase`); });
   });
+
+  /* ---------- add machine sheet ---------- */
+  const addScrim = $("#addScrim");
+  const addBody = $("#addSheetBody");
+  let addStep = 0;                 // 0 form, 1 verified, 2 done
+  let addDraft = { name:"", addr:"", role:"" };
+  let addTestResult = null;
+  let addBusy = false;
+  let addError = "";
+
+  function openAddSheet(){
+    addStep = 0; addDraft = { name:"", addr:"", role:"" };
+    addTestResult = null; addBusy = false; addError = "";
+    addScrim.classList.add("open");
+    renderAddSheet();
+  }
+  function closeAddSheet(){ addScrim.classList.remove("open"); }
+
+  function renderAddSheet(){
+    if(addStep === 0){
+      addBody.innerHTML = `
+        <h3>Add a machine</h3>
+        <p class="sd">point hush-control at a new hush-agent on your tailnet</p>
+        <div class="field">
+          <label>Name <span class="opt">— optional, falls back to the agent's hostname</span></label>
+          <input type="text" id="fName" placeholder="e.g. beacon" value="${esc(addDraft.name)}">
+        </div>
+        <div class="field">
+          <label>Tailnet address</label>
+          <input type="text" id="fAddr" placeholder="100.71.x.x:8765" value="${esc(addDraft.addr)}">
+          <div class="hint">the agent's tailnet IP or MagicDNS name, port 8765</div>
+        </div>
+        <div class="field">
+          <label>Role <span class="opt">— optional</span></label>
+          <input type="text" id="fRole" placeholder="e.g. store, gateway" value="${esc(addDraft.role)}">
+        </div>
+        <div class="field-note">
+          <b>Note —</b> hush-agent has no auth yet, so this just confirms the address answers and saves it. Anything already on your tailnet can reach it.
+        </div>
+        ${addError ? `<div class="field-note err">${esc(addError)}</div>` : ""}
+        <div class="sheet-actions">
+          <button class="btn ghost" id="addCancel">Cancel</button>
+          <button class="btn primary" id="addTest" ${addBusy?"disabled":""}>${addBusy?"Testing…":"Test connection →"}</button>
+        </div>`;
+      $("#addCancel").addEventListener("click", closeAddSheet);
+      $("#addTest").addEventListener("click", submitTest);
+      $("#fName").addEventListener("input", e=>{ addDraft.name = e.target.value; });
+      $("#fAddr").addEventListener("input", e=>{ addDraft.addr = e.target.value; });
+      $("#fRole").addEventListener("input", e=>{ addDraft.role = e.target.value; });
+    } else if(addStep === 1){
+      const r = addTestResult;
+      addBody.innerHTML = `
+        <h3>Add a machine</h3>
+        <p class="sd">${esc(addDraft.addr)}</p>
+        <div class="verify-box">
+          <div class="verify-row"><span class="vdot ok"></span>reached the agent</div>
+          <div class="verify-row"><span class="vdot ok"></span>/vitals responded in ${r.latencyMs}ms</div>
+          <div class="preview">
+            <span class="gly">▦</span>
+            <div><div class="pn">${esc(addDraft.name || r.host || "—")}</div><div class="pm">${esc(r.os||"—")}</div></div>
+          </div>
+        </div>
+        <div class="sheet-actions">
+          <button class="btn ghost" id="addBack">← Back</button>
+          <button class="btn primary" id="addSave" ${addBusy?"disabled":""}>${addBusy?"Adding…":"Add to fleet"}</button>
+        </div>`;
+      $("#addBack").addEventListener("click", ()=>{ addStep=0; renderAddSheet(); });
+      $("#addSave").addEventListener("click", submitAdd);
+    } else {
+      const total = M.length + PENDING.length;
+      addBody.innerHTML = `
+        <h3>${esc(addDraft.name || (addTestResult&&addTestResult.host) || "Machine")} added ✓</h3>
+        <p class="sd">now watching ${total} machine${total===1?"":"s"}</p>
+        <div class="field-note"><b>Note —</b> vitals arrive on the next poll (~2.5s). No restart of hush-control needed.</div>
+        <div class="sheet-actions">
+          <button class="btn primary" id="addDone" style="flex:1">Done</button>
+        </div>`;
+      $("#addDone").addEventListener("click", closeAddSheet);
+    }
+  }
+
+  async function submitTest(){
+    const addr = ($("#fAddr").value || "").trim();
+    addDraft.addr = addr;
+    if(!addr){ addError = "enter an address"; renderAddSheet(); return; }
+    addBusy = true; addError = ""; renderAddSheet();
+    try {
+      const r = await fetch("api/agents/test", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ addr })
+      });
+      const data = await r.json();
+      addBusy = false;
+      if(!data.ok){ addError = data.error || "couldn't reach that address"; renderAddSheet(); return; }
+      addTestResult = data;
+      addStep = 1;
+      renderAddSheet();
+    } catch(e){
+      addBusy = false; addError = "couldn't reach hush-control itself — is it running?";
+      renderAddSheet();
+    }
+  }
+
+  async function submitAdd(){
+    addBusy = true; renderAddSheet();
+    try {
+      const r = await fetch("api/agents", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ name: addDraft.name, addr: addDraft.addr, role: addDraft.role })
+      });
+      if(!r.ok){
+        addBusy = false; addError = await r.text() || "couldn't add that machine";
+        addStep = 0; renderAddSheet(); return;
+      }
+      const added = await r.json();
+      PENDING.push({ id: added.name || (addTestResult&&addTestResult.host) || added.addr, ip: added.ip });
+      addBusy = false;
+      addStep = 2;
+      state.view = "fleet"; // so the pending card is visible behind the sheet
+      renderAddSheet();
+      render();
+      poll(); // fetch fresh vitals now instead of waiting for the next interval tick
+    } catch(e){
+      addBusy = false; addError = "couldn't reach hush-control itself — is it running?";
+      addStep = 0; renderAddSheet();
+    }
+  }
+
+  $("#addMachineBtn").addEventListener("click", openAddSheet);
+  addScrim.addEventListener("click", e=>{ if(e.target===addScrim) closeAddSheet(); });
 
   /* ---------- toast ---------- */
   let toastT;
