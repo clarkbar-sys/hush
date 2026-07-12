@@ -86,8 +86,15 @@ func main() {
 
 	// disco starts empty; tsnet mode populates it with a tailnet peer lister once
 	// the node is up (LAN mode leaves it nil, so discovery reports unavailable).
+	// The discoverer polls it in the background so the console can badge newly
+	// appeared agents without re-probing the tailnet on every request.
 	disco := &discoverySource{}
-	mux := buildMux(store, disco, *webDir)
+	discoClient := &http.Client{Timeout: 2 * time.Second}
+	probe := func(addr string) testAgentResult { return testAgent(discoClient, addr) }
+	discoverer := newDiscoverer(disco, probe, store.Snapshot)
+	go discoverer.run(context.Background())
+
+	mux := buildMux(store, discoverer, *webDir)
 
 	if *useTsnet {
 		serveTsnet(mux, disco, *listen, *hostname, *stateDir, allow)
@@ -102,7 +109,7 @@ func main() {
 // the static UI. It is transport-agnostic, so the same handler serves both
 // LAN and tsnet modes. The UI is served from the embedded assets unless
 // webDir is set (dev override).
-func buildMux(store *agentStore, disco *discoverySource, webDir string) http.Handler {
+func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Handler {
 	client := &http.Client{Timeout: 2 * time.Second}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/fleet", func(w http.ResponseWriter, r *http.Request) {
@@ -170,8 +177,17 @@ func buildMux(store *agentStore, disco *discoverySource, webDir string) http.Han
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		probe := func(addr string) testAgentResult { return testAgent(client, addr) }
-		result := discoverCandidates(r.Context(), disco.get(), probe, store.Snapshot())
+		// The passive badge poll reads the cached result (cheap); the console's
+		// explicit "Rescan" asks for a fresh live probe with ?rescan=1. A cold
+		// cache falls back to a live scan so the first request isn't empty.
+		var result discoverResult
+		if r.URL.Query().Get("rescan") == "1" {
+			result = discoverer.scan(r.Context())
+		} else if cached, ok := discoverer.snapshot(); ok {
+			result = cached
+		} else {
+			result = discoverer.scan(r.Context())
+		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(result); err != nil {
 			log.Printf("encode discover result: %v", err)

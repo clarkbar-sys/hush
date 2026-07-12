@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/clarkbar-sys/hush/internal/vitals"
@@ -108,15 +109,16 @@ func TestAPIDiscoverEndpoint(t *testing.T) {
 	}))
 	defer agent.Close()
 
-	// Point the discovery lister at the test agent's actual address, so the real
-	// testAgent probe (wired inside buildMux) reaches it.
+	// A lister reporting the test agent (probed as running hush-agent) yields one
+	// candidate through the endpoint's cold-cache live scan.
 	host := hostFromAddr(agent.URL)
-	// The endpoint always probes :8765, so use a lister that reports the agent's
-	// address verbatim via a small shim: override the probe by matching addr.
 	store := newTestStore(t, nil)
 	disco := &discoverySource{}
-	disco.set(fakeLister{peers: []discoveredPeer{{Host: host, IP: host, OS: "linux", Online: true}}})
-	mux := buildMux(store, disco, "")
+	disco.set(fakeLister{peers: []discoveredPeer{{Host: "beacon", IP: host, OS: "linux", Online: true}}})
+	probe := probeFunc(map[string]testAgentResult{
+		"http://" + host + ":" + discoverPort: {OK: true, Host: "beacon", OS: "Debian 12"},
+	})
+	mux := buildMux(store, newDiscoverer(disco, probe, store.Snapshot), "")
 
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/discover", nil))
@@ -127,19 +129,25 @@ func TestAPIDiscoverEndpoint(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if !got.Available {
-		t.Fatalf("discover result = %+v, want Available", got)
+	if !got.Available || got.Error != "" {
+		t.Fatalf("discover result = %+v, want available with no error", got)
 	}
-	// The probe targets :8765, which the test agent isn't on, so no candidate is
-	// expected — this asserts the endpoint is wired and returns valid JSON.
-	if got.Error != "" {
-		t.Fatalf("discover Error = %q, want none", got.Error)
+	if len(got.Candidates) != 1 || got.Candidates[0].Name != "beacon" {
+		t.Fatalf("candidates = %+v, want a single 'beacon'", got.Candidates)
 	}
+}
+
+// muxDiscoverer builds a discoverer for buildMux in tests that don't exercise
+// discovery: LAN mode (no lister) with a probe that never reaches anything.
+func muxDiscoverer(store *agentStore) *discoverer {
+	return newDiscoverer(&discoverySource{}, func(string) testAgentResult {
+		return testAgentResult{Error: "unreachable"}
+	}, store.Snapshot)
 }
 
 func TestAPIDiscoverRejectsPOST(t *testing.T) {
 	store := newTestStore(t, nil)
-	mux := buildMux(store, &discoverySource{}, "")
+	mux := buildMux(store, muxDiscoverer(store), "")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/discover", nil))
 	if rr.Code != http.StatusMethodNotAllowed {
@@ -151,7 +159,7 @@ func TestAPIDiscoverUnavailableInLANMode(t *testing.T) {
 	// No lister set (LAN mode): the endpoint responds, but reports discovery
 	// unavailable rather than erroring.
 	store := newTestStore(t, nil)
-	mux := buildMux(store, &discoverySource{}, "")
+	mux := buildMux(store, muxDiscoverer(store), "")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/discover", nil))
 	if rr.Code != http.StatusOK {
@@ -164,4 +172,77 @@ func TestAPIDiscoverUnavailableInLANMode(t *testing.T) {
 	if got.Available {
 		t.Fatalf("LAN-mode discover: Available = true, want false")
 	}
+}
+
+func TestDiscovererCachesAndRescans(t *testing.T) {
+	// A lister whose peer set changes between scans, to prove the endpoint serves
+	// the cache until an explicit rescan refreshes it.
+	lister := &mutableLister{peers: []discoveredPeer{
+		{Host: "beacon", IP: "100.71.6.4", OS: "linux", Online: true},
+	}}
+	disco := &discoverySource{}
+	disco.set(lister)
+	probe := probeFunc(map[string]testAgentResult{
+		"http://100.71.6.4:8765": {OK: true, Host: "beacon"},
+		"http://100.71.2.5:8765": {OK: true, Host: "forge"},
+	})
+	store := newTestStore(t, nil)
+	d := newDiscoverer(disco, probe, store.Snapshot)
+
+	// Warm the cache with the first scan (what run() does at startup).
+	if got := d.scan(context.Background()); len(got.Candidates) != 1 {
+		t.Fatalf("first scan: %d candidates, want 1", len(got.Candidates))
+	}
+	mux := buildMux(store, d, "")
+
+	// A new agent appears, but a plain GET still serves the cached single result.
+	lister.set([]discoveredPeer{
+		{Host: "beacon", IP: "100.71.6.4", OS: "linux", Online: true},
+		{Host: "forge", IP: "100.71.2.5", OS: "linux", Online: true},
+	})
+	if got := discoverGET(t, mux, "/api/discover"); len(got.Candidates) != 1 {
+		t.Fatalf("cached GET: %d candidates, want 1 (cache not yet refreshed)", len(got.Candidates))
+	}
+
+	// An explicit rescan re-probes and now sees both.
+	if got := discoverGET(t, mux, "/api/discover?rescan=1"); len(got.Candidates) != 2 {
+		t.Fatalf("rescan GET: %d candidates, want 2", len(got.Candidates))
+	}
+	// ...and the refreshed result is now what a plain GET serves.
+	if got := discoverGET(t, mux, "/api/discover"); len(got.Candidates) != 2 {
+		t.Fatalf("post-rescan cached GET: %d candidates, want 2", len(got.Candidates))
+	}
+}
+
+// mutableLister is a peerLister whose peer set can change between scans, for the
+// caching/rescan test.
+type mutableLister struct {
+	mu    sync.RWMutex
+	peers []discoveredPeer
+}
+
+func (m *mutableLister) set(p []discoveredPeer) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.peers = p
+}
+
+func (m *mutableLister) Peers(context.Context) ([]discoveredPeer, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.peers, nil
+}
+
+func discoverGET(t *testing.T, mux http.Handler, path string) discoverResult {
+	t.Helper()
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET %s: status = %d", path, rr.Code)
+	}
+	var got discoverResult
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode %s: %v", path, err)
+	}
+	return got
 }

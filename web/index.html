@@ -307,6 +307,10 @@
   .disc-meta .pn { font-family:var(--mono); font-weight:700; font-size:13px; }
   .disc-meta .pm { font-family:var(--mono); font-size:10.5px; color:var(--faint); }
   .disc-add { font-family:var(--mono); font-size:11px; color:var(--accent); flex:none; }
+  /* count of agents found on the tailnet but not yet added */
+  .badge-count { display:inline-grid; place-items:center; min-width:16px; height:16px; padding:0 4px;
+    margin-left:6px; border-radius:8px; background:var(--accent); color:var(--ground);
+    font-family:var(--mono); font-size:10px; font-weight:700; line-height:1; vertical-align:middle; }
 
   .sheet-actions { display:flex; gap:9px; }
   .sheet-actions .btn { flex:1; justify-content:center; }
@@ -432,7 +436,7 @@
 
   <div class="dock">
     <span class="hint" id="dockHint">loading fleet…</span>
-    <button class="btn" id="addMachineBtn">⊕ Add machine</button>
+    <button class="btn" id="addMachineBtn">⊕ Add machine<span class="badge-count" id="addBadge" style="display:none"></span></button>
     <button class="btn primary build" id="buildBtn">＋ Build</button>
   </div>
 </div>
@@ -864,11 +868,20 @@
   let addError = "";
   // tailnet discovery state for the "Scan tailnet" affordance.
   let discoverState = { ran:false, loading:false, available:true, error:"", candidates:[] };
+  // lastDiscover holds the most recent background poll result, so the badge and
+  // the freshly-opened sheet can show discovered agents without waiting on a scan.
+  let lastDiscover = null;
 
   function openAddSheet(){
     addStep = 0; addDraft = { name:"", addr:"", role:"" };
     addTestResult = null; addBusy = false; addError = "";
-    discoverState = { ran:false, loading:false, available:true, error:"", candidates:[] };
+    // Seed from the last background poll so cached candidates show immediately;
+    // "Rescan" then refreshes them live.
+    if(lastDiscover){
+      discoverState = { ran:true, loading:false, available:lastDiscover.available, error:"", candidates:lastDiscover.candidates.slice() };
+    } else {
+      discoverState = { ran:false, loading:false, available:true, error:"", candidates:[] };
+    }
     addScrim.classList.add("open");
     renderAddSheet();
   }
@@ -980,6 +993,12 @@
       renderAddSheet();
       render();
       poll(); // fetch fresh vitals now instead of waiting for the next interval tick
+      // Drop the just-added machine from the discovery badge without waiting for
+      // the next background scan.
+      if(lastDiscover){
+        lastDiscover.candidates = lastDiscover.candidates.filter(c => c.addr !== addDraft.addr);
+        updateAddBadge();
+      }
     } catch(e){
       addBusy = false; addError = "couldn't reach hush-control itself — is it running?";
       addStep = 0; renderAddSheet();
@@ -1025,7 +1044,7 @@
 
   function attachScanHandlers(){
     const b = $("#scanBtn");
-    if(b) b.addEventListener("click", scanTailnet);
+    if(b) b.addEventListener("click", ()=>scanTailnet(true)); // explicit scan → force fresh
     document.querySelectorAll(".disc-row").forEach(el=>{
       el.addEventListener("click", ()=>{
         const c = discoverState.candidates[+el.dataset.i];
@@ -1040,10 +1059,10 @@
     });
   }
 
-  async function scanTailnet(){
+  async function scanTailnet(fresh){
     discoverState.loading = true; discoverState.error = ""; renderAddSheet();
     try {
-      const r = await fetch("api/discover");
+      const r = await fetch("api/discover" + (fresh ? "?rescan=1" : ""));
       const data = await r.json();
       discoverState = {
         ran:true, loading:false,
@@ -1051,10 +1070,44 @@
         error: data.error || "",
         candidates: Array.isArray(data.candidates) ? data.candidates : []
       };
+      // keep the badge in sync with what the sheet just learned
+      lastDiscover = { available: discoverState.available, candidates: discoverState.candidates };
+      updateAddBadge();
     } catch(e){
       discoverState = { ran:true, loading:false, available:true, error:"couldn't reach hush-control — is it running?", candidates:[] };
     }
     renderAddSheet();
+  }
+
+  // pollDiscover refreshes the passive badge: how many agents are live on the
+  // tailnet but not yet in the fleet. It reads the control plane's cached scan,
+  // so it's cheap to call on an interval.
+  async function pollDiscover(){
+    try {
+      const r = await fetch("api/discover");
+      const data = await r.json();
+      lastDiscover = {
+        available: !!data.available,
+        candidates: Array.isArray(data.candidates) ? data.candidates : []
+      };
+      updateAddBadge();
+    } catch(e){ /* leave the last known badge in place */ }
+  }
+
+  function updateAddBadge(){
+    const b = $("#addBadge");
+    if(!b) return;
+    const n = (lastDiscover && lastDiscover.available) ? lastDiscover.candidates.length : 0;
+    if(n > 0){
+      b.textContent = n;
+      b.style.display = "";
+      const btn = $("#addMachineBtn");
+      if(btn) btn.title = n + " agent" + (n===1?"":"s") + " found on your tailnet, not yet added";
+    } else {
+      b.style.display = "none";
+      const btn = $("#addMachineBtn");
+      if(btn) btn.removeAttribute("title");
+    }
   }
 
   $("#addMachineBtn").addEventListener("click", openAddSheet);
@@ -1095,6 +1148,8 @@
   setInterval(poll, 2500);
   checkVersion();
   setInterval(checkVersion, 15*60*1000);
+  pollDiscover();
+  setInterval(pollDiscover, 20000);
 })();
 </script>
 </body>
