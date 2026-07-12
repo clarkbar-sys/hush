@@ -119,7 +119,7 @@ Funnel. See [`docs/DESIGN.md`](./docs/DESIGN.md#run-modes) for details.
 
 ### Add machines from the console
 
-You don't have to edit `fleet.json` by hand. The console's **⊕ Add machine**
+You don't have to edit `fleet.json` by hand. The console's **＋ Build → Machine**
 sheet takes a tailnet address, probes it to confirm a `hush-agent` is answering,
 and persists it to `fleet.json` — the new machine shows up on the next poll, no
 restart needed.
