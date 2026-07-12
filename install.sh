@@ -20,6 +20,11 @@
 # an editable env file to /etc/hush/*.env — never clobbered on re-run, so
 # local edits survive upgrades.
 #
+# On immutable-root distros (SteamOS, Fedora Silverblue/Kinoite) /usr is
+# read-only, so /usr/local/bin can't be written. There the installer falls
+# back to a writable directory automatically and rewrites the unit's
+# ExecStart to match. Force a specific location with HUSH_BIN_DIR=/some/dir.
+#
 # Targets systemd + shadow-utils (useradd) distros: Debian, Ubuntu, Fedora,
 # Arch, RHEL, openSUSE. Not Alpine (OpenRC) or NixOS (declarative modules),
 # and not macOS (no systemd) — build from source and run it yourself there.
@@ -37,7 +42,6 @@ TARGET="${1:-agent}"
 SERVICE_USER="${HUSH_USER:-hush}"
 SERVICE_GROUP="${HUSH_GROUP:-hush}"
 CONFIG_DIR="/etc/hush"
-BIN_DIR="/usr/local/bin"
 UNIT_DIR="/etc/systemd/system"
 
 require_root() {
@@ -62,6 +66,35 @@ os() {
       exit 1
       ;;
   esac
+}
+
+# resolve_bin_dir picks where the binaries land and sets BIN_DIR. The usual
+# /usr/local/bin is unwritable on immutable-root distros (SteamOS, Fedora
+# Silverblue/Kinoite) where /usr is mounted read-only, so fall back to a
+# writable path there. An explicit HUSH_BIN_DIR always wins. Must run after
+# require_root, since the fallbacks live outside the user's home.
+resolve_bin_dir() {
+  if [ -n "${HUSH_BIN_DIR:-}" ]; then
+    BIN_DIR="$HUSH_BIN_DIR"
+    if ! mkdir -p "$BIN_DIR" 2>/dev/null || [ ! -w "$BIN_DIR" ]; then
+      echo "error: HUSH_BIN_DIR='$BIN_DIR' is not writable" >&2
+      exit 1
+    fi
+    return
+  fi
+  for cand in /usr/local/bin /opt/hush/bin /var/lib/hush/bin; do
+    if mkdir -p "$cand" 2>/dev/null && [ -w "$cand" ]; then
+      BIN_DIR="$cand"
+      if [ "$cand" != /usr/local/bin ]; then
+        echo "note: /usr/local/bin is read-only; installing binaries to $cand instead" >&2
+        echo "  (set HUSH_BIN_DIR to pick a different location)" >&2
+      fi
+      return
+    fi
+  done
+  echo "error: found no writable install dir (tried /usr/local/bin, /opt/hush/bin, /var/lib/hush/bin)" >&2
+  echo "  set HUSH_BIN_DIR=/some/writable/dir and re-run" >&2
+  exit 1
 }
 
 arch() {
@@ -115,6 +148,13 @@ fetch_unit() {
   if ! curl -fsSL "$url" -o "$TMP_DIR/$unit"; then
     echo "error: couldn't fetch $url" >&2
     exit 1
+  fi
+  # Point ExecStart (and the updater's ReadWritePaths) at the resolved BIN_DIR
+  # so a non-default location — e.g. the SteamOS read-only-/usr fallback — is
+  # reflected in the unit. A no-op when BIN_DIR is /usr/local/bin.
+  if [ "$BIN_DIR" != /usr/local/bin ]; then
+    sed "s#/usr/local/bin#$BIN_DIR#g" "$TMP_DIR/$unit" >"$TMP_DIR/$unit.patched"
+    mv "$TMP_DIR/$unit.patched" "$TMP_DIR/$unit"
   fi
   install -o root -g root -m 0644 "$TMP_DIR/$unit" "$UNIT_DIR/$unit"
   echo "installed $UNIT_DIR/$unit" >&2
@@ -208,6 +248,7 @@ install_control_tsnet() {
 }
 
 require_root
+resolve_bin_dir
 OS_NAME="$(os)"
 ARCH_NAME="$(arch)"
 TMP_DIR="$(mktemp -d)"
