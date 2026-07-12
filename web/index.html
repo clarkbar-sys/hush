@@ -6,81 +6,49 @@
 <title>hush — tailnet fleet console</title>
 <style>
   :root {
-    /* light (cool, faint teal bias) */
-    --ground: #eef2f2;
-    --panel: #ffffff;
-    --panel-2: #f6f9f9;
-    --border: #d6e0e0;
-    --border-soft: #e4ebeb;
-    --text: #17242a;
-    --muted: #5d7178;
-    --faint: #90a4aa;
-    --accent: #0d9488;
-    --accent-soft: #d4f0ec;
-    --ring2: #6d5fd6;
-    --good: #2f9e52;
-    --good-soft: #d8efdf;
-    --warn: #b7791f;
-    --warn-soft: #f5e8cd;
-    --crit: #c8443c;
-    --crit-soft: #f5dad7;
-    --shadow: 0 1px 2px rgba(20,40,45,.06), 0 8px 24px rgba(20,40,45,.06);
+    /* cyber — the console's single locked theme. neon on void, cyan × magenta.
+       everything downstream reads these vars, so the whole UI re-skins from here. */
+    --ground: #060210;
+    --panel: #0d0620;
+    --panel-2: #140b33;
+    --border: #2c1e66;
+    --border-soft: #1b1240;
+    --text: #e6dcff;
+    --muted: #9d86d9;
+    --faint: #6a54a0;
+    --accent: #19e3ff;
+    --accent-soft: #06313f;
+    --ring2: #ff2bd6;
+    --good: #2bffa6;
+    --good-soft: #06331f;
+    --warn: #ffd23f;
+    --warn-soft: #332905;
+    --crit: #ff3d6e;
+    --crit-soft: #360712;
+    --shadow: 0 0 0 1px rgba(25,227,255,.05), 0 2px 0 rgba(0,0,0,.55);
+    --scan: rgba(25,227,255,.03);   /* ambient scanline wash */
+    --grid: rgba(120,80,220,.06);   /* blueprint grid        */
     --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
-    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --r: 12px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --ground: #0c1214;
-      --panel: #131c1f;
-      --panel-2: #182327;
-      --border: #26343a;
-      --border-soft: #1e2c31;
-      --text: #dde7e9;
-      --muted: #869aa1;
-      --faint: #5e7178;
-      --accent: #2dd4bf;
-      --accent-soft: #123632;
-      --ring2: #9f92f2;
-      --good: #56c26a;
-      --good-soft: #12301c;
-      --warn: #e0a94b;
-      --warn-soft: #322611;
-      --crit: #e5675e;
-      --crit-soft: #371815;
-      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
-    }
-  }
-  :root[data-theme="light"] {
-    --ground: #eef2f2; --panel: #ffffff; --panel-2: #f6f9f9;
-    --border: #d6e0e0; --border-soft: #e4ebeb;
-    --text: #17242a; --muted: #5d7178; --faint: #90a4aa;
-    --accent: #0d9488; --accent-soft: #d4f0ec; --ring2: #6d5fd6;
-    --good: #2f9e52; --good-soft: #d8efdf;
-    --warn: #b7791f; --warn-soft: #f5e8cd;
-    --crit: #c8443c; --crit-soft: #f5dad7;
-    --shadow: 0 1px 2px rgba(20,40,45,.06), 0 8px 24px rgba(20,40,45,.06);
-  }
-  :root[data-theme="dark"] {
-    --ground: #0c1214; --panel: #131c1f; --panel-2: #182327;
-    --border: #26343a; --border-soft: #1e2c31;
-    --text: #dde7e9; --muted: #869aa1; --faint: #5e7178;
-    --accent: #2dd4bf; --accent-soft: #123632; --ring2: #9f92f2;
-    --good: #56c26a; --good-soft: #12301c;
-    --warn: #e0a94b; --warn-soft: #322611;
-    --crit: #e5675e; --crit-soft: #371815;
-    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    --sans: var(--mono);            /* locked: the whole console runs terminal-mono */
+    --r: 0px;                       /* sharp HUD corners      */
+    --tick: 9px;                    /* card corner-bracket size */
   }
 
   * { box-sizing: border-box; }
   body {
-    margin: 0; background: var(--ground); color: var(--text);
+    margin: 0; color: var(--text);
     font-family: var(--sans);
     -webkit-font-smoothing: antialiased;
     line-height: 1.45;
+    /* blueprint grid + scanline wash over the void */
+    background:
+      repeating-linear-gradient(var(--scan) 0 1px, transparent 1px 3px),
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 38px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 38px 100%,
+      var(--ground);
   }
   .wrap { max-width: 480px; margin: 0 auto; min-height: 100vh;
-    background: var(--ground); position: relative;
+    background: transparent; position: relative;
     display: flex; flex-direction: column; }
   @media (min-width: 900px) { .wrap { max-width: 900px; } }
 
@@ -112,11 +80,6 @@
   .chip.demo .live { background: var(--warn); animation: none; }
   .chip.down { color: var(--crit); border-color: var(--crit-soft); }
   .chip.down .live { background: var(--crit); animation: none; }
-  .iconbtn { background: var(--panel); border: 1px solid var(--border);
-    color: var(--muted); border-radius: 9px; width: 34px; height: 34px;
-    font-size: 15px; cursor: pointer; display: grid; place-items: center; }
-  .iconbtn:hover { color: var(--text); border-color: var(--accent); }
-  .iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* ---- breadcrumb / summary strip ---- */
   .strip { padding: 14px 16px 6px; display: flex; align-items: center; gap: 10px;
@@ -335,6 +298,55 @@
   .note { font-family:var(--mono); font-size:11px; color:var(--faint); text-align:center;
     padding: 14px 16px 0; }
 
+  /* ============================================================
+     CYBER SKIN — structural HUD treatment on top of the palette.
+     Sharp corners, terminal chrome, target brackets. Single theme,
+     so these ride directly on the base components.
+     ============================================================ */
+  /* sharpen every rounded holdout (status LEDs stay round on purpose) */
+  .chip, .pill, .role, .badge, .row, .row .gly, .btn, .term,
+  .sheet, .grab, .pitem, .pitem .pg, #toast, .alertbar { border-radius: 0; }
+
+  /* header: blinking cursor on the wordmark, // prefix on the tagline */
+  .brand b::after { content:"_"; color: var(--accent); margin-left:1px;
+    animation: blink 1.1s step-end infinite; }
+  .brand span::before { content:"// "; color: var(--accent); }
+  .chip { text-transform: uppercase; letter-spacing:.08em; }
+  .chip .live { box-shadow:0 0 7px var(--accent); }
+
+  /* section heading: // prefix, chromatic-aberration title + cursor */
+  .eyebrow::before { content:"// "; }
+  .h-title { text-transform: uppercase; letter-spacing:.05em;
+    text-shadow: -1.4px 0 rgba(255,43,214,.55), 1.4px 0 rgba(25,227,255,.55); }
+  .h-title::after { content:" ▮"; color: var(--accent); text-shadow:none;
+    animation: blink 1.1s step-end infinite; }
+
+  /* fleet card: top severity rule + diagonal target brackets */
+  .node::before { inset:0 0 auto 0; width:auto; height:2px; box-shadow:0 0 8px var(--sev); }
+  .node::after { content:""; position:absolute; inset:5px; pointer-events:none;
+    background:
+      linear-gradient(var(--accent),var(--accent)) top right / var(--tick) 1px no-repeat,
+      linear-gradient(var(--accent),var(--accent)) top right / 1px var(--tick) no-repeat,
+      linear-gradient(var(--accent),var(--accent)) bottom left / var(--tick) 1px no-repeat,
+      linear-gradient(var(--accent),var(--accent)) bottom left / 1px var(--tick) no-repeat;
+    opacity:.5; transition: opacity .12s ease; }
+  .node:hover::after { opacity:1; }
+  .node .host { text-transform: uppercase; letter-spacing:.02em; }
+  .role { text-shadow:0 0 6px var(--accent-soft); }
+  .aura { box-shadow:0 0 0 2px var(--sev-soft), 0 0 8px var(--sev); }
+  .ring .v, .bigring .v { text-shadow:0 0 8px currentColor; }
+
+  /* pills → bracketed square tags */
+  .badge { background: transparent; border:1px solid currentColor; padding:2px 5px;
+    text-transform: uppercase; letter-spacing:.06em; }
+  .badge::before { content:"["; margin-right:3px; opacity:.7; }
+  .badge::after  { content:"]"; margin-left:3px;  opacity:.7; }
+
+  /* dock reads like a shell prompt; buttons like commands */
+  .dock .hint::before { content:"$ "; color: var(--accent); }
+  .btn { text-transform: uppercase; letter-spacing:.1em; }
+
+  @keyframes blink { 0%,55%{ opacity:1; } 56%,100%{ opacity:0; } }
   @keyframes pulse { 0%{ box-shadow:0 0 0 0 var(--accent);} 70%{ box-shadow:0 0 0 6px transparent;} 100%{ box-shadow:0 0 0 0 transparent;} }
   @keyframes pulse-good { 0%{ box-shadow:0 0 0 0 var(--good-soft);} 70%{ box-shadow:0 0 0 6px transparent;} 100%{ box-shadow:0 0 0 0 transparent;} }
   @keyframes rise { from{ transform: translateY(30px); opacity:.4;} to{ transform:none; opacity:1;} }
@@ -352,7 +364,6 @@
     </div>
     <div class="spacer"></div>
     <div class="chip" id="statusChip"><span class="live"></span>connecting…</div>
-    <button class="iconbtn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">◐</button>
   </header>
 
   <div id="app"></div>
@@ -380,15 +391,6 @@
   const $ = (s,r=document)=>r.querySelector(s);
   const app = $("#app");
   const HIST = 26;                 // sparkline sample count
-
-  /* ---------- theme ---------- */
-  const root = document.documentElement;
-  $("#themeBtn").addEventListener("click", ()=>{
-    const cur = root.getAttribute("data-theme");
-    const sysDark = matchMedia("(prefers-color-scheme: dark)").matches;
-    const now = cur ? cur : (sysDark ? "dark" : "light");
-    root.setAttribute("data-theme", now === "dark" ? "light" : "dark");
-  });
 
   /* ---------- state ---------- */
   const CONSTRUCTS = [
