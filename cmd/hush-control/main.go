@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -130,6 +131,14 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 		if err := json.NewEncoder(w).Encode(fleet); err != nil {
 			log.Printf("encode fleet: %v", err)
 		}
+	})
+	mux.HandleFunc("/api/machines/{host}/browse", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyBrowse(w, r, client, a)
 	})
 	mux.HandleFunc("/api/agents", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -325,6 +334,25 @@ func (s *agentStore) Snapshot() []Agent {
 	return out
 }
 
+// find resolves a machine identifier from the UI back to an agent. The console
+// keys machines by their display name, so that's matched first; the tailnet IP
+// is a fallback for agents configured without a name.
+func (s *agentStore) find(host string) (Agent, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, a := range s.agents {
+		if a.Name == host {
+			return a, true
+		}
+	}
+	for _, a := range s.agents {
+		if a.IP == host {
+			return a, true
+		}
+	}
+	return Agent{}, false
+}
+
 // errDuplicateAddr marks an Add rejection caused by an address already in
 // the fleet, as opposed to a persistence failure — the HTTP handler uses
 // errors.Is to tell the two apart and pick the right status code.
@@ -373,6 +401,34 @@ func (s *stringList) Set(v string) error {
 }
 
 // collectFleet queries every agent concurrently, preserving config order.
+// proxyBrowse forwards a directory-listing request to one agent's /browse and
+// relays its response verbatim — including the status code, so the agent's
+// 403 (can't read) / 404 (no such dir) reach the console unchanged. The phone
+// can't address agents directly in tsnet mode, so every browse rides through
+// hush-control; on the NAS the bytes never leave the box until they reach you.
+func proxyBrowse(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent) {
+	u := strings.TrimRight(a.Addr, "/") + "/browse"
+	if q := r.URL.RawQuery; q != "" {
+		u += "?" + q
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, u, nil)
+	if err != nil {
+		http.Error(w, "bad upstream request", http.StatusInternalServerError)
+		return
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "agent unreachable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		log.Printf("proxy browse %s: %v", a.Name, err)
+	}
+}
+
 func collectFleet(client *http.Client, agents []Agent) []Machine {
 	out := make([]Machine, len(agents))
 	var wg sync.WaitGroup
