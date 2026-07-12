@@ -180,13 +180,14 @@
   .spark { width:100%; height: 26px; display:block; }
 
   .node .foot { display:flex; align-items:center; justify-content:space-between; gap:6px;
-    border-top: 1px solid var(--border-soft); padding-top: 9px; }
+    flex-wrap: wrap; border-top: 1px solid var(--border-soft); padding-top: 9px; }
   .cons { font-family: var(--mono); font-size: 10.5px; color: var(--muted);
     display:flex; gap: 8px; }
   .cons b { color: var(--text); }
   .badge { font-family: var(--mono); font-size: 10px; font-weight:600;
     padding: 2px 7px; border-radius: 999px; display:inline-flex; align-items:center; gap:5px;
-    max-width: 62%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    max-width: 100%; }
+  .badge .lbl { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
   .badge.warn { color: var(--warn); background: var(--warn-soft); }
   .badge.crit { color: var(--crit); background: var(--crit-soft); }
   .badge.ok { color: var(--good); background: var(--good-soft); }
@@ -459,6 +460,7 @@
 
   <div class="dock">
     <span class="hint" id="dockHint">loading fleet…</span>
+    <button class="btn" id="reportBtn" title="Download a JSON snapshot of the whole fleet">⬇ Report</button>
     <button class="btn primary build" id="buildBtn">＋ Build<span class="badge-count on-primary" id="addBadge" style="display:none"></span></button>
   </div>
 </div>
@@ -522,13 +524,16 @@
 
   /* ---------- svg helpers ---------- */
   function ring(pct, size){
-    const r = size/2 - 3, c = 2*Math.PI*r, off = c*(1-pct/100);
-    const col = pct>=85 ? "var(--crit)" : pct>=70 ? "var(--warn)" : "var(--accent)";
     const cx = size/2;
+    const r1 = cx-3, c1 = 2*Math.PI*r1, off = c1*(1-pct/100);
+    const r2 = cx-9, c2 = 2*Math.PI*r2;
+    const col = pct>=85 ? "var(--crit)" : pct>=70 ? "var(--warn)" : "var(--accent)";
+    const sw = 3.2;
     return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="var(--border)" stroke-width="3"/>
-      <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${col}" stroke-width="3"
-        stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
+      <circle cx="${cx}" cy="${cx}" r="${r1}" fill="none" stroke="var(--border)" stroke-width="${sw}"/>
+      <circle cx="${cx}" cy="${cx}" r="${r2}" fill="none" stroke="var(--border)" stroke-width="${sw}"/>
+      <circle cx="${cx}" cy="${cx}" r="${r1}" fill="none" stroke="${col}" stroke-width="${sw}"
+        stroke-linecap="round" stroke-dasharray="${c1.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
         transform="rotate(-90 ${cx} ${cx})"/></svg>`;
   }
   function utilCol(p){ return p>=85?"var(--crit)":p>=70?"var(--warn)":"var(--accent)"; }
@@ -618,7 +623,7 @@
         <div class="rings"><div class="ring"><div class="placeholder-ring">?</div></div></div>
         <div class="foot">
           <span class="cons">waiting for first check-in…</span>
-          <span class="badge pending">◌ pairing</span>
+          <span class="badge pending">◌&nbsp;<span class="lbl">pairing</span></span>
         </div>
       </div>`;
   }
@@ -626,10 +631,10 @@
   function nodeCard(m){
     const rolePill = m.role ? `<span class="role">${m.role}</span>` : "";
     let badge;
-    if(!m.online) badge = `<span class="badge crit">● offline</span>`;
-    else if(m.status==="crit") badge = `<span class="badge crit">● ${(m.alert||"critical").split("—")[0].trim()}</span>`;
-    else if(m.status==="warn") badge = `<span class="badge warn">▲ ${(m.alert||"elevated").split("·")[0].trim()}</span>`;
-    else badge = `<span class="badge ok">● nominal</span>`;
+    if(!m.online) badge = `<span class="badge crit">●&nbsp;<span class="lbl">offline</span></span>`;
+    else if(m.status==="crit") badge = `<span class="badge crit">●&nbsp;<span class="lbl">${(m.alert||"critical").split("—")[0].trim()}</span></span>`;
+    else if(m.status==="warn") badge = `<span class="badge warn">▲&nbsp;<span class="lbl">${(m.alert||"elevated").split("·")[0].trim()}</span></span>`;
+    else badge = `<span class="badge ok">●&nbsp;<span class="lbl">nominal</span></span>`;
     const gpuRing = m.gpu!=null ? `
           <div class="ring">${dualRing(m.gpu,m.vram,44)}<span class="v">${m.gpu}%</span><span class="k">gpu</span><span class="k2"><i></i>${m.vram}% vram</span></div>` : "";
     const hist = m.loadHist && m.loadHist.length>1 ? m.loadHist : [m.cpu||0, m.cpu||0];
@@ -1180,6 +1185,31 @@
   }
 
   addScrim.addEventListener("click", e=>{ if(e.target===addScrim) closeAddSheet(); });
+
+  /* ---------- fleet report download ---------- */
+  async function downloadReport(){
+    const btn = $("#reportBtn");
+    btn.disabled = true;
+    try {
+      const r = await fetch("api/report", {cache:"no-store"});
+      if(!r.ok) throw new Error("bad status");
+      const blob = await r.blob();
+      const cd = r.headers.get("Content-Disposition") || "";
+      const m = /filename="?([^"]+)"?/.exec(cd);
+      const name = m ? m[1] : "hush-fleet.json";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click();
+      a.remove(); URL.revokeObjectURL(url);
+      toast("⬇ fleet report downloaded");
+    } catch(e){
+      toast("couldn't generate the report — is hush-control running?");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  $("#reportBtn").addEventListener("click", downloadReport);
 
   /* ---------- toast ---------- */
   let toastT;
