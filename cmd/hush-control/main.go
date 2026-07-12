@@ -57,6 +57,17 @@ type Machine struct {
 	Alert        string           `json:"alert,omitempty"`
 }
 
+// Report is the downloadable fleet snapshot served by /api/report: the same
+// per-machine data the console renders, wrapped with a timestamp and the
+// control-plane version so the file stands alone as an artifact for offline
+// analysis (e.g. handing it to an agent).
+type Report struct {
+	GeneratedAt    string    `json:"generatedAt"`    // RFC3339 UTC, when the snapshot was taken
+	ControlVersion string    `json:"controlVersion"` // hush-control build version
+	MachineCount   int       `json:"machineCount"`
+	Machines       []Machine `json:"machines"`
+}
+
 func main() {
 	listen := flag.String("listen", ":8080", "address to serve the console on (LAN mode)")
 	configPath := flag.String("config", "fleet.json", "path to the fleet config JSON")
@@ -198,6 +209,24 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(result); err != nil {
 			log.Printf("encode discover result: %v", err)
+		}
+	})
+	mux.HandleFunc("/api/report", func(w http.ResponseWriter, r *http.Request) {
+		now := time.Now().UTC()
+		machines := collectFleet(client, store.Snapshot())
+		report := Report{
+			GeneratedAt:    now.Format(time.RFC3339),
+			ControlVersion: version.Current(),
+			MachineCount:   len(machines),
+			Machines:       machines,
+		}
+		filename := "hush-fleet-" + now.Format("20060102-150405Z") + ".json"
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(report); err != nil {
+			log.Printf("encode report: %v", err)
 		}
 	})
 	vc := &versionChecker{client: &http.Client{Timeout: 5 * time.Second}}

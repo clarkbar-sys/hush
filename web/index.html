@@ -458,6 +458,7 @@
 
   <div class="dock">
     <span class="hint" id="dockHint">loading fleet…</span>
+    <button class="btn" id="reportBtn" title="Download a JSON snapshot of the whole fleet">⬇ Report</button>
     <button class="btn" id="addMachineBtn">⊕ Add machine<span class="badge-count" id="addBadge" style="display:none"></span></button>
     <button class="btn primary build" id="buildBtn">＋ Build</button>
   </div>
@@ -1173,6 +1174,31 @@
 
   $("#addMachineBtn").addEventListener("click", openAddSheet);
   addScrim.addEventListener("click", e=>{ if(e.target===addScrim) closeAddSheet(); });
+
+  /* ---------- fleet report download ---------- */
+  async function downloadReport(){
+    const btn = $("#reportBtn");
+    btn.disabled = true;
+    try {
+      const r = await fetch("api/report", {cache:"no-store"});
+      if(!r.ok) throw new Error("bad status");
+      const blob = await r.blob();
+      const cd = r.headers.get("Content-Disposition") || "";
+      const m = /filename="?([^"]+)"?/.exec(cd);
+      const name = m ? m[1] : "hush-fleet.json";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click();
+      a.remove(); URL.revokeObjectURL(url);
+      toast("⬇ fleet report downloaded");
+    } catch(e){
+      toast("couldn't generate the report — is hush-control running?");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  $("#reportBtn").addEventListener("click", downloadReport);
 
   /* ---------- toast ---------- */
   let toastT;
