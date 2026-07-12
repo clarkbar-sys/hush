@@ -171,8 +171,10 @@ install_agent() {
   fetch_unit hush-agent.service
   install_env_file agent.env \
     "# hush-agent environment — edit, then: systemctl restart hush-agent" \
-    "# Bind to the tailnet interface in production, not 127.0.0.1." \
-    "HUSH_AGENT_LISTEN=127.0.0.1:8765"
+    "# 'tailnet' binds this machine's Tailscale IP so hush-control discovers it" \
+    "# over the tailnet with no LAN or public exposure. Use 127.0.0.1:8765 for a" \
+    "# local-only agent, or host:port to pin a specific interface." \
+    "HUSH_AGENT_LISTEN=tailnet"
   enable_service hush-agent.service
 }
 
