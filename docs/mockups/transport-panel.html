@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>hush — transport panel mockup</title>
+<style>
+  /* ---- lifted straight from web/index.html's "cyber" theme so this mockup
+     matches the real console. only new bits: .chip.tap (clickable transport
+     chip) and the #transportScrim / #transportSheet stats panel below. ---- */
+  :root {
+    --ground: #060210;
+    --panel: #0d0620;
+    --panel-2: #140b33;
+    --border: #2c1e66;
+    --border-soft: #1b1240;
+    --text: #e6dcff;
+    --muted: #9d86d9;
+    --faint: #6a54a0;
+    --accent: #19e3ff;
+    --accent-soft: #06313f;
+    --ring2: #ff2bd6;
+    --good: #2bffa6;
+    --good-soft: #06331f;
+    --warn: #ffd23f;
+    --warn-soft: #332905;
+    --crit: #ff3d6e;
+    --crit-soft: #360712;
+    --shadow: 0 0 0 1px rgba(25,227,255,.05), 0 2px 0 rgba(0,0,0,.55);
+    --scan: rgba(25,227,255,.03);
+    --grid: rgba(120,80,220,.06);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: var(--mono);
+    --r: 0px;
+    --tick: 9px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.45;
+    background:
+      repeating-linear-gradient(var(--scan) 0 1px, transparent 1px 3px),
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 38px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 38px 100%,
+      var(--ground);
+  }
+  .wrap { max-width: 480px; margin: 0 auto; min-height: 100vh;
+    display: flex; flex-direction: column; }
+  @media (min-width: 900px) { .wrap { max-width: 900px; } }
+
+  header {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    background: color-mix(in srgb, var(--ground) 82%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .brand { display: flex; align-items: baseline; gap: 8px; }
+  .brand b { font-size: 17px; letter-spacing: -.02em; font-weight: 700; }
+  .brand b::after { content:"_"; color: var(--accent); margin-left:1px; animation: blink 1.1s step-end infinite; }
+  .brand .dot-h { width:7px; height:7px; border-radius:50%; background:var(--accent);
+    display:inline-block; box-shadow:0 0 0 3px var(--accent-soft); }
+  .spacer { flex: 1; }
+  .chip {
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 9px; border: 1px solid var(--border);
+    background: var(--panel); white-space: nowrap;
+    text-transform: uppercase; letter-spacing:.08em;
+  }
+  .chip .live { width:6px; height:6px; border-radius:50%; background:var(--accent);
+    box-shadow:0 0 7px var(--accent); animation: pulse 2.4s infinite; }
+  .chip.tap { cursor: pointer; appearance: none; font: inherit; }
+  .chip.tap:hover { border-color: var(--accent); color: var(--text); }
+  .chip.tap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .strip { padding: 14px 16px 6px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .eyebrow { font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--faint); }
+  .eyebrow::before { content:"// "; }
+  .h-title { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin: 2px 0 0;
+    text-transform: uppercase; letter-spacing:.05em;
+    text-shadow: -1.4px 0 rgba(255,43,214,.55), 1.4px 0 rgba(25,227,255,.55); }
+  .h-title::after { content:" ▮"; color: var(--accent); text-shadow:none; animation: blink 1.1s step-end infinite; }
+  .summ { display:flex; gap: 8px; }
+  .summ .s { display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size: 12px; color: var(--muted); }
+  .summ .s b { color: var(--text); }
+  .swatch { width:8px; height:8px; border-radius:50%; }
+
+  main { padding: 4px 16px 96px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+  @media (min-width: 900px) { .grid { grid-template-columns: 1fr 1fr 1fr; } }
+
+  .node {
+    position: relative; text-align: left;
+    background: var(--panel); border: 1px solid var(--border);
+    padding: 13px 13px 12px;
+    display: flex; flex-direction: column; gap: 10px;
+    box-shadow: var(--shadow); overflow: hidden;
+    font-family: var(--sans); color: var(--text);
+  }
+  .node::before { content:""; position:absolute; inset:0 0 auto 0; height:2px;
+    background: var(--sev); box-shadow:0 0 8px var(--sev); }
+  .node::after { content:""; position:absolute; inset:5px; pointer-events:none;
+    background:
+      linear-gradient(var(--accent),var(--accent)) top right / var(--tick) 1px no-repeat,
+      linear-gradient(var(--accent),var(--accent)) top right / 1px var(--tick) no-repeat,
+      linear-gradient(var(--accent),var(--accent)) bottom left / var(--tick) 1px no-repeat,
+      linear-gradient(var(--accent),var(--accent)) bottom left / 1px var(--tick) no-repeat;
+    opacity:.5; }
+  .node.s-good { --sev: var(--good); --sev-soft: var(--good-soft); }
+  .node.s-warn { --sev: var(--warn); --sev-soft: var(--warn-soft); }
+  .node.s-crit { --sev: var(--crit); --sev-soft: var(--crit-soft); }
+  .node .hd { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .node .host { font-family: var(--mono); font-weight: 700; font-size: 15px;
+    letter-spacing: -.01em; display:flex; align-items:center; gap:7px;
+    text-transform: uppercase; letter-spacing:.02em; }
+  .aura { width:9px; height:9px; border-radius:50%; background:var(--sev);
+    box-shadow: 0 0 0 2px var(--sev-soft), 0 0 8px var(--sev); flex:none; }
+  .node .meta { font-family: var(--mono); font-size: 10.5px; color: var(--faint); margin-top: 2px; }
+  .node .foot { display:flex; align-items:center; justify-content:space-between; gap:6px;
+    border-top: 1px solid var(--border-soft); padding-top: 9px; }
+  .cons { font-family: var(--mono); font-size: 10.5px; color: var(--muted); display:flex; gap: 8px; }
+  .cons b { color: var(--text); }
+  .badge { font-family: var(--mono); font-size: 10px; font-weight:600;
+    padding: 2px 5px; display:inline-flex; align-items:center; gap:5px;
+    background: transparent; border:1px solid currentColor; text-transform: uppercase; letter-spacing:.06em; }
+  .badge::before { content:"["; margin-right:3px; opacity:.7; }
+  .badge::after  { content:"]"; margin-left:3px;  opacity:.7; }
+  .badge.warn { color: var(--warn); }
+  .badge.crit { color: var(--crit); }
+  .badge.ok { color: var(--good); }
+
+  .dock { position: sticky; bottom: 0; z-index: 15;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--ground) 88%, transparent);
+    backdrop-filter: blur(10px); border-top: 1px solid var(--border-soft);
+    display:flex; gap: 10px; align-items:center; }
+  .dock .hint { font-family:var(--mono); font-size:11px; color:var(--faint); flex:1; }
+  .dock .hint::before { content:"$ "; color: var(--accent); }
+
+  /* ---- sheet (shared shell for the transport panel) ---- */
+  .scrim { position: fixed; inset:0; background: rgba(6,12,14,.5); z-index: 40;
+    display:none; align-items:flex-end; justify-content:center; }
+  .scrim.open { display:flex; }
+  .sheet { width:100%; max-width: 480px; background: var(--panel);
+    border:1px solid var(--border); border-bottom:none; padding: 8px 16px 24px;
+    box-shadow: 0 -10px 40px rgba(0,0,0,.3); animation: rise .22s ease; max-height: 82vh; overflow-y: auto; }
+  @media (min-width:900px){ .scrim{ align-items:center;} .sheet{ max-width:560px;} }
+  .grab { width:38px; height:4px; border-radius:99px; background: var(--border); margin: 6px auto 12px; }
+  .sheet h3 { margin: 0 0 2px; font-size: 16px; text-transform:uppercase; letter-spacing:.05em; }
+  .sheet p.sd { margin: 0 0 14px; font-family:var(--mono); font-size:11px; color:var(--faint); }
+
+  .pill { font-family: var(--mono); font-size: 11px; font-weight:600; padding: 5px 11px;
+    display:inline-flex; align-items:center; gap:6px; white-space:nowrap; margin-bottom: 14px; }
+  .pill.good { color:var(--good); background:var(--good-soft); }
+  .pill .d { width:6px; height:6px; border-radius:50%; background:currentColor; box-shadow:0 0 6px currentColor; }
+
+  .metagrid { display:grid; grid-template-columns:repeat(2,1fr); gap:1px; background:var(--border-soft);
+    border-top:1px solid var(--border-soft); border-bottom:1px solid var(--border-soft); margin-bottom: 18px; }
+  .metagrid .m { background: var(--panel-2); padding: 11px 12px; }
+  .metagrid .mk { font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); }
+  .metagrid .mv { font-family:var(--mono); font-size:14px; font-weight:600; margin-top:3px;
+    font-variant-numeric:tabular-nums; text-shadow:0 0 8px currentColor; }
+  @media (min-width:480px){ .metagrid{ grid-template-columns:repeat(4,1fr);} }
+
+  .sec-title { font-family: var(--mono); font-size: 11px; letter-spacing:.14em;
+    text-transform: uppercase; color: var(--faint); margin: 4px 2px 8px;
+    display:flex; align-items:center; gap:8px; }
+  .sec-title::after { content:""; flex:1; height:1px; background: var(--border-soft); }
+
+  .tlist { display:flex; flex-direction:column; gap: 8px; }
+  .trow { display:flex; align-items:center; gap:11px;
+    background: var(--panel-2); border:1px solid var(--border-soft);
+    padding: 10px 11px; }
+  .trow .host { font-family: var(--mono); font-size: 12.5px; font-weight:600; flex:1; min-width:0;
+    display:flex; align-items:center; gap:8px; text-transform: uppercase; letter-spacing:.02em; }
+  .trow .path { font-family: var(--mono); font-size: 10.5px; color: var(--muted); white-space:nowrap; }
+  .trow .path.relay { color: var(--warn); }
+  .trow .lat { font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+    white-space:nowrap; min-width: 48px; text-align:right; font-variant-numeric:tabular-nums; }
+
+  #toast { position: fixed; left:50%; bottom: 84px; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--ground); font-family: var(--mono); font-size: 12px;
+    padding: 10px 15px; z-index: 60; opacity:0; pointer-events:none;
+    transition: opacity .2s, transform .2s; max-width: 90%; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+  #toast.show { opacity:1; transform: translateX(-50%) translateY(0); }
+
+  @keyframes blink { 0%,55%{ opacity:1; } 56%,100%{ opacity:0; } }
+  @keyframes pulse { 0%{ box-shadow:0 0 0 0 var(--accent);} 70%{ box-shadow:0 0 0 6px transparent;} 100%{ box-shadow:0 0 0 0 transparent;} }
+  @keyframes rise { from{ transform: translateY(30px); opacity:.4;} to{ transform:none; opacity:1;} }
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after { animation-duration: .001ms !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><span class="dot-h"></span><b>hush</b></div>
+    <div class="spacer"></div>
+    <button class="chip tap" id="transportChip" type="button">
+      <span class="live"></span>transport ok
+    </button>
+  </header>
+
+  <div class="strip">
+    <div style="flex:1">
+      <div class="eyebrow">Fleet</div>
+      <div class="h-title">Console</div>
+    </div>
+    <div class="summ">
+      <span class="s"><span class="swatch" style="background:var(--good)"></span><b>5</b> ok</span>
+      <span class="s"><span class="swatch" style="background:var(--warn)"></span><b>1</b> warn</span>
+      <span class="s"><span class="swatch" style="background:var(--crit)"></span><b>0</b> crit</span>
+    </div>
+  </div>
+
+  <main>
+    <div class="grid" id="grid"></div>
+    <p style="font-family:var(--mono);font-size:11px;color:var(--faint);text-align:center;padding:14px 16px 0">
+      mockup — tap "transport ok" above to see the new panel
+    </p>
+  </main>
+
+  <div class="dock"><span class="hint" id="dockHint">6 machines · 0 critical · 1 warning</span></div>
+</div>
+
+<div class="scrim" id="transportScrim">
+  <div class="sheet" role="dialog" aria-label="Transport">
+    <div class="grab"></div>
+    <h3>Transport</h3>
+    <p class="sd">tsnet · encrypted wireguard mesh, hush-control ⇄ hush-agent</p>
+
+    <span class="pill good"><span class="d"></span>all peers reachable</span>
+
+    <div class="metagrid">
+      <div class="m"><div class="mk">control uptime</div><div class="mv" style="color:var(--accent)">12d 4h</div></div>
+      <div class="m"><div class="mk">reachable</div><div class="mv" style="color:var(--good)">6 / 6</div></div>
+      <div class="m"><div class="mk">avg latency</div><div class="mv" style="color:var(--accent)">38 ms</div></div>
+      <div class="m"><div class="mk">protocol</div><div class="mv" style="color:var(--text)">wg · tsnet</div></div>
+    </div>
+
+    <div class="sec-title">Peers <span style="color:var(--muted)">6</span></div>
+    <div class="tlist" id="peerList"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  const $ = (s,r=document)=>r.querySelector(s);
+
+  // static demo fleet — same shape as web/index.html's demoFleet(), trimmed
+  // to what this mockup needs (uptime + transport path + latency added).
+  const FLEET = [
+    { id:"citadel", os:"Debian 12", ip:"100.71.8.9", status:"good", up:"41d 3h",  path:"direct",            latency:"9 ms" },
+    { id:"nas",     os:"TrueNAS",   ip:"100.71.4.2", status:"good", up:"92d 11h", path:"direct",            latency:"14 ms" },
+    { id:"forge",   os:"Arch",      ip:"100.71.2.5", status:"warn", up:"6d 0h",   path:"relay · derp-sfo",  latency:"71 ms" },
+    { id:"atlas",   os:"Ubuntu 24.04", ip:"100.71.9.3", status:"good", up:"2d 5h", path:"direct",           latency:"22 ms" },
+    { id:"pi-gate", os:"Raspberry Pi OS", ip:"100.71.0.1", status:"good", up:"118d 2h", path:"direct",      latency:"11 ms" },
+    { id:"lab-01",  os:"NixOS 24.05", ip:"100.71.5.7", status:"good", up:"3d 9h", path:"direct",            latency:"31 ms" },
+  ];
+
+  $("#grid").innerHTML = FLEET.map(m => `
+    <div class="node s-${m.status}">
+      <div class="hd">
+        <div>
+          <div class="host"><span class="aura"></span>${m.id}</div>
+          <div class="meta">${m.os} · ${m.ip}</div>
+        </div>
+      </div>
+      <div class="foot">
+        <span class="cons">up <b>${m.up}</b></span>
+        <span class="badge ${m.status==="good"?"ok":"warn"}">${m.status==="good"?"● nominal":"▲ elevated"}</span>
+      </div>
+    </div>`).join("");
+
+  $("#peerList").innerHTML = FLEET.map(m => `
+    <div class="trow">
+      <span class="aura" style="--sev:var(--${m.status==="good"?"good":"warn"});--sev-soft:var(--${m.status==="good"?"good":"warn"}-soft)"></span>
+      <span class="host">${m.id}<span style="color:var(--faint);font-weight:400;text-transform:none"> · up ${m.up}</span></span>
+      <span class="path ${m.path.startsWith("relay")?"relay":""}">${m.path}</span>
+      <span class="lat">${m.latency}</span>
+    </div>`).join("");
+
+  const scrim = $("#transportScrim");
+  $("#transportChip").addEventListener("click", ()=> scrim.classList.add("open"));
+  scrim.addEventListener("click", e=>{ if(e.target===scrim) scrim.classList.remove("open"); });
+  document.addEventListener("keydown", e=>{ if(e.key==="Escape") scrim.classList.remove("open"); });
+})();
+</script>
+</body>
+</html>
