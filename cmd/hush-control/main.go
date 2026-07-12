@@ -485,14 +485,28 @@ func runSelfUpdate() int {
 }
 
 // restartService bounces whichever control unit is active so the freshly
-// swapped binary is what runs. try-restart is a no-op for an inactive unit, so
-// naming both LAN and tsnet units restarts exactly the one that is running.
+// swapped binary is what runs. try-restart is a no-op for an inactive unit,
+// but install.sh only ever installs the unit file for the mode actually
+// chosen (LAN or tsnet), so the other name is routinely missing on any given
+// box. try-restart per unit individually so a "not found" on the uninstalled
+// mode doesn't mask a real failure restarting the one that's actually there.
 func restartService(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "systemctl", "try-restart",
-		"hush-control.service", "hush-control-tsnet.service")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("systemctl try-restart: %w: %s", err, strings.TrimSpace(string(out)))
+	units := []string{"hush-control.service", "hush-control-tsnet.service"}
+	var errs []string
+	for _, unit := range units {
+		cmd := exec.CommandContext(ctx, "systemctl", "try-restart", unit)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			continue
+		}
+		msg := strings.TrimSpace(string(out))
+		if strings.Contains(msg, "not found") {
+			continue // this mode's unit isn't installed on this box
+		}
+		errs = append(errs, fmt.Sprintf("%s: %v: %s", unit, err, msg))
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("systemctl try-restart: %s", strings.Join(errs, "; "))
 	}
 	return nil
 }
