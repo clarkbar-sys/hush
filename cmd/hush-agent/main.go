@@ -10,12 +10,15 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"syscall"
 
+	"github.com/clarkbar-sys/hush/internal/browse"
 	"github.com/clarkbar-sys/hush/internal/version"
 	"github.com/clarkbar-sys/hush/internal/vitals"
 )
@@ -44,10 +47,37 @@ func main() {
 			log.Printf("encode vitals: %v", err)
 		}
 	})
+	mux.HandleFunc("/browse", handleBrowse)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
 
 	log.Printf("hush-agent listening on %s", listenAddr)
 	log.Fatal(http.ListenAndServe(listenAddr, mux))
+}
+
+// handleBrowse serves a read-only directory listing for the Store construct.
+// There is no jail: any absolute path is listed, bounded only by what the
+// unprivileged "hush" user can read. The OS's own errors decide the outcome —
+// permission denied and no-such-dir map to 403 and 404 so the console can tell
+// "you can't see this" apart from "this isn't here".
+func handleBrowse(w http.ResponseWriter, r *http.Request) {
+	listing, err := browse.List(r.URL.Query().Get("path"))
+	if err != nil {
+		status := http.StatusInternalServerError
+		switch {
+		case os.IsPermission(err):
+			status = http.StatusForbidden
+		case os.IsNotExist(err):
+			status = http.StatusNotFound
+		case errors.Is(err, os.ErrInvalid), errors.Is(err, syscall.ENOTDIR):
+			status = http.StatusBadRequest
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(listing); err != nil {
+		log.Printf("encode browse: %v", err)
+	}
 }

@@ -102,6 +102,30 @@ Each phase layers on the same map.
 - **Phase 2 — Creation.** Build new Services and Jobs from the palette.
 - **Phase 3 — Workflows.** The visual blueprint builder (Scheme DSL).
 - **Phase 4 — Backups & Store.** The NAS view; intelligent dedup'd backups.
+  A first slice lands early: read-only **file browsing** on every machine
+  (see below), so the NAS is walkable before dedup'd backups exist.
+
+## Store — browsing files
+
+Every machine exposes its filesystem as a **Store** you can walk from the
+Machine view: Fleet → Machine → Store → directory → directory. The agent's
+`/browse?path=` endpoint returns a directory listing (name, size, mode, mtime,
+symlink target); `hush-control` proxies it at
+`/api/machines/{host}/browse`, so the phone reaches it the same way it reaches
+everything else (agents aren't directly addressable in tsnet mode). It is
+read-only — opening/streaming a file is the next step.
+
+**No jail — the Unix user is the boundary.** Browse is not rooted at a
+configured directory; any absolute path is listable, and the *only* thing that
+gates what comes back is what the unprivileged `hush` user can read on that box.
+A directory it can't read returns permission-denied (surfaced as `403`), exactly
+as it would for that user in a shell. This is deliberate: the security boundary
+is the OS identity, not application logic, which is the same model a future
+"run a command on this machine" capability wants. Widen or tighten a box's reach
+by changing the `hush` user's group membership (`usermod -aG …`), not by editing
+hush. The agent's systemd unit is hardened but intentionally omits
+`ProtectHome`/`PrivateTmp`, which would blank out readable paths and make the
+sandbox — rather than the user — the real fence.
 
 ## Running it (dev)
 
