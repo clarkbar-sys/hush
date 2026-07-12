@@ -81,6 +81,20 @@
   .chip.demo .live { background: var(--warn); animation: none; }
   .chip.down { color: var(--crit); border-color: var(--crit-soft); }
   .chip.down .live { background: var(--crit); animation: none; }
+
+  /* ---- lost-connection banner: has to be impossible to miss on a cached tab ---- */
+  .lostbar {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 9px 12px; font-family: var(--mono); font-size: 12px; font-weight: 700;
+    letter-spacing: .04em; text-transform: uppercase; text-align: center;
+    color: #1a0006; background: var(--crit);
+    animation: lostbar-blink 1.1s steps(1,end) infinite;
+  }
+  .lostbar[hidden] { display: none; }
+  .lostbar-dot { width:7px; height:7px; border-radius:50%; background:#1a0006; flex-shrink:0; }
+  @keyframes lostbar-blink { 0%,100% { opacity:1; } 50% { opacity:.55; } }
+  body.conn-lost .wrap { filter: grayscale(.8) brightness(.6); pointer-events: none; }
   .chip.ver { text-decoration: none; }
   .chip.ver.avail { color: var(--good); border-color: var(--good-soft); cursor: pointer; }
   .chip.ver .up { width:6px; height:6px; border-radius:50%; background:var(--good);
@@ -421,6 +435,10 @@
 </style>
 </head>
 <body>
+<div class="lostbar" id="lostBar" hidden>
+  <span class="lostbar-dot"></span>
+  <span id="lostBarText">lost connection to hush-control</span>
+</div>
 <div class="wrap">
   <header>
     <div class="brand">
@@ -480,7 +498,10 @@
   const sevRank = { crit:2, warn:1, good:0 };
 
   let M = [];                      // current fleet
-  let MODE = "connecting";         // connecting | live | demo
+  let MODE = "connecting";         // connecting | live | demo | lost
+  let everLive = false;            // true once /api/fleet has answered at least once
+  let lostSince = 0;               // ms timestamp poll() started failing after being live
+  const DOC_TITLE = document.title;
   const cpuHist = {};              // id -> rolling cpu samples (live mode)
   const state = { view:"fleet", mid:null, cname:null };
   const byId = id => M.find(m=>m.id===id);
@@ -779,11 +800,26 @@
       const online = M.filter(m=>m.online).length;
       txt = online===M.length ? "transport ok" : `${online}/${M.length} reachable`;
     } else if(MODE==="demo"){ txt = "demo data"; }
+    else if(MODE==="lost"){ txt = "lost connection"; }
     chip.innerHTML = `<span class="live"></span>${txt}`;
     const crit = M.filter(m=>m.status==="crit").length;
     const warn = M.filter(m=>m.status==="warn").length;
     const pairing = PENDING.length ? ` · ${PENDING.length} pairing` : "";
-    $("#dockHint").textContent = `${M.length} machine${M.length===1?"":"s"} · ${crit} critical · ${warn} warning${pairing}`;
+    $("#dockHint").textContent = MODE==="lost"
+      ? `showing last known state · ${M.length} machine${M.length===1?"":"s"}`
+      : `${M.length} machine${M.length===1?"":"s"} · ${crit} critical · ${warn} warning${pairing}`;
+  }
+
+  function setLostBanner(on){
+    const bar = $("#lostBar");
+    bar.hidden = !on;
+    document.body.classList.toggle("conn-lost", on);
+    document.title = on ? "⛔ DISCONNECTED — hush" : DOC_TITLE;
+    if(on){
+      const secs = Math.max(0, Math.round((Date.now() - lostSince) / 1000));
+      const ago = secs < 60 ? `${secs}s` : `${Math.round(secs/60)}m`;
+      $("#lostBarText").textContent = `lost connection to hush-control · reconnecting… · down for ${ago}`;
+    }
   }
 
   async function poll(){
@@ -794,10 +830,24 @@
       if(!Array.isArray(data)) throw new Error("bad payload");
       ingestLive(data);
       MODE = "live";
+      everLive = true;
+      lostSince = 0;
+      setLostBanner(false);
     } catch(e){
-      if(MODE!=="demo"){ M = demoFleet(); }
-      MODE = "demo";
-      jitterDemo();
+      if(everLive){
+        // we had a real connection and lost it (e.g. hush-control rebooting) —
+        // freeze the last known fleet rather than silently swapping in fake
+        // demo machines, and make the loss unmissable.
+        if(MODE!=="lost"){ lostSince = Date.now(); }
+        MODE = "lost";
+        setLostBanner(true);
+      } else {
+        // never connected at all (local preview, file://, no backend running) —
+        // this is the legitimate demo-data fallback.
+        if(MODE!=="demo"){ M = demoFleet(); }
+        MODE = "demo";
+        jitterDemo();
+      }
     }
     setChip();
     render();
