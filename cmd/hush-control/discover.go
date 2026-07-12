@@ -13,6 +13,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	"tailscale.com/client/local"
 )
@@ -24,6 +25,12 @@ const discoverPort = "8765"
 // discoverProbeConcurrency bounds how many peers we probe at once, so scanning a
 // large tailnet doesn't open a connection to every node simultaneously.
 const discoverProbeConcurrency = 16
+
+// rescanInterval is how often the background discoverer re-scans the tailnet, so
+// the console can badge newly-appeared agents without the operator opening the
+// Add sheet. Tuned for a homelab: fresh enough to notice a new box within a
+// minute, sparse enough not to hammer the tailnet.
+const rescanInterval = time.Minute
 
 // discoveredPeer is one tailnet node as seen by the discovery layer, reduced to
 // just the fields discovery needs. It deliberately does not depend on Tailscale
@@ -187,4 +194,60 @@ func discoverCandidates(ctx context.Context, lister peerLister, probe agentProbe
 		})
 	}
 	return discoverResult{Available: true, Candidates: candidates}
+}
+
+// discoverer runs discovery on a timer and caches the latest result, so the
+// console can show a passive "new agents found" badge without every request
+// re-probing the whole tailnet. It reads the active lister through the shared
+// discoverySource, so it comes alive as soon as tsnet mode sets one; in LAN mode
+// each scan short-circuits to "unavailable" at negligible cost.
+type discoverer struct {
+	disco *discoverySource
+	probe agentProbe
+	fleet func() []Agent
+
+	mu       sync.RWMutex
+	cached   discoverResult
+	hasCache bool
+}
+
+// newDiscoverer builds a discoverer over a discoverySource, a probe (testAgent
+// in production), and a snapshot of the current fleet (store.Snapshot), so each
+// scan dedupes against machines already being watched.
+func newDiscoverer(disco *discoverySource, probe agentProbe, fleet func() []Agent) *discoverer {
+	return &discoverer{disco: disco, probe: probe, fleet: fleet}
+}
+
+// scan runs one discovery pass and refreshes the cache, returning the result.
+// It backs both the background timer and an on-demand rescan from the console.
+func (d *discoverer) scan(ctx context.Context) discoverResult {
+	res := discoverCandidates(ctx, d.disco.get(), d.probe, d.fleet())
+	d.mu.Lock()
+	d.cached, d.hasCache = res, true
+	d.mu.Unlock()
+	return res
+}
+
+// snapshot returns the last cached result. ok is false until the first scan
+// completes, letting the handler fall back to a live scan on a cold cache.
+func (d *discoverer) snapshot() (result discoverResult, ok bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.cached, d.hasCache
+}
+
+// run scans immediately (to warm the cache at startup) and then on every tick
+// until ctx is cancelled.
+func (d *discoverer) run(ctx context.Context) {
+	d.scan(ctx)
+	t := time.NewTicker(rescanInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			d.scan(ctx)
+		}
+	}
 }
