@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0](https://github.com/clarkbar-sys/hush/compare/v1.5.0...v1.6.0) (2026-07-12)
+
+
+### Features
+
+* **web:** show a copy-paste update command in a modal ([43fa3a4](https://github.com/clarkbar-sys/hush/commit/43fa3a4477827a113e66b35971bf94968f609928))
+
+
+### Bug Fixes
+
+* restart only the installed control unit on self-update ([#43](https://github.com/clarkbar-sys/hush/issues/43)) ([43fa3a4](https://github.com/clarkbar-sys/hush/commit/43fa3a4477827a113e66b35971bf94968f609928))
+
 ## [1.5.0](https://github.com/clarkbar-sys/hush/compare/v1.4.0...v1.5.0) (2026-07-12)
 
 
