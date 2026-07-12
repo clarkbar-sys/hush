@@ -15,10 +15,12 @@ ExecStart=/usr/local/bin/hush-control -listen ${HUSH_CONTROL_LISTEN} -config ${H
 Restart=on-failure
 RestartSec=5s
 
-# Sandboxing. LAN mode only reads fleet.json and talks HTTP to agents — no
-# writable paths required.
+# Sandboxing. hush-control talks HTTP to agents and persists fleet.json (the
+# web console can add/remove machines), so /etc/hush needs to stay writable
+# even under ProtectSystem=strict.
 NoNewPrivileges=true
 ProtectSystem=strict
+ReadWritePaths=/etc/hush
 ProtectHome=true
 PrivateTmp=true
 ProtectKernelTunables=true
