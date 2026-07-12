@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/clarkbar-sys/hush/compare/v1.2.0...v1.3.0) (2026-07-12)
+
+
+### Features
+
+* add machines to the fleet from the web console ([#25](https://github.com/clarkbar-sys/hush/issues/25)) ([7fe542c](https://github.com/clarkbar-sys/hush/commit/7fe542cb2de95011a4729eba9b448c03295e7e4e))
+* version check and self-update for hush-control ([#26](https://github.com/clarkbar-sys/hush/issues/26)) ([bc4edc8](https://github.com/clarkbar-sys/hush/commit/bc4edc80fc4e15a10ce0ded2fddf436e912e3472))
+
 ## [1.2.0](https://github.com/clarkbar-sys/hush/compare/v1.1.1...v1.2.0) (2026-07-12)
 
 
