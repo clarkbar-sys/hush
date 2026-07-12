@@ -331,6 +331,8 @@
   .badge-count { display:inline-grid; place-items:center; min-width:16px; height:16px; padding:0 4px;
     margin-left:6px; border-radius:8px; background:var(--accent); color:var(--ground);
     font-family:var(--mono); font-size:10px; font-weight:700; line-height:1; vertical-align:middle; }
+  /* on the cyan Build button the accent badge would vanish — invert it */
+  .badge-count.on-primary { background:var(--ground); color:var(--accent); }
 
   .sheet-actions { display:flex; gap:9px; }
   .sheet-actions .btn { flex:1; justify-content:center; }
@@ -459,8 +461,7 @@
   <div class="dock">
     <span class="hint" id="dockHint">loading fleet…</span>
     <button class="btn" id="reportBtn" title="Download a JSON snapshot of the whole fleet">⬇ Report</button>
-    <button class="btn" id="addMachineBtn">⊕ Add machine<span class="badge-count" id="addBadge" style="display:none"></span></button>
-    <button class="btn primary build" id="buildBtn">＋ Build</button>
+    <button class="btn primary build" id="buildBtn">＋ Build<span class="badge-count on-primary" id="addBadge" style="display:none"></span></button>
   </div>
 </div>
 
@@ -909,15 +910,26 @@
 
   /* ---------- build sheet ---------- */
   const scrim = $("#scrim");
-  $("#palette").innerHTML = CONSTRUCTS.map(c=>`
+  $("#palette").innerHTML = CONSTRUCTS.map(c=>{
+    // Machine is the one construct that already ships (via the add-machine flow),
+    // so it carries the "agents waiting to be added" dot the rest don't have.
+    const badge = c[0]==="Machine" ? `<span class="badge-count" id="machineBadge" style="display:none"></span>` : "";
+    return `
     <div class="pitem" data-c="${c[0]}">
       <span class="pg">${c[1]}</span>
-      <div><div class="pn">${c[0]}</div><div class="pdz">${c[2]}</div></div>
-    </div>`).join("");
+      <div><div class="pn">${c[0]}${badge}</div><div class="pdz">${c[2]}</div></div>
+    </div>`;
+  }).join("");
   $("#buildBtn").addEventListener("click", ()=>scrim.classList.add("open"));
   scrim.addEventListener("click", e=>{ if(e.target===scrim) scrim.classList.remove("open"); });
   $("#palette").querySelectorAll(".pitem").forEach(el=>{
-    el.addEventListener("click", ()=>{ scrim.classList.remove("open"); toast(`＋ ${el.dataset.c} builder — coming in a later phase`); });
+    el.addEventListener("click", ()=>{
+      scrim.classList.remove("open");
+      // Machine graduates straight into the working add-machine sheet; the rest
+      // are still placeholders.
+      if(el.dataset.c === "Machine"){ openAddSheet(); return; }
+      toast(`＋ ${el.dataset.c} builder — coming in a later phase`);
+    });
   });
 
   /* ---------- add machine sheet ---------- */
@@ -1157,22 +1169,21 @@
   }
 
   function updateAddBadge(){
-    const b = $("#addBadge");
-    if(!b) return;
     const n = (lastDiscover && lastDiscover.available) ? lastDiscover.candidates.length : 0;
-    if(n > 0){
-      b.textContent = n;
-      b.style.display = "";
-      const btn = $("#addMachineBtn");
-      if(btn) btn.title = n + " agent" + (n===1?"":"s") + " found on your tailnet, not yet added";
-    } else {
-      b.style.display = "none";
-      const btn = $("#addMachineBtn");
-      if(btn) btn.removeAttribute("title");
+    // The dot rides on Build (the dock button) and on the Machine row inside its palette.
+    ["#addBadge","#machineBadge"].forEach(sel=>{
+      const b = $(sel);
+      if(!b) return;
+      if(n > 0){ b.textContent = n; b.style.display = ""; }
+      else { b.style.display = "none"; }
+    });
+    const btn = $("#buildBtn");
+    if(btn){
+      if(n > 0) btn.title = n + " agent" + (n===1?"":"s") + " found on your tailnet, not yet added";
+      else btn.removeAttribute("title");
     }
   }
 
-  $("#addMachineBtn").addEventListener("click", openAddSheet);
   addScrim.addEventListener("click", e=>{ if(e.target===addScrim) closeAddSheet(); });
 
   /* ---------- fleet report download ---------- */
