@@ -111,6 +111,20 @@ Every request is gated by Tailscale identity (`WhoIs`). **Prerequisites:**
 your tailnet. The node is served **tailnet-only** — hush never uses Tailscale
 Funnel. See [`docs/DESIGN.md`](./docs/DESIGN.md#run-modes) for details.
 
+### Add machines from the console
+
+You don't have to edit `fleet.json` by hand. The console's **⊕ Add machine**
+sheet takes a tailnet address, probes it to confirm a `hush-agent` is answering,
+and persists it to `fleet.json` — the new machine shows up on the next poll, no
+restart needed.
+
+In **tsnet mode** the sheet can also find agents for you: **Scan tailnet** reads
+your tailnet's device list (the same table Tailscale keeps, much like DHCP
+leases), probes each online node on the agent port, and lists the ones running
+`hush-agent` that aren't in your fleet yet. Tap one to add it — no IP hunting.
+Discovery needs the tailnet handle tsnet provides, so the scan button falls back
+to manual entry in LAN mode.
+
 ## Run as a service
 
 `install.sh` (above) already does this — every install is a systemd service

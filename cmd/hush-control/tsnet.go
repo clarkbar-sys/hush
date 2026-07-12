@@ -31,7 +31,7 @@ import (
 // state), or — when neither is present — interactively via the first-run setup
 // page bound to listen (the -listen address). Either way we end up with a live
 // *tsnet.Server that serveConsoleOverTsnet then serves the console over.
-func serveTsnet(mux http.Handler, listen, hostname, stateDir string, allow []string) {
+func serveTsnet(mux http.Handler, disco *discoverySource, listen, hostname, stateDir string, allow []string) {
 	authKey := os.Getenv("TS_AUTHKEY")
 
 	var srv *tsnet.Server
@@ -49,16 +49,21 @@ func serveTsnet(mux http.Handler, listen, hostname, stateDir string, allow []str
 	}
 	defer srv.Close()
 
-	serveConsoleOverTsnet(srv, mux, allow)
+	serveConsoleOverTsnet(srv, disco, mux, allow)
 }
 
 // serveConsoleOverTsnet serves mux over HTTPS on :443 of an already-up tsnet
 // node, gating every request on Tailscale identity. It blocks (log.Fatal) until
 // the server exits.
-func serveConsoleOverTsnet(srv *tsnet.Server, mux http.Handler, allow []string) {
+func serveConsoleOverTsnet(srv *tsnet.Server, disco *discoverySource, mux http.Handler, allow []string) {
 	lc, err := srv.LocalClient()
 	if err != nil {
 		log.Fatalf("tsnet: local client: %v", err)
+	}
+
+	// The tailnet is now reachable through lc, so /api/discover can enumerate it.
+	if disco != nil {
+		disco.set(tsnetPeerLister{lc: lc})
 	}
 
 	ln, err := srv.ListenTLS("tcp", ":443")
