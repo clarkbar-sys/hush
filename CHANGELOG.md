@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/clarkbar-sys/hush/compare/v1.4.0...v1.5.0) (2026-07-12)
+
+
+### Features
+
+* **agent:** add tailnet listen mode and default installs to it ([#40](https://github.com/clarkbar-sys/hush/issues/40)) ([e126986](https://github.com/clarkbar-sys/hush/commit/e1269866b1ef64ca180fa4ca36d6f3b675772a3b)), closes [#36](https://github.com/clarkbar-sys/hush/issues/36)
+* **web:** make a lost hush-control connection loud, not silent demo data ([#35](https://github.com/clarkbar-sys/hush/issues/35)) ([9445f70](https://github.com/clarkbar-sys/hush/commit/9445f70e3ab8525829c1b5e3ec851b99d2787fe4))
+
 ## [1.4.0](https://github.com/clarkbar-sys/hush/compare/v1.3.0...v1.4.0) (2026-07-12)
 
 
