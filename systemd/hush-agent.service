@@ -29,7 +29,12 @@ ProtectSystem=strict
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# AF_NETLINK is required for -listen tailnet: resolving the machine's tailnet
+# address calls net.InterfaceAddrs(), which enumerates interfaces over a netlink
+# socket. Without it the call fails with "address family not supported by
+# protocol" and the agent loops "no tailnet address after N attempts" even when
+# tailscale0 is up. This mirrors the hush-control-tsnet unit's allowlist.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 LockPersonality=true
 
 [Install]
