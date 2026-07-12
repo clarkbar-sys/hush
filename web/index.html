@@ -811,12 +811,10 @@
     } else if(MODE==="demo"){ txt = "demo data"; }
     else if(MODE==="lost"){ txt = "lost connection"; }
     chip.innerHTML = `<span class="live"></span>${txt}`;
-    const crit = M.filter(m=>m.status==="crit").length;
-    const warn = M.filter(m=>m.status==="warn").length;
     const pairing = PENDING.length ? ` · ${PENDING.length} pairing` : "";
     $("#dockHint").textContent = MODE==="lost"
       ? `showing last known state · ${M.length} machine${M.length===1?"":"s"}`
-      : `${M.length} machine${M.length===1?"":"s"} · ${crit} critical · ${warn} warning${pairing}`;
+      : `${M.length} machine${M.length===1?"":"s"}${pairing}`;
   }
 
   function setLostBanner(on){

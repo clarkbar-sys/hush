@@ -214,7 +214,10 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 create_user
-install -d -o root -g "$SERVICE_GROUP" -m 0750 "$CONFIG_DIR"
+# Owned by the service user, not root: hush-control runs as this user and
+# persists fleet.json here (the web console can add/remove machines), so it
+# needs write access to its own state directory.
+install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 "$CONFIG_DIR"
 
 case "$TARGET" in
   agent) install_agent ;;

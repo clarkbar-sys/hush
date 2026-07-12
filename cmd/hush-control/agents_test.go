@@ -145,6 +145,29 @@ func TestAPIAgentsAddAndReject(t *testing.T) {
 	}
 }
 
+// TestAPIAgentsSaveFailureReturns500 makes sure a persistence failure (e.g.
+// the config directory isn't writable) surfaces as a 500, not the 409 used
+// for a genuine duplicate-address rejection — the two are different
+// problems and the client needs to tell them apart. Pointed at a config
+// path whose parent directory doesn't exist, so the write fails the same
+// way it would against a read-only filesystem, but without depending on
+// permission checks the test might run past as root.
+func TestAPIAgentsSaveFailureReturns500(t *testing.T) {
+	store := newAgentStore(filepath.Join(t.TempDir(), "nonexistent", "fleet.json"), nil)
+	mux := buildMux(store, muxDiscoverer(store), "")
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/agents", bytes.NewBufferString(`{"addr":"100.71.6.4:8765"}`))
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("save failure: status = %d, body = %s, want 500", rr.Code, rr.Body.String())
+	}
+	if got := store.Snapshot(); len(got) != 0 {
+		t.Fatalf("fleet has %d agents after a failed save, want 0", len(got))
+	}
+}
+
 func TestAPIAgentsRejectsGET(t *testing.T) {
 	store := newTestStore(t, nil)
 	mux := buildMux(store, muxDiscoverer(store), "")
