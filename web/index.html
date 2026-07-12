@@ -624,7 +624,7 @@
           <div class="top">
             <div>
               <div class="host"><span class="aura" style="--sev:var(--${sv});--sev-soft:var(--${sv}-soft);background:var(--${sv})"></span>${m.id}</div>
-              <div class="sub"><span>${m.os||"—"}</span>${m.ip?`<span>${m.ip}</span>`:""}${m.up?`<span>up ${m.up}</span>`:""}${m.gpu!=null&&m.gpuName?`<span style="color:var(--accent)">${m.gpuName}${m.vramText?` · ${m.vramText}`:""}</span>`:""}${m.role?`<span style="color:var(--accent)">${m.role}</span>`:""}</div>
+              <div class="sub"><span>${m.os||"—"}</span>${m.ip?`<span>${m.ip}</span>`:""}${m.up?`<span>up ${m.up}</span>`:""}${m.gpu!=null&&m.gpuName?`<span style="color:var(--accent)">${m.gpuName}${m.vramText?` · ${m.vramText}`:""}</span>`:""}${m.role?`<span style="color:var(--accent)">${m.role}</span>`:""}${m.agentVersion?`<span>agent ${m.agentVersion}</span>`:""}</div>
             </div>
             <span class="pill ${m.status}"><span class="d"></span>${!m.online?"offline":m.status==="good"?"healthy":m.status==="warn"?"degraded":"critical"}</span>
           </div>
@@ -792,26 +792,26 @@
   function demoFleet(){
     const mk = o => { o.online=true; o.jobs=o.jobs||[]; o.tasks=o.tasks||[]; o.loadHist=walk(HIST,o.cpu,12); return o; };
     return [
-      mk({ id:"citadel", os:"Debian 12", ip:"100.71.8.9", role:"", status:"good", cpu:23, mem:47, disk:38, up:"41d", load:"0.9",
+      mk({ id:"citadel", agentVersion:"v1.3.0", os:"Debian 12", ip:"100.71.8.9", role:"", status:"good", cpu:23, mem:47, disk:38, up:"41d", load:"0.9",
         gpu:18, vram:47, gpuName:"RTX 3090", vramText:"11.3 / 24 GB",
         services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"caddy",state:"running",mem:"42 MB"},{name:"postgres",state:"running",mem:"512 MB"},{name:"tailscaled",state:"running",mem:"24 MB"}],
         jobs:[{name:"nightly-backup",next:"in 3h 12m",sched:"0 3 * * *"},{name:"cert-renew",next:"in 6d",sched:"@weekly"}],
         tasks:[{name:"git pull · deploy/api",when:"12m ago",ok:true}] }),
-      mk({ id:"nas", os:"TrueNAS · ZFS", ip:"100.71.4.2", role:"store", status:"good", cpu:11, mem:34, disk:81, up:"92d", load:"0.4", gpu:null,
+      mk({ id:"nas", agentVersion:"v1.3.0", os:"TrueNAS · ZFS", ip:"100.71.4.2", role:"store", status:"good", cpu:11, mem:34, disk:81, up:"92d", load:"0.4", gpu:null,
         services:[{name:"hush-agent",state:"running",mem:"17 MB"},{name:"smbd",state:"running",mem:"88 MB"},{name:"zfs-scrub",state:"running",mem:"6 MB"}],
         jobs:[{name:"pull-backups",next:"in 3h 12m",sched:"0 3 * * *"}] }),
-      mk({ id:"forge", os:"Arch Linux", ip:"100.71.2.5", role:"", status:"warn", cpu:88, mem:71, disk:52, up:"6d", load:"14.2",
+      mk({ id:"forge", agentVersion:"v1.2.0", os:"Arch Linux", ip:"100.71.2.5", role:"", status:"warn", cpu:88, mem:71, disk:52, up:"6d", load:"14.2",
         gpu:62, vram:71, gpuName:"RTX 4070", vramText:"8.5 / 12 GB", alert:"load 14.2 · CI backlog building",
         services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"buildkite-agent",state:"running",mem:"120 MB"},{name:"docker",state:"running",mem:"340 MB"}],
         jobs:[{name:"cache-prune",next:"in 40m",sched:"*/30 * * * *"}] }),
-      mk({ id:"atlas", os:"Ubuntu 24.04", ip:"100.71.9.3", role:"", status:"crit", cpu:5, mem:22, disk:63, up:"2d", load:"0.2",
+      mk({ id:"atlas", agentVersion:"v1.3.0", os:"Ubuntu 24.04", ip:"100.71.9.3", role:"", status:"crit", cpu:5, mem:22, disk:63, up:"2d", load:"0.2",
         gpu:34, vram:41, gpuName:"RTX 3060", vramText:"4.9 / 12 GB", alert:"plex.service failed — exit code 1",
         services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"plex",state:"failed",mem:"—"},{name:"jellyfin",state:"running",mem:"210 MB"},{name:"sonarr",state:"running",mem:"96 MB"}],
         jobs:[{name:"library-scan",next:"in 1h",sched:"0 * * * *"}] }),
-      mk({ id:"pi-gate", os:"Raspberry Pi OS", ip:"100.71.0.1", role:"gateway", status:"good", cpu:31, mem:58, disk:44, up:"118d", load:"1.1", gpu:null,
+      mk({ id:"pi-gate", agentVersion:"v1.3.0", os:"Raspberry Pi OS", ip:"100.71.0.1", role:"gateway", status:"good", cpu:31, mem:58, disk:44, up:"118d", load:"1.1", gpu:null,
         services:[{name:"hush-agent",state:"running",mem:"16 MB"},{name:"tailscaled",state:"running",mem:"22 MB"},{name:"adguardhome",state:"running",mem:"54 MB"}],
         jobs:[{name:"speedtest-log",next:"in 25m",sched:"*/30 * * * *"}] }),
-      mk({ id:"lab-01", os:"NixOS 24.05", ip:"100.71.5.7", role:"", status:"good", cpu:9, mem:19, disk:12, up:"3d", load:"0.3",
+      mk({ id:"lab-01", agentVersion:"v1.3.0", os:"NixOS 24.05", ip:"100.71.5.7", role:"", status:"good", cpu:9, mem:19, disk:12, up:"3d", load:"0.3",
         gpu:88, vram:91, gpuName:"RTX 4090", vramText:"21.8 / 24 GB",
         services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"k3s",state:"running",mem:"430 MB"}] }),
     ];
