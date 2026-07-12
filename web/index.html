@@ -293,6 +293,21 @@
   .field-note b { color: var(--muted); }
   .field-note.err { color: var(--crit); border-color: var(--crit-soft); }
 
+  /* tailnet discovery (Scan tailnet) */
+  .scan-block { margin: 2px 0 16px; }
+  .scan-block .btn.ghost { width:100%; }
+  .disc-list { display:flex; flex-direction:column; gap:7px; margin-bottom:9px; }
+  .disc-row { display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+    border:1px solid var(--border); border-radius:10px; padding:9px 11px; background:var(--panel-2);
+    color:inherit; cursor:pointer; font:inherit; }
+  .disc-row:hover, .disc-row:focus-visible { border-color: var(--accent); outline:none; }
+  .disc-row .gly { width:30px; height:30px; border-radius:8px; background:var(--good-soft); color:var(--good);
+    display:grid; place-items:center; font-size:15px; flex:none; }
+  .disc-meta { flex:1; min-width:0; }
+  .disc-meta .pn { font-family:var(--mono); font-weight:700; font-size:13px; }
+  .disc-meta .pm { font-family:var(--mono); font-size:10.5px; color:var(--faint); }
+  .disc-add { font-family:var(--mono); font-size:11px; color:var(--accent); flex:none; }
+
   .sheet-actions { display:flex; gap:9px; }
   .sheet-actions .btn { flex:1; justify-content:center; }
 
@@ -847,10 +862,13 @@
   let addTestResult = null;
   let addBusy = false;
   let addError = "";
+  // tailnet discovery state for the "Scan tailnet" affordance.
+  let discoverState = { ran:false, loading:false, available:true, error:"", candidates:[] };
 
   function openAddSheet(){
     addStep = 0; addDraft = { name:"", addr:"", role:"" };
     addTestResult = null; addBusy = false; addError = "";
+    discoverState = { ran:false, loading:false, available:true, error:"", candidates:[] };
     addScrim.classList.add("open");
     renderAddSheet();
   }
@@ -861,6 +879,7 @@
       addBody.innerHTML = `
         <h3>Add a machine</h3>
         <p class="sd">point hush-control at a new hush-agent on your tailnet</p>
+        ${renderScanBlock()}
         <div class="field">
           <label>Name <span class="opt">— optional, falls back to the agent's hostname</span></label>
           <input type="text" id="fName" placeholder="e.g. beacon" value="${esc(addDraft.name)}">
@@ -887,6 +906,7 @@
       $("#fName").addEventListener("input", e=>{ addDraft.name = e.target.value; });
       $("#fAddr").addEventListener("input", e=>{ addDraft.addr = e.target.value; });
       $("#fRole").addEventListener("input", e=>{ addDraft.role = e.target.value; });
+      attachScanHandlers();
     } else if(addStep === 1){
       const r = addTestResult;
       addBody.innerHTML = `
@@ -964,6 +984,77 @@
       addBusy = false; addError = "couldn't reach hush-control itself — is it running?";
       addStep = 0; renderAddSheet();
     }
+  }
+
+  // renderScanBlock draws the "Scan tailnet" control and, once a scan has run,
+  // the list of discovered agents not yet in the fleet. Tapping one pre-fills
+  // the form and runs the same test → add flow as a hand-typed address.
+  function renderScanBlock(){
+    const s = discoverState;
+    if(s.loading){
+      return `<div class="scan-block"><button class="btn ghost" disabled>Scanning tailnet…</button></div>`;
+    }
+    if(!s.ran){
+      return `<div class="scan-block"><button class="btn ghost" id="scanBtn">⟲ Scan tailnet for agents</button></div>`;
+    }
+    if(!s.available){
+      return `<div class="scan-block">
+        <button class="btn ghost" id="scanBtn">⟲ Scan tailnet for agents</button>
+        <div class="field-note">Tailnet scan needs hush-control running in tsnet mode. Enter the address by hand below.</div></div>`;
+    }
+    if(s.error){
+      return `<div class="scan-block">
+        <button class="btn ghost" id="scanBtn">⟲ Rescan tailnet</button>
+        <div class="field-note err">${esc(s.error)}</div></div>`;
+    }
+    if(!s.candidates.length){
+      return `<div class="scan-block">
+        <button class="btn ghost" id="scanBtn">⟲ Rescan tailnet</button>
+        <div class="field-note">No new hush-agents found — everything live on your tailnet is already in the fleet.</div></div>`;
+    }
+    const rows = s.candidates.map((c,i)=>`
+      <button class="disc-row" data-i="${i}">
+        <span class="gly">▦</span>
+        <div class="disc-meta"><div class="pn">${esc(c.name||c.ip)}</div><div class="pm">${esc(c.ip)}${c.os?" · "+esc(c.os):""}</div></div>
+        <span class="disc-add">Add →</span>
+      </button>`).join("");
+    return `<div class="scan-block">
+      <div class="disc-list">${rows}</div>
+      <button class="btn ghost" id="scanBtn">⟲ Rescan tailnet</button></div>`;
+  }
+
+  function attachScanHandlers(){
+    const b = $("#scanBtn");
+    if(b) b.addEventListener("click", scanTailnet);
+    document.querySelectorAll(".disc-row").forEach(el=>{
+      el.addEventListener("click", ()=>{
+        const c = discoverState.candidates[+el.dataset.i];
+        if(!c) return;
+        addDraft.name = c.name || "";
+        addDraft.addr = c.addr;
+        addError = "";
+        const inp = $("#fAddr"); if(inp) inp.value = c.addr;
+        const nm = $("#fName"); if(nm) nm.value = c.name || "";
+        submitTest(); // reuse the verify → add flow, exactly as a typed address
+      });
+    });
+  }
+
+  async function scanTailnet(){
+    discoverState.loading = true; discoverState.error = ""; renderAddSheet();
+    try {
+      const r = await fetch("api/discover");
+      const data = await r.json();
+      discoverState = {
+        ran:true, loading:false,
+        available: !!data.available,
+        error: data.error || "",
+        candidates: Array.isArray(data.candidates) ? data.candidates : []
+      };
+    } catch(e){
+      discoverState = { ran:true, loading:false, available:true, error:"couldn't reach hush-control — is it running?", candidates:[] };
+    }
+    renderAddSheet();
   }
 
   $("#addMachineBtn").addEventListener("click", openAddSheet);

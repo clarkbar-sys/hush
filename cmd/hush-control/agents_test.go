@@ -108,7 +108,7 @@ func TestTestAgentEmptyAddr(t *testing.T) {
 
 func TestAPIAgentsAddAndReject(t *testing.T) {
 	store := newTestStore(t, nil)
-	mux := buildMux(store, "")
+	mux := buildMux(store, &discoverySource{}, "")
 
 	post := func(body string) *httptest.ResponseRecorder {
 		rr := httptest.NewRecorder()
@@ -147,7 +147,7 @@ func TestAPIAgentsAddAndReject(t *testing.T) {
 
 func TestAPIAgentsRejectsGET(t *testing.T) {
 	store := newTestStore(t, nil)
-	mux := buildMux(store, "")
+	mux := buildMux(store, &discoverySource{}, "")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/agents", nil))
 	if rr.Code != http.StatusMethodNotAllowed {
@@ -162,7 +162,7 @@ func TestAPIAgentsTestEndpoint(t *testing.T) {
 	defer agent.Close()
 
 	store := newTestStore(t, nil)
-	mux := buildMux(store, "")
+	mux := buildMux(store, &discoverySource{}, "")
 
 	u, _ := url.Parse(agent.URL)
 	body, _ := json.Marshal(map[string]string{"addr": u.Host})

@@ -83,10 +83,13 @@ func main() {
 	log.Printf("hush-control: %d agent(s) configured", len(agents))
 	store := newAgentStore(*configPath, agents)
 
-	mux := buildMux(store, *webDir)
+	// disco starts empty; tsnet mode populates it with a tailnet peer lister once
+	// the node is up (LAN mode leaves it nil, so discovery reports unavailable).
+	disco := &discoverySource{}
+	mux := buildMux(store, disco, *webDir)
 
 	if *useTsnet {
-		serveTsnet(mux, *listen, *hostname, *stateDir, allow)
+		serveTsnet(mux, disco, *listen, *hostname, *stateDir, allow)
 		return
 	}
 
@@ -98,7 +101,7 @@ func main() {
 // the static UI. It is transport-agnostic, so the same handler serves both
 // LAN and tsnet modes. The UI is served from the embedded assets unless
 // webDir is set (dev override).
-func buildMux(store *agentStore, webDir string) http.Handler {
+func buildMux(store *agentStore, disco *discoverySource, webDir string) http.Handler {
 	client := &http.Client{Timeout: 2 * time.Second}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/fleet", func(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +162,18 @@ func buildMux(store *agentStore, webDir string) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(testAgent(client, req.Addr)); err != nil {
 			log.Printf("encode test result: %v", err)
+		}
+	})
+	mux.HandleFunc("/api/discover", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		probe := func(addr string) testAgentResult { return testAgent(client, addr) }
+		result := discoverCandidates(r.Context(), disco.get(), probe, store.Snapshot())
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(result); err != nil {
+			log.Printf("encode discover result: %v", err)
 		}
 	})
 	vc := &versionChecker{client: &http.Client{Timeout: 5 * time.Second}}
