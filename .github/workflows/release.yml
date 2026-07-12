@@ -58,10 +58,14 @@ jobs:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: 0
+          # The tag being released, e.g. "v1.2.0" — stamped into the binary so
+          # `-version`, /api/version, and self-update know what they're running.
+          VERSION: ${{ needs.release-please.outputs.tag_name }}
         run: |
           mkdir -p out
+          ldflags="-s -w -X github.com/clarkbar-sys/hush/internal/version.Version=${VERSION}"
           for bin in hush-agent hush-control; do
-            go build -trimpath -ldflags="-s -w" -o "out/$bin" "./cmd/$bin"
+            go build -trimpath -ldflags="$ldflags" -o "out/$bin" "./cmd/$bin"
             tar -C out -czf "out/${bin}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz" "$bin"
             rm "out/$bin"
           done
