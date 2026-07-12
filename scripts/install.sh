@@ -17,6 +17,11 @@
 # Override the source binary with HUSH_AGENT_BIN / HUSH_CONTROL_BIN if it
 # isn't on $PATH.
 #
+# Binaries install to /usr/local/bin by default. On immutable-root distros
+# (SteamOS, Fedora Silverblue/Kinoite) /usr is read-only, so the installer
+# falls back to a writable directory and rewrites the unit's ExecStart to
+# match. Force a specific location with HUSH_BIN_DIR=/some/dir.
+#
 # Targets systemd + shadow-utils (useradd) distros: Debian, Ubuntu, Fedora,
 # Arch, RHEL, openSUSE. Not Alpine (OpenRC) or NixOS (declarative modules).
 #
@@ -28,7 +33,6 @@ set -euo pipefail
 SERVICE_USER="${HUSH_USER:-hush}"
 SERVICE_GROUP="${HUSH_GROUP:-hush}"
 CONFIG_DIR="/etc/hush"
-BIN_DIR="/usr/local/bin"
 UNIT_DIR="/etc/systemd/system"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -37,6 +41,36 @@ require_root() {
     echo "error: must run as root (sudo)" >&2
     exit 1
   fi
+}
+
+# resolve_bin_dir picks where the binaries land and sets BIN_DIR. The usual
+# /usr/local/bin is unwritable on immutable-root distros (SteamOS, Fedora
+# Silverblue/Kinoite) where /usr is mounted read-only, so fall back to a
+# writable path there. An explicit HUSH_BIN_DIR always wins. Must run after
+# require_root, since the fallbacks live outside the user's home.
+resolve_bin_dir() {
+  if [[ -n "${HUSH_BIN_DIR:-}" ]]; then
+    BIN_DIR="$HUSH_BIN_DIR"
+    if ! mkdir -p "$BIN_DIR" 2>/dev/null || [[ ! -w "$BIN_DIR" ]]; then
+      echo "error: HUSH_BIN_DIR='$BIN_DIR' is not writable" >&2
+      exit 1
+    fi
+    return
+  fi
+  local cand
+  for cand in /usr/local/bin /opt/hush/bin /var/lib/hush/bin; do
+    if mkdir -p "$cand" 2>/dev/null && [[ -w "$cand" ]]; then
+      BIN_DIR="$cand"
+      if [[ "$cand" != /usr/local/bin ]]; then
+        echo "note: /usr/local/bin is read-only; installing binaries to $cand instead"
+        echo "  (set HUSH_BIN_DIR to pick a different location)"
+      fi
+      return
+    fi
+  done
+  echo "error: found no writable install dir (tried /usr/local/bin, /opt/hush/bin, /var/lib/hush/bin)" >&2
+  echo "  set HUSH_BIN_DIR=/some/writable/dir and re-run" >&2
+  exit 1
 }
 
 create_user() {
@@ -73,7 +107,18 @@ install_binary() {
 
 install_unit() {
   local unit="$1"
-  install -o root -g root -m 0644 "$REPO_ROOT/systemd/$unit" "$UNIT_DIR/$unit"
+  # Point ExecStart (and the updater's ReadWritePaths) at the resolved BIN_DIR
+  # so a non-default location — e.g. the SteamOS read-only-/usr fallback — is
+  # reflected in the unit. A straight copy when BIN_DIR is /usr/local/bin.
+  if [[ "$BIN_DIR" != /usr/local/bin ]]; then
+    local tmp
+    tmp="$(mktemp)"
+    sed "s#/usr/local/bin#$BIN_DIR#g" "$REPO_ROOT/systemd/$unit" >"$tmp"
+    install -o root -g root -m 0644 "$tmp" "$UNIT_DIR/$unit"
+    rm -f "$tmp"
+  else
+    install -o root -g root -m 0644 "$REPO_ROOT/systemd/$unit" "$UNIT_DIR/$unit"
+  fi
   echo "installed $UNIT_DIR/$unit"
 }
 
@@ -163,6 +208,7 @@ install_control_tsnet() {
 
 main() {
   require_root
+  resolve_bin_dir
   create_user
   case "${1:-}" in
     agent) install_agent ;;
