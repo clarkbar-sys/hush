@@ -21,13 +21,18 @@ import (
 )
 
 func main() {
-	listen := flag.String("listen", ":8765", "address to listen on (bind to the tailnet interface in production)")
+	listen := flag.String("listen", ":8765", `address to listen on, or "tailnet" to bind this machine's Tailscale IP (tailnet-only; "tailnet:PORT" for a non-default port)`)
 	showVersion := flag.Bool("version", false, "print the hush-agent version and exit")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Printf("hush-agent %s\n", version.Current())
 		os.Exit(0)
+	}
+
+	listenAddr, err := resolveListen(*listen)
+	if err != nil {
+		log.Fatalf("hush-agent: %v", err)
 	}
 
 	vitals.StartSampler()
@@ -43,6 +48,6 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 
-	log.Printf("hush-agent listening on %s", *listen)
-	log.Fatal(http.ListenAndServe(*listen, mux))
+	log.Printf("hush-agent listening on %s", listenAddr)
+	log.Fatal(http.ListenAndServe(listenAddr, mux))
 }

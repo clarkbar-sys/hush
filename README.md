@@ -74,6 +74,12 @@ open http://127.0.0.1:8080
 To watch a real fleet, copy [`fleet.example.json`](./fleet.example.json) to
 `fleet.json`, list your agents' tailnet addresses, and start `hush-control`. In
 production each `hush-agent` binds to the tailnet interface — no public exposure.
+Pass `-listen tailnet` (or set `HUSH_AGENT_LISTEN=tailnet`) and the agent binds
+this machine's Tailscale IP automatically, waiting for `tailscaled` to come up on
+boot rather than hardcoding a `100.x` address. This is the default for
+`install.sh`, so a freshly installed agent is discoverable over the tailnet with
+no post-install edit. Use `tailnet:PORT` for a non-default port, or a literal
+`host:port` (e.g. `127.0.0.1:8765`) to pin a specific interface.
 
 Working from a clone instead? Swap `hush-control` for `go run ./cmd/hush-control`
 (and likewise for the agent). Add `-web web` to serve the UI from the on-disk
