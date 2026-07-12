@@ -241,6 +241,26 @@
   .browsebar .bactions { display:flex; gap:12px; white-space:nowrap; }
   .browsebar a { color: var(--accent); cursor:pointer; }
   .browsebar a:hover { text-decoration:underline; }
+  .vov { position:fixed; inset:0; z-index:120; padding:16px; display:grid; place-items:center;
+    background:rgba(4,2,14,.82); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+  .vsheet { width:min(940px,100%); max-height:92vh; display:flex; flex-direction:column;
+    background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden;
+    box-shadow:0 24px 80px rgba(0,0,0,.6); }
+  .vbar { display:flex; align-items:center; gap:12px; padding:11px 14px;
+    border-bottom:1px solid var(--border-soft); }
+  .vname { font-family:var(--mono); font-size:13px; font-weight:600; color:var(--text);
+    flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .vmeta { font-family:var(--mono); font-size:11px; color:var(--muted); white-space:nowrap; }
+  .vbtn { font-family:var(--mono); font-size:12px; color:var(--accent); background:transparent;
+    border:1px solid var(--border); border-radius:8px; padding:6px 10px; cursor:pointer;
+    text-decoration:none; white-space:nowrap; }
+  .vbtn:hover { border-color:var(--accent); }
+  .vbody { padding:14px; overflow:auto; display:grid; place-items:center; }
+  .vmedia { max-width:100%; max-height:78vh; border-radius:8px; display:block; }
+  .vaudio { width:100%; }
+  .vpre { font-family:var(--mono); font-size:12px; line-height:1.55; white-space:pre-wrap;
+    word-break:break-word; color:var(--text); width:100%; margin:0; }
+  .vnote { font-family:var(--mono); font-size:12px; color:var(--faint); padding:26px 16px; }
   .row {
     display:flex; align-items:center; gap:11px; cursor:pointer;
     background: var(--panel); border:1px solid var(--border); border-radius: 10px;
@@ -780,10 +800,10 @@
         <span class="rt">dir</span></button>`;
     }
     const sym = e.symlink ? `<span class="rt" style="opacity:.65">→ ${esc(e.symlink)}</span>` : "";
-    return `<div class="row" style="cursor:default">
-      <span class="gly" style="background:var(--faint-soft,transparent);color:var(--muted)">·</span>
+    return `<button class="row" data-file="${esc(e.name)}" data-size="${e.size}">
+      <span class="gly" style="background:var(--accent-soft);color:var(--accent)">▪</span>
       <span class="nm">${esc(e.name)}</span>${sym}
-      <span class="rt">${fmtBytes(e.size)}</span></div>`;
+      <span class="rt">${fmtBytes(e.size)}</span></button>`;
   }
   function wireBrowse(id){
     const box = $("#browse"); if(!box) return;
@@ -792,10 +812,71 @@
       state.browsePath = base + "/" + el.dataset.dir;
       fillBrowse(id);
     }));
+    box.querySelectorAll("[data-file]").forEach(el=>el.addEventListener("click", ()=>{
+      const base = state.browsePath==="/" ? "" : state.browsePath;
+      openFile(id, base + "/" + el.dataset.file, el.dataset.file, +el.dataset.size);
+    }));
     const up = box.querySelector("[data-up]");
     if(up) up.addEventListener("click", ()=>{ state.browsePath = up.dataset.up; fillBrowse(id); });
     const cl = box.querySelector("[data-close]");
     if(cl) cl.addEventListener("click", ()=>{ state.browsePath = null; renderMachine(); });
+  }
+
+  // openFile pops a viewer over the console for one file, streamed through
+  // control's /file proxy. The kind is chosen by extension: video/audio get a
+  // seekable player (the proxy forwards Range requests), images render inline,
+  // small text is fetched and shown, and anything else offers a download. The
+  // overlay lives on <body>, so the fleet poll re-rendering #app underneath
+  // never tears it down.
+  const VIDEO=["mp4","webm","ogv","ogm","mov","m4v"];
+  const AUDIO=["mp3","ogg","oga","wav","flac","m4a","aac","opus"];
+  const IMAGE=["png","jpg","jpeg","gif","webp","avif","svg","bmp","ico"];
+  const TEXT=["txt","log","md","markdown","json","yaml","yml","toml","ini","conf","cfg","xml",
+    "csv","tsv","sh","bash","zsh","fish","go","py","js","mjs","ts","c","h","cpp","hpp","rs","rb",
+    "lua","pl","php","sql","html","css","service","timer","env","dockerfile","makefile","license"];
+  const TEXT_MAX = 1024*1024;
+  function openFile(id, path, name, size){
+    const url = `api/machines/${encodeURIComponent(id)}/file?path=${encodeURIComponent(path)}`;
+    const dl = url + "&download=1";
+    const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : name.toLowerCase();
+    const ov = document.createElement("div");
+    ov.className = "vov";
+    ov.innerHTML = `<div class="vsheet">
+        <div class="vbar">
+          <div class="vname" title="${esc(path)}">${esc(name)}</div>
+          <div class="vmeta">${fmtBytes(size)}</div>
+          <a class="vbtn" href="${dl}">⤓ Download</a>
+          <button class="vbtn vclose" aria-label="Close">✕</button>
+        </div>
+        <div class="vbody"><div class="vnote">loading…</div></div>
+      </div>`;
+    document.body.appendChild(ov);
+    const body = ov.querySelector(".vbody");
+    const alive = () => document.body.contains(ov);
+    const close = () => { ov.remove(); document.removeEventListener("keydown", onkey); };
+    const onkey = e => { if(e.key==="Escape") close(); };
+    document.addEventListener("keydown", onkey);
+    ov.querySelector(".vclose").addEventListener("click", close);
+    ov.addEventListener("click", e => { if(e.target===ov) close(); });
+
+    if(VIDEO.includes(ext)){
+      body.innerHTML = `<video class="vmedia" controls autoplay playsinline src="${url}"></video>`;
+    } else if(AUDIO.includes(ext)){
+      body.innerHTML = `<audio class="vmedia vaudio" controls autoplay src="${url}"></audio>`;
+    } else if(IMAGE.includes(ext)){
+      body.innerHTML = `<img class="vmedia" src="${url}" alt="${esc(name)}">`;
+    } else if(TEXT.includes(ext)){
+      if(size!=null && size>TEXT_MAX){
+        body.innerHTML = `<div class="vnote">${fmtBytes(size)} — too large to preview. Use Download.</div>`;
+      } else {
+        fetch(url, {cache:"no-store"})
+          .then(r => r.ok ? r.text() : Promise.reject(r.status))
+          .then(t => { if(alive()) body.innerHTML = `<pre class="vpre"></pre>`, body.firstChild.textContent = t; })
+          .catch(s => { if(alive()) body.innerHTML = `<div class="vnote">could not load (${esc(String(s))})</div>`; });
+      }
+    } else {
+      body.innerHTML = `<div class="vnote">No inline preview for this file — use Download.</div>`;
+    }
   }
   function fmtBytes(n){
     if(n==null) return "";

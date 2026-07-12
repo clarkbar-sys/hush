@@ -16,6 +16,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"syscall"
 
 	"github.com/clarkbar-sys/hush/internal/browse"
@@ -48,6 +49,7 @@ func main() {
 		}
 	})
 	mux.HandleFunc("/browse", handleBrowse)
+	mux.HandleFunc("/file", handleFile)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -80,4 +82,45 @@ func handleBrowse(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(listing); err != nil {
 		log.Printf("encode browse: %v", err)
 	}
+}
+
+// handleFile streams a single file's contents — the "open it" half of the Store
+// construct. Like /browse it is unjailed and bounded only by the hush user's
+// read permission (permission denied → 403, missing → 404, a directory → 400).
+// It leans on http.ServeContent, which handles Range requests (so a phone can
+// seek within a video), Content-Type by extension, and If-Modified-Since for
+// free. Pass ?download=1 to force a save dialog instead of inline rendering.
+func handleFile(w http.ResponseWriter, r *http.Request) {
+	path := filepath.Clean(r.URL.Query().Get("path"))
+	if !filepath.IsAbs(path) {
+		http.Error(w, "path must be absolute", http.StatusBadRequest)
+		return
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		status := http.StatusInternalServerError
+		switch {
+		case os.IsPermission(err):
+			status = http.StatusForbidden
+		case os.IsNotExist(err):
+			status = http.StatusNotFound
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if info.IsDir() {
+		http.Error(w, "is a directory — use /browse", http.StatusBadRequest)
+		return
+	}
+	if r.URL.Query().Get("download") != "" {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", info.Name()))
+	}
+	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
 }

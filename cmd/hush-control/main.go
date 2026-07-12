@@ -140,6 +140,17 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 		}
 		proxyBrowse(w, r, client, a)
 	})
+	// Streaming a file can take far longer than the 2s fleet-poll budget (a
+	// whole video), so it rides its own client with no overall timeout.
+	streamClient := &http.Client{}
+	mux.HandleFunc("/api/machines/{host}/file", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyFile(w, r, streamClient, a)
+	})
 	mux.HandleFunc("/api/agents", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -426,6 +437,44 @@ func proxyBrowse(w http.ResponseWriter, r *http.Request, client *http.Client, a 
 	w.WriteHeader(resp.StatusCode)
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		log.Printf("proxy browse %s: %v", a.Name, err)
+	}
+}
+
+// proxyFile streams one file from an agent's /file through to the caller. It
+// forwards the conditional/range request headers so byte-range seeks (video
+// scrubbing) survive the hop, and relays the agent's response headers and
+// status verbatim — including 206 Partial Content — before streaming the body.
+// In tsnet mode the phone can't reach agents directly, so media rides through
+// hush-control; on the NAS the bytes never leave the box until they reach you.
+func proxyFile(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent) {
+	u := strings.TrimRight(a.Addr, "/") + "/file"
+	if q := r.URL.RawQuery; q != "" {
+		u += "?" + q
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, u, nil)
+	if err != nil {
+		http.Error(w, "bad upstream request", http.StatusInternalServerError)
+		return
+	}
+	for _, h := range []string{"Range", "If-Range", "If-Modified-Since", "If-None-Match"} {
+		if v := r.Header.Get(h); v != "" {
+			req.Header.Set(h, v)
+		}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "agent unreachable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	for k, vs := range resp.Header {
+		for _, v := range vs {
+			w.Header().Add(k, v)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		log.Printf("proxy file %s: %v", a.Name, err)
 	}
 }
 

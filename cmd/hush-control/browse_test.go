@@ -79,6 +79,48 @@ func TestProxyBrowseUnknownMachine(t *testing.T) {
 	}
 }
 
+func TestProxyFileForwardsRangeAndRelays(t *testing.T) {
+	agent := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/file" {
+			t.Errorf("agent path = %q, want /file", r.URL.Path)
+		}
+		if r.Header.Get("Range") != "bytes=0-3" {
+			t.Errorf("Range not forwarded: %q", r.Header.Get("Range"))
+		}
+		w.Header().Set("Content-Type", "video/mp4")
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.WriteHeader(http.StatusPartialContent)
+		w.Write([]byte("data"))
+	})
+	mux, _ := browseFleet(t, agent)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/machines/nas/file?path=/srv/clip.mp4", nil)
+	req.Header.Set("Range", "bytes=0-3")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusPartialContent {
+		t.Fatalf("status = %d, want 206 (agent's status must pass through)", rec.Code)
+	}
+	if rec.Header().Get("Content-Type") != "video/mp4" {
+		t.Errorf("Content-Type not relayed: %q", rec.Header().Get("Content-Type"))
+	}
+	if rec.Body.String() != "data" {
+		t.Errorf("body = %q", rec.Body.String())
+	}
+}
+
+func TestProxyFileUnknownMachine(t *testing.T) {
+	agent := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	mux, _ := browseFleet(t, agent)
+	req := httptest.NewRequest(http.MethodGet, "/api/machines/ghost/file?path=/x", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
 func TestStoreFindByNameThenIP(t *testing.T) {
 	store := newTestStore(t, []Agent{
 		{Name: "nas", Addr: "http://a", IP: "100.0.0.1"},
