@@ -16,6 +16,12 @@
 #   curl -fsSL .../install.sh | sudo sh -s -- control-tsnet   # hush-control, tsnet mode
 #   curl -fsSL .../install.sh | sudo sh -s -- all             # agent + control, one box
 #
+# A second argument picks the release channel: "latest" (default, the newest
+# tagged release) or "edge" (a rolling pre-release rebuilt from the tip of
+# main on every push — see .github/workflows/edge.yml). Track main instead
+# of waiting on the next tag:
+#   curl -fsSL .../install.sh | sudo sh -s -- agent edge
+#
 # Installs binaries to /usr/local/bin, the unit to /etc/systemd/system, and
 # an editable env file to /etc/hush/*.env — never clobbered on re-run, so
 # local edits survive upgrades.
@@ -34,6 +40,7 @@ REPO="clarkbar-sys/hush"
 REF="main"
 RAW_BASE="https://raw.githubusercontent.com/$REPO/$REF"
 TARGET="${1:-agent}"
+CHANNEL="${2:-latest}"
 SERVICE_USER="${HUSH_USER:-hush}"
 SERVICE_GROUP="${HUSH_GROUP:-hush}"
 CONFIG_DIR="/etc/hush"
@@ -94,12 +101,24 @@ create_user() {
 
 fetch_binary() {
   name="$1"
-  url="https://github.com/$REPO/releases/latest/download/${name}_${OS_NAME}_${ARCH_NAME}.tar.gz"
-  echo "downloading $name ($OS_NAME/$ARCH_NAME)..." >&2
+  case "$CHANNEL" in
+    latest) url="https://github.com/$REPO/releases/latest/download/${name}_${OS_NAME}_${ARCH_NAME}.tar.gz" ;;
+    edge) url="https://github.com/$REPO/releases/download/edge/${name}_${OS_NAME}_${ARCH_NAME}.tar.gz" ;;
+    *)
+      echo "error: unknown channel '$CHANNEL' — expected 'latest' or 'edge'" >&2
+      exit 1
+      ;;
+  esac
+  echo "downloading $name ($OS_NAME/$ARCH_NAME, $CHANNEL)..." >&2
   if ! curl -fsSL "$url" -o "$TMP_DIR/$name.tar.gz"; then
     echo "error: no release binary found at $url" >&2
-    echo "  (no tagged release yet, or unsupported platform — build from source instead:" >&2
-    echo "   go install github.com/$REPO/cmd/$name@latest)" >&2
+    if [ "$CHANNEL" = "edge" ]; then
+      echo "  (the edge workflow may not have run yet, or this platform is unsupported —" >&2
+      echo "   build from source instead: go install github.com/$REPO/cmd/$name@main)" >&2
+    else
+      echo "  (no tagged release yet, or unsupported platform — build from source instead:" >&2
+      echo "   go install github.com/$REPO/cmd/$name@latest)" >&2
+    fi
     exit 1
   fi
   tar -xzf "$TMP_DIR/$name.tar.gz" -C "$TMP_DIR" "$name"
@@ -223,7 +242,7 @@ case "$TARGET" in
     install_control
     ;;
   *)
-    echo "usage: install.sh {agent|control|control-tsnet|all}" >&2
+    echo "usage: install.sh {agent|control|control-tsnet|all} [latest|edge]" >&2
     exit 1
     ;;
 esac

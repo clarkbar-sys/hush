@@ -1,0 +1,59 @@
+name: Edge
+
+# Publishes a rolling "edge" pre-release built from the tip of main, for
+# tracking main instead of waiting on the next tagged release:
+#   curl -fsSL .../install.sh | sudo sh -s -- agent edge
+# Each push to main replaces the previous edge release + tag, so "edge"
+# always reflects HEAD. GitHub's "latest release" lookup (release.yml, and
+# hush-control's self-update checker) ignores pre-releases, so this never
+# interferes with the stable channel. Like release.yml, this trusts that
+# CI (a required status check) already passed before a commit lands on main.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: edge
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Build & publish edge release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # Same "<binary>_<os>_<arch>.tar.gz" naming as the release channel —
+      # install.sh's edge path expects it.
+      - name: Build edge artifacts
+        env:
+          CGO_ENABLED: 0
+          VERSION: edge-${{ github.sha }}
+        run: |
+          mkdir -p out
+          ldflags="-s -w -X github.com/clarkbar-sys/hush/internal/version.Version=${VERSION}"
+          for platform in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            export GOOS="${platform%/*}" GOARCH="${platform#*/}"
+            for bin in hush-agent hush-control; do
+              go build -trimpath -ldflags="$ldflags" -o "out/$bin" "./cmd/$bin"
+              tar -C out -czf "out/${bin}_${GOOS}_${GOARCH}.tar.gz" "$bin"
+              rm "out/$bin"
+            done
+          done
+      - name: Replace the edge release + tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete edge --yes --cleanup-tag || true
+          gh release create edge out/*.tar.gz \
+            --title "edge (main@${GITHUB_SHA::7})" \
+            --notes "Auto-built from main@${GITHUB_SHA}. Not a stable release — see https://github.com/${{ github.repository }}/releases for tagged versions." \
+            --target "$GITHUB_SHA" \
+            --prerelease

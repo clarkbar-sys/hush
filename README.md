@@ -39,6 +39,19 @@ below for the same install from a local clone, and "Prefer building from
 source" below for running the binary yourself without a service (e.g. on
 macOS, which has no systemd).
 
+Want to track `main` instead of the latest tagged release? A second argument
+picks the channel — `edge` is a rolling pre-release rebuilt from the tip of
+`main` on every push:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh | sudo sh -s -- agent edge
+```
+
+Same deal for `control` / `control-tsnet` / `all`. Switch back with
+`... -s -- agent latest` (or just re-run the plain one-liner). `hush-control`
+auto-update only ever considers tagged releases, so it won't pull you off
+`edge` on its own.
+
 Prefer building from source? Both binaries also install with the Go toolchain
 (Go 1.26+):
 
