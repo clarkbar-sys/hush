@@ -34,25 +34,26 @@ type Agent struct {
 
 // Machine is the shape the web UI consumes (one entry of /api/fleet).
 type Machine struct {
-	ID       string           `json:"id"`
-	OS       string           `json:"os"`
-	IP       string           `json:"ip"`
-	Role     string           `json:"role"`
-	Status   string           `json:"status"`
-	CPU      int              `json:"cpu"`
-	Mem      int              `json:"mem"`
-	Disk     int              `json:"disk"`
-	GPU      *int             `json:"gpu"`
-	VRAM     *int             `json:"vram"`
-	GPUName  string           `json:"gpuName,omitempty"`
-	VRAMText string           `json:"vramText,omitempty"`
-	Up       string           `json:"up"`
-	Load     string           `json:"load"`
-	Services []vitals.Service `json:"services"`
-	Jobs     []any            `json:"jobs"`
-	Tasks    []any            `json:"tasks"`
-	Online   bool             `json:"online"`
-	Alert    string           `json:"alert,omitempty"`
+	ID           string           `json:"id"`
+	AgentVersion string           `json:"agentVersion,omitempty"`
+	OS           string           `json:"os"`
+	IP           string           `json:"ip"`
+	Role         string           `json:"role"`
+	Status       string           `json:"status"`
+	CPU          int              `json:"cpu"`
+	Mem          int              `json:"mem"`
+	Disk         int              `json:"disk"`
+	GPU          *int             `json:"gpu"`
+	VRAM         *int             `json:"vram"`
+	GPUName      string           `json:"gpuName,omitempty"`
+	VRAMText     string           `json:"vramText,omitempty"`
+	Up           string           `json:"up"`
+	Load         string           `json:"load"`
+	Services     []vitals.Service `json:"services"`
+	Jobs         []any            `json:"jobs"`
+	Tasks        []any            `json:"tasks"`
+	Online       bool             `json:"online"`
+	Alert        string           `json:"alert,omitempty"`
 }
 
 func main() {
@@ -359,6 +360,7 @@ func fetchOne(client *http.Client, a Agent) Machine {
 	m.Online = true
 	m.Alert = ""
 	m.Status = s.Status
+	m.AgentVersion = s.Version
 	if a.Name == "" && s.Host != "" {
 		m.ID = s.Host
 	}

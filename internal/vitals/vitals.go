@@ -15,6 +15,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/clarkbar-sys/hush/internal/version"
 )
 
 // Service is one systemd unit as the fleet console understands it.
@@ -27,6 +29,7 @@ type Service struct {
 // Snapshot is a single point-in-time reading of a machine.
 type Snapshot struct {
 	Host     string    `json:"host"`
+	Version  string    `json:"version"` // hush-agent build version, e.g. "v1.3.0" or "dev"
 	OS       string    `json:"os"`
 	Up       string    `json:"up"`
 	CPU      int       `json:"cpu"`
@@ -276,6 +279,7 @@ func Collect() Snapshot {
 	cpu, mem, disk := cpuUsage(), memUsage(), diskUsage()
 	return Snapshot{
 		Host:     host,
+		Version:  version.Current(),
 		OS:       osName(),
 		Up:       uptime(),
 		CPU:      cpu,
