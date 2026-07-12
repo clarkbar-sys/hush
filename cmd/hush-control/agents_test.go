@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/clarkbar-sys/hush/internal/vitals"
@@ -175,6 +176,44 @@ func TestAPIAgentsRejectsGET(t *testing.T) {
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/agents", nil))
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("GET /api/agents: status = %d, want 405", rr.Code)
+	}
+}
+
+func TestAPIReport(t *testing.T) {
+	agent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(vitals.Snapshot{Host: "beacon", OS: "Debian 12", Status: "good", CPU: 12})
+	}))
+	defer agent.Close()
+
+	u, _ := url.Parse(agent.URL)
+	store := newTestStore(t, []Agent{{Name: "beacon", Addr: agent.URL, IP: u.Host}})
+	mux := buildMux(store, muxDiscoverer(store), "")
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/report", nil))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if cd := rr.Header().Get("Content-Disposition"); !strings.HasPrefix(cd, "attachment; filename=") {
+		t.Fatalf("Content-Disposition = %q, want an attachment filename", cd)
+	}
+
+	var got Report
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode report: %v", err)
+	}
+	if got.GeneratedAt == "" {
+		t.Error("report missing generatedAt")
+	}
+	if got.ControlVersion == "" {
+		t.Error("report missing controlVersion")
+	}
+	if got.MachineCount != 1 || len(got.Machines) != 1 {
+		t.Fatalf("machineCount = %d, len(machines) = %d, want 1 each", got.MachineCount, len(got.Machines))
+	}
+	if m := got.Machines[0]; m.ID != "beacon" || !m.Online || m.CPU != 12 {
+		t.Fatalf("machine = %+v, want the beacon snapshot reflected", m)
 	}
 }
 
