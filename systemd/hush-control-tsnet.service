@@ -22,6 +22,9 @@ NoNewPrivileges=true
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 ProtectSystem=strict
+# hush-control persists fleet.json here when machines are added/removed from
+# the web console, so /etc/hush needs to stay writable despite strict mode.
+ReadWritePaths=/etc/hush
 ProtectHome=true
 PrivateTmp=true
 ProtectKernelTunables=true
