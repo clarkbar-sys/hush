@@ -522,13 +522,16 @@
 
   /* ---------- svg helpers ---------- */
   function ring(pct, size){
-    const r = size/2 - 3, c = 2*Math.PI*r, off = c*(1-pct/100);
-    const col = pct>=85 ? "var(--crit)" : pct>=70 ? "var(--warn)" : "var(--accent)";
     const cx = size/2;
+    const r1 = cx-3, c1 = 2*Math.PI*r1, off = c1*(1-pct/100);
+    const r2 = cx-9, c2 = 2*Math.PI*r2;
+    const col = pct>=85 ? "var(--crit)" : pct>=70 ? "var(--warn)" : "var(--accent)";
+    const sw = 3.2;
     return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="var(--border)" stroke-width="3"/>
-      <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${col}" stroke-width="3"
-        stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
+      <circle cx="${cx}" cy="${cx}" r="${r1}" fill="none" stroke="var(--border)" stroke-width="${sw}"/>
+      <circle cx="${cx}" cy="${cx}" r="${r2}" fill="none" stroke="var(--border)" stroke-width="${sw}"/>
+      <circle cx="${cx}" cy="${cx}" r="${r1}" fill="none" stroke="${col}" stroke-width="${sw}"
+        stroke-linecap="round" stroke-dasharray="${c1.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
         transform="rotate(-90 ${cx} ${cx})"/></svg>`;
   }
   function utilCol(p){ return p>=85?"var(--crit)":p>=70?"var(--warn)":"var(--accent)"; }
