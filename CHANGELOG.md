@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.0](https://github.com/clarkbar-sys/hush/compare/v1.3.0...v1.4.0) (2026-07-12)
+
+
+### Features
+
+* background tailnet rescan with a "new agents" badge ([#34](https://github.com/clarkbar-sys/hush/issues/34)) ([cdbeab0](https://github.com/clarkbar-sys/hush/commit/cdbeab001fbf1b3b3ab91652805388bdb2ca3ed2))
+* discover tailnet agents from the console (tsnet mode) ([#33](https://github.com/clarkbar-sys/hush/issues/33)) ([7fab268](https://github.com/clarkbar-sys/hush/commit/7fab268699831a66bbf22fea87579ca735461ecf))
+* **web:** show each agent's version on the fleet console ([#31](https://github.com/clarkbar-sys/hush/issues/31)) ([540a03c](https://github.com/clarkbar-sys/hush/commit/540a03cf16c97edc8337bbbce9fe47bfc7cd77d7))
+
 ## [1.3.0](https://github.com/clarkbar-sys/hush/compare/v1.2.0...v1.3.0) (2026-07-12)
 
 
