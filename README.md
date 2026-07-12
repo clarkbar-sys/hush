@@ -127,7 +127,7 @@ Funnel. See [`docs/DESIGN.md`](./docs/DESIGN.md#run-modes) for details.
 
 ### Add machines from the console
 
-You don't have to edit `fleet.json` by hand. The console's **⊕ Add machine**
+You don't have to edit `fleet.json` by hand. The console's **＋ Build → Machine**
 sheet takes a tailnet address, probes it to confirm a `hush-agent` is answering,
 and persists it to `fleet.json` — the new machine shows up on the next poll, no
 restart needed.
@@ -139,8 +139,8 @@ leases), probes each online node on the agent port, and lists the ones running
 Discovery needs the tailnet handle tsnet provides, so the scan button falls back
 to manual entry in LAN mode.
 
-`hush-control` also rescans the tailnet in the background, so the **⊕ Add
-machine** button carries a count badge when new agents appear that you haven't
+`hush-control` also rescans the tailnet in the background, so the **＋ Build**
+button carries a count badge when new agents appear that you haven't
 added — you don't have to open the sheet to notice a fresh box. Adding stays a
 deliberate tap; discovery only ever suggests.
 
