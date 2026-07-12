@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0](https://github.com/clarkbar-sys/hush/compare/v1.1.1...v1.2.0) (2026-07-12)
+
+
+### Features
+
+* browser-based first-run setup for hush-control tsnet mode ([#21](https://github.com/clarkbar-sys/hush/issues/21)) ([76be60f](https://github.com/clarkbar-sys/hush/commit/76be60f431e16d7500cb0d57ccdaee5b66a52516))
+* **web:** lock console to single cyber theme, drop theme toggle ([#24](https://github.com/clarkbar-sys/hush/issues/24)) ([46509d9](https://github.com/clarkbar-sys/hush/commit/46509d936266d10c272d60ab212357bb4f4d38e8))
+
+
+### Bug Fixes
+
+* allow AF_NETLINK in hush-control-tsnet unit so tsnet can start ([#23](https://github.com/clarkbar-sys/hush/issues/23)) ([ecb49fe](https://github.com/clarkbar-sys/hush/commit/ecb49fe115e3b9cf29bce5ba3aaaa05fd8746d85))
+
 ## [1.1.1](https://github.com/clarkbar-sys/hush/compare/v1.1.0...v1.1.1) (2026-07-11)
 
 
