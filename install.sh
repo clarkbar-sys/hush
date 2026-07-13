@@ -214,7 +214,13 @@ install_agent() {
     "# 'tailnet' binds this machine's Tailscale IP so hush-control discovers it" \
     "# over the tailnet with no LAN or public exposure. Use 127.0.0.1:8765 for a" \
     "# local-only agent, or host:port to pin a specific interface." \
-    "HUSH_AGENT_LISTEN=tailnet"
+    "HUSH_AGENT_LISTEN=tailnet" \
+    "" \
+    "# Uncomment to enable the Job scheduler: saved commands that fire on a cron" \
+    "# schedule as the unprivileged hush user, persisted to /var/lib/hush/jobs.json." \
+    "# Off by default because Jobs run unattended. HUSH_AGENT_EXEC=0 likewise" \
+    "# disables the one-shot /exec runner (on by default)." \
+    "# HUSH_AGENT_JOBS=1"
   enable_service hush-agent.service
 }
 

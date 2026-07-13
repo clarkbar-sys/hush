@@ -164,7 +164,12 @@ install_agent() {
   install_env_file agent.env \
     "# hush-agent environment — edit, then: systemctl restart hush-agent" \
     "# Bind to the tailnet interface in production, not 127.0.0.1." \
-    "HUSH_AGENT_LISTEN=127.0.0.1:8765"
+    "HUSH_AGENT_LISTEN=127.0.0.1:8765" \
+    "" \
+    "# Uncomment to enable the Job scheduler (cron-scheduled commands run as the" \
+    "# hush user, persisted to /var/lib/hush/jobs.json). Off by default; Jobs run" \
+    "# unattended." \
+    "# HUSH_AGENT_JOBS=1"
   enable_service hush-agent.service
 }
 

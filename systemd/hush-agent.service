@@ -13,17 +13,26 @@ ExecStart=/usr/local/bin/hush-agent -listen ${HUSH_AGENT_LISTEN}
 Restart=on-failure
 RestartSec=5s
 
-# Sandboxing. The agent is read-only and writes nothing, so the whole
-# filesystem stays read-only (ProtectSystem=strict) and privilege escalation is
-# off. What it can *read* is deliberately left to the Unix layer: the /browse
-# endpoint lists directories bounded only by what the unprivileged "hush" user
-# can see, so we do NOT set ProtectHome/PrivateTmp here — those would blank out
-# /home, /root, /run and the real /tmp regardless of file permissions, making
-# the security boundary the sandbox instead of the user's identity. Tighten or
-# widen the agent's reach by changing the hush user's group membership
-# (usermod -aG ...), not by editing this unit. The kernel-surface protections
-# below stay on — they don't hide readable files, they just lock down knobs the
-# agent never touches.
+# Persist the Job scheduler's jobs.json here. StateDirectory creates
+# /var/lib/hush as 0700 hush:hush and keeps it writable even under
+# ProtectSystem=strict, so no ReadWritePaths is needed and the agent resolves it
+# automatically via $STATE_DIRECTORY. It costs nothing when jobs are off (the
+# agent only touches it once enabled), so it's set unconditionally.
+StateDirectory=hush
+
+# Sandboxing. The agent's only writable spot is its StateDirectory above; the
+# rest of the filesystem stays read-only (ProtectSystem=strict) and privilege
+# escalation is off. What it can *read* is deliberately left to the Unix layer:
+# the /browse endpoint lists directories bounded only by what the unprivileged
+# "hush" user can see, so we do NOT set ProtectHome/PrivateTmp here — those would
+# blank out /home, /root, /run and the real /tmp regardless of file permissions,
+# making the security boundary the sandbox instead of the user's identity.
+# Tighten or widen the agent's reach by changing the hush user's group
+# membership (usermod -aG ...), not by editing this unit. Note /exec and /jobs
+# run commands as that same hush user — both opt-in (jobs is off by default) —
+# so they inherit exactly this reach. The kernel-surface protections below stay
+# on — they don't hide readable files, they just lock down knobs the agent's own
+# code never touches.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectKernelTunables=true
