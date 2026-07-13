@@ -1,0 +1,20 @@
+name: PR Title Lint
+
+# Squash-merges use the PR title as the commit message, and release-please
+# only sees Conventional Commits. Enforce the format here so every merge to
+# main stays release-please-readable.
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
