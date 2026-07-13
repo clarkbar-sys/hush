@@ -213,21 +213,53 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 		}
 	})
 	mux.HandleFunc("/api/workflows/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
+		switch r.Method {
+		case http.MethodPut:
+			var req struct {
+				Name  string `json:"name"`
+				Steps []Step `json:"steps"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "bad request body", http.StatusBadRequest)
+				return
+			}
+			name, steps, err := checkWorkflow(req.Name, req.Steps, func(host string) bool {
+				_, ok := store.find(host)
+				return ok
+			})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			saved, found, err := wstore.Update(r.PathValue("id"), name, steps)
+			if err != nil {
+				log.Printf("update workflow: %v", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if !found {
+				http.Error(w, "unknown workflow", http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(saved); err != nil {
+				log.Printf("encode workflow: %v", err)
+			}
+		case http.MethodDelete:
+			removed, err := wstore.Delete(r.PathValue("id"))
+			if err != nil {
+				log.Printf("delete workflow: %v", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if !removed {
+				http.Error(w, "unknown workflow", http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
 		}
-		removed, err := wstore.Delete(r.PathValue("id"))
-		if err != nil {
-			log.Printf("delete workflow: %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if !removed {
-			http.Error(w, "unknown workflow", http.StatusNotFound)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/api/workflows/{id}/run", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

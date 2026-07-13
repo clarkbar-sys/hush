@@ -293,6 +293,41 @@ func TestWorkflowsHTTPCreateListRun(t *testing.T) {
 		t.Errorf("run missing done frame: %q", rec.Body.String())
 	}
 
+	// Update in place: same id, new name and steps.
+	upBody := `{"name":"Ping v2","steps":[{"host":"box","cmd":"echo one"},{"host":"box","cmd":"echo two"}]}`
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/workflows/"+created.ID, strings.NewReader(upBody)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var updated Workflow
+	if err := json.Unmarshal(rec.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.ID != created.ID {
+		t.Errorf("update changed id: %q -> %q", created.ID, updated.ID)
+	}
+	if updated.CreatedAt != created.CreatedAt {
+		t.Errorf("update changed createdAt: %q -> %q", created.CreatedAt, updated.CreatedAt)
+	}
+	if updated.Name != "Ping v2" || len(updated.Steps) != 2 {
+		t.Errorf("update didn't apply: %+v", updated)
+	}
+
+	// Update rejects an unknown host, leaving the stored copy untouched.
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/workflows/"+created.ID, strings.NewReader(`{"name":"x","steps":[{"host":"ghost","cmd":"ls"}]}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("unknown-host update = %d, want 400", rec.Code)
+	}
+
+	// Update on an unknown id is a 404.
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/workflows/nope", strings.NewReader(upBody)))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("update unknown id = %d, want 404", rec.Code)
+	}
+
 	// Delete, then confirm it's gone.
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/api/workflows/"+created.ID, nil))
