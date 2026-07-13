@@ -1397,6 +1397,8 @@
   }
 
   async function deleteWorkflow(id){
+    const w = wfSaved.find(x=>x.id===id);
+    if(!confirm(`Delete workflow "${(w&&w.name)||id}"? This can't be undone.`)) return;
     if(MODE === "demo"){
       const i = wfDemo.findIndex(w=>w.id===id); if(i>=0) wfDemo.splice(i,1);
       wfSaved = wfDemo.slice(); renderWorkflowSheet(); return;
