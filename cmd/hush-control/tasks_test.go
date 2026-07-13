@@ -69,7 +69,7 @@ func TestTaskStoreRoundTrip(t *testing.T) {
 	if got := reloaded.Snapshot(); len(got) != 1 || got[0].ID != "t1" {
 		t.Fatalf("reload = %+v", got)
 	}
-	if _, ok := reloaded.find("t1"); !ok {
+	if _, ok := reloaded.Find("t1"); !ok {
 		t.Error("find(t1) missed a persisted task")
 	}
 

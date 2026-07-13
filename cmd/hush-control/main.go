@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/clarkbar-sys/hush/internal/store"
 	"github.com/clarkbar-sys/hush/internal/updater"
 	"github.com/clarkbar-sys/hush/internal/version"
 	"github.com/clarkbar-sys/hush/internal/vitals"
@@ -269,7 +270,7 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		wf, ok := wstore.find(r.PathValue("id"))
+		wf, ok := wstore.Find(r.PathValue("id"))
 		if !ok {
 			http.Error(w, "unknown workflow", http.StatusNotFound)
 			return
@@ -381,7 +382,7 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		t, ok := tstore.find(r.PathValue("id"))
+		t, ok := tstore.Find(r.PathValue("id"))
 		if !ok {
 			http.Error(w, "unknown task", http.StatusNotFound)
 			return
@@ -630,26 +631,15 @@ func (s *agentStore) Add(a Agent) (Agent, error) {
 		}
 	}
 	updated := append(s.agents, a)
-	if err := saveAgents(s.path, updated); err != nil {
+	// The fleet config shares the store package's crash-safe atomic write, but
+	// keeps its own bespoke load (loadAgents falls back to a local agent and
+	// fails loudly on a corrupt parse) — the console can rebuild a workflow
+	// list, but must not silently forget its fleet.
+	if err := store.Save(s.path, updated); err != nil {
 		return Agent{}, fmt.Errorf("save %s: %w — check that its directory is writable (see the -config flag and the systemd unit's ReadWritePaths)", s.path, err)
 	}
 	s.agents = updated
 	return a, nil
-}
-
-// saveAgents writes the fleet config atomically (write to a temp file, then
-// rename over the target) so a crash mid-write can't corrupt fleet.json.
-func saveAgents(path string, agents []Agent) error {
-	b, err := json.MarshalIndent(agents, "", "  ")
-	if err != nil {
-		return err
-	}
-	b = append(b, '\n')
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
 }
 
 // stringList is a repeatable string flag (e.g. -allow a -allow b).
