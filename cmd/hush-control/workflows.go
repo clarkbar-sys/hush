@@ -10,15 +10,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	hexec "github.com/clarkbar-sys/hush/internal/exec"
+	"github.com/clarkbar-sys/hush/internal/store"
 )
 
 // Step is one command in a Workflow: a shell line run on a named machine. It is
@@ -59,127 +57,32 @@ func workflowsPath(configPath string) string {
 	return filepath.Join(filepath.Dir(configPath), "workflows.json")
 }
 
-// workflowStore holds saved blueprints in memory and persists them to disk on
-// every change, mirroring agentStore. Blueprints are additive and non-critical:
-// a missing or unreadable file starts empty rather than aborting the console,
-// since a broken workflows.json must not take the fleet map down with it.
+// workflowStore holds saved blueprints in memory and persists them on every
+// change. It's a thin skin over the generic store.JSON — blueprints are
+// additive and non-critical, so a missing or unreadable file starts empty
+// rather than aborting the console — adding only the typed Update the handlers
+// expect. Snapshot/Find/Add/Delete come straight from the embedded store.
 type workflowStore struct {
-	mu   sync.RWMutex
-	path string
-	wfs  []Workflow
+	*store.JSON[Workflow]
 }
 
 func newWorkflowStore(path string) *workflowStore {
-	return &workflowStore{path: path, wfs: loadWorkflows(path)}
+	return &workflowStore{store.New(path, "workflows", func(w Workflow) string { return w.ID })}
 }
 
-func loadWorkflows(path string) []Workflow {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			log.Printf("read %s: %v; starting with no workflows", path, err)
-		}
-		return []Workflow{}
-	}
-	var wfs []Workflow
-	if err := json.Unmarshal(b, &wfs); err != nil {
-		log.Printf("parse %s: %v; starting with no workflows", path, err)
-		return []Workflow{}
-	}
-	return wfs
-}
+// loadWorkflows reads workflows.json, tolerating a missing or corrupt file by
+// starting empty — a broken blueprint file must not take the fleet map down.
+func loadWorkflows(path string) []Workflow { return store.Load[Workflow](path, "workflows") }
 
-// Snapshot returns a copy of the saved workflows, safe to read without the lock.
-func (s *workflowStore) Snapshot() []Workflow {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]Workflow, len(s.wfs))
-	copy(out, s.wfs)
-	return out
-}
-
-func (s *workflowStore) find(id string) (Workflow, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for _, w := range s.wfs {
-		if w.ID == id {
-			return w, true
-		}
-	}
-	return Workflow{}, false
-}
-
-// Add persists a new blueprint and returns the stored copy (with its generated
-// id and timestamp filled in).
-func (s *workflowStore) Add(wf Workflow) (Workflow, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	updated := append(s.wfs, wf)
-	if err := saveWorkflows(s.path, updated); err != nil {
-		return Workflow{}, fmt.Errorf("save %s: %w — check that its directory is writable (see the -config flag and the systemd unit's ReadWritePaths)", s.path, err)
-	}
-	s.wfs = updated
-	return wf, nil
-}
-
-// Update replaces an existing blueprint's name and steps in place, preserving
-// its id and CreatedAt so a saved workflow keeps its identity across edits. It
-// reports whether a workflow with that id existed, so the handler can answer
-// 404 for an unknown id, and returns the stored copy on success.
+// Update replaces an existing blueprint's name and steps, preserving its id and
+// CreatedAt so a saved workflow keeps its identity across edits. It reports
+// whether a workflow with that id existed, so the handler can answer 404 for an
+// unknown id, and returns the stored copy on success.
 func (s *workflowStore) Update(id, name string, steps []Step) (Workflow, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for i, w := range s.wfs {
-		if w.ID != id {
-			continue
-		}
-		updated := make([]Workflow, len(s.wfs))
-		copy(updated, s.wfs)
-		updated[i].Name = name
-		updated[i].Steps = steps
-		if err := saveWorkflows(s.path, updated); err != nil {
-			return Workflow{}, true, fmt.Errorf("save %s: %w", s.path, err)
-		}
-		s.wfs = updated
-		return updated[i], true, nil
-	}
-	return Workflow{}, false, nil
-}
-
-// Delete removes a blueprint by id, persisting the result. It reports whether
-// anything was removed so the handler can answer 404 for an unknown id.
-func (s *workflowStore) Delete(id string) (bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	kept := make([]Workflow, 0, len(s.wfs))
-	for _, w := range s.wfs {
-		if w.ID != id {
-			kept = append(kept, w)
-		}
-	}
-	if len(kept) == len(s.wfs) {
-		return false, nil
-	}
-	if err := saveWorkflows(s.path, kept); err != nil {
-		return false, fmt.Errorf("save %s: %w", s.path, err)
-	}
-	s.wfs = kept
-	return true, nil
-}
-
-// saveWorkflows writes the blueprints atomically (temp file then rename), the
-// same crash-safe dance saveAgents uses for fleet.json.
-func saveWorkflows(path string, wfs []Workflow) error {
-	b, err := json.MarshalIndent(wfs, "", "  ")
-	if err != nil {
-		return err
-	}
-	b = append(b, '\n')
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return s.JSON.Update(id, func(w *Workflow) {
+		w.Name = name
+		w.Steps = steps
+	})
 }
 
 // newWorkflowID derives a stable, readable id from the name plus a random

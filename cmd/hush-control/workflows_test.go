@@ -93,7 +93,7 @@ func TestWorkflowStoreRoundTrip(t *testing.T) {
 	if got := reloaded.Snapshot(); len(got) != 1 || got[0].ID != "w1" {
 		t.Fatalf("reload = %+v", got)
 	}
-	if _, ok := reloaded.find("w1"); !ok {
+	if _, ok := reloaded.Find("w1"); !ok {
 		t.Error("find(w1) missed a persisted workflow")
 	}
 

@@ -1,15 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
-	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/clarkbar-sys/hush/internal/store"
 )
 
 // Task is a saved, reusable one-shot run: the write half of the browse model —
@@ -37,127 +35,32 @@ func tasksPath(configPath string) string {
 	return filepath.Join(filepath.Dir(configPath), "tasks.json")
 }
 
-// taskStore holds saved Tasks in memory and persists them on every change,
-// mirroring workflowStore. Like blueprints, saved Tasks are additive and
-// non-critical: a missing or unreadable file starts empty rather than aborting
-// the console, so a broken tasks.json can't take the fleet map down with it.
+// taskStore holds saved Tasks in memory and persists them on every change. Like
+// workflowStore it's a thin skin over the generic store.JSON — saved Tasks are
+// additive and non-critical, so a missing or unreadable file starts empty rather
+// than aborting the console — adding only the typed Update the handlers expect.
+// Snapshot/Find/Add/Delete come straight from the embedded store.
 type taskStore struct {
-	mu    sync.RWMutex
-	path  string
-	tasks []Task
+	*store.JSON[Task]
 }
 
 func newTaskStore(path string) *taskStore {
-	return &taskStore{path: path, tasks: loadTasks(path)}
+	return &taskStore{store.New(path, "tasks", func(t Task) string { return t.ID })}
 }
 
-func loadTasks(path string) []Task {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			log.Printf("read %s: %v; starting with no tasks", path, err)
-		}
-		return []Task{}
-	}
-	var tasks []Task
-	if err := json.Unmarshal(b, &tasks); err != nil {
-		log.Printf("parse %s: %v; starting with no tasks", path, err)
-		return []Task{}
-	}
-	return tasks
-}
+// loadTasks reads tasks.json, tolerating a missing or corrupt file by starting
+// empty so a broken tasks.json can't take the fleet map down with it.
+func loadTasks(path string) []Task { return store.Load[Task](path, "tasks") }
 
-// Snapshot returns a copy of the saved tasks, safe to read without the lock.
-func (s *taskStore) Snapshot() []Task {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]Task, len(s.tasks))
-	copy(out, s.tasks)
-	return out
-}
-
-func (s *taskStore) find(id string) (Task, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for _, t := range s.tasks {
-		if t.ID == id {
-			return t, true
-		}
-	}
-	return Task{}, false
-}
-
-// Add persists a new saved task and returns the stored copy (with its generated
-// id and timestamp already filled in by validateTask).
-func (s *taskStore) Add(t Task) (Task, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	updated := append(s.tasks, t)
-	if err := saveTasks(s.path, updated); err != nil {
-		return Task{}, fmt.Errorf("save %s: %w — check that its directory is writable (see the -config flag and the systemd unit's ReadWritePaths)", s.path, err)
-	}
-	s.tasks = updated
-	return t, nil
-}
-
-// Update replaces a saved task's name, host, and command in place, preserving its
-// id and CreatedAt so it keeps its identity across edits. It reports whether a
-// task with that id existed, so the handler can answer 404 for an unknown id.
+// Update replaces a saved task's name, host, and command, preserving its id and
+// CreatedAt so it keeps its identity across edits. It reports whether a task with
+// that id existed, so the handler can answer 404 for an unknown id.
 func (s *taskStore) Update(id, name, host, cmd string) (Task, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for i, t := range s.tasks {
-		if t.ID != id {
-			continue
-		}
-		updated := make([]Task, len(s.tasks))
-		copy(updated, s.tasks)
-		updated[i].Name = name
-		updated[i].Host = host
-		updated[i].Cmd = cmd
-		if err := saveTasks(s.path, updated); err != nil {
-			return Task{}, true, fmt.Errorf("save %s: %w", s.path, err)
-		}
-		s.tasks = updated
-		return updated[i], true, nil
-	}
-	return Task{}, false, nil
-}
-
-// Delete removes a saved task by id, persisting the result. It reports whether
-// anything was removed so the handler can answer 404 for an unknown id.
-func (s *taskStore) Delete(id string) (bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	kept := make([]Task, 0, len(s.tasks))
-	for _, t := range s.tasks {
-		if t.ID != id {
-			kept = append(kept, t)
-		}
-	}
-	if len(kept) == len(s.tasks) {
-		return false, nil
-	}
-	if err := saveTasks(s.path, kept); err != nil {
-		return false, fmt.Errorf("save %s: %w", s.path, err)
-	}
-	s.tasks = kept
-	return true, nil
-}
-
-// saveTasks writes the saved tasks atomically (temp file then rename), the same
-// crash-safe dance saveWorkflows and saveAgents use.
-func saveTasks(path string, tasks []Task) error {
-	b, err := json.MarshalIndent(tasks, "", "  ")
-	if err != nil {
-		return err
-	}
-	b = append(b, '\n')
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return s.JSON.Update(id, func(t *Task) {
+		t.Name = name
+		t.Host = host
+		t.Cmd = cmd
+	})
 }
 
 // newTaskID derives a stable, readable id from the name plus a random suffix, so
