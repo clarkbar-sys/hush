@@ -144,6 +144,18 @@ button carries a count badge when new agents appear that you haven't
 added — you don't have to open the sheet to notice a fresh box. Adding stays a
 deliberate tap; discovery only ever suggests.
 
+### Run a command (Tasks)
+
+The **Task** construct runs a one-shot command on a machine and streams its
+output live to the console — **＋ Build → Task**, or the **Tasks** section of any
+Machine view. This is the one thing an agent does that changes a box, so it is
+**opt-in per agent**: start `hush-agent` with `-exec` (or set
+`HUSH_AGENT_EXEC=1` in its env file and restart) to enable it. An agent without
+it stays read-only and refuses `/exec`. Commands run via `sh -c` as the
+unprivileged `hush` user with no sandbox — the OS permissions of that user are
+the only boundary, the same model as file browsing. See
+[`docs/DESIGN.md`](./docs/DESIGN.md#tasks--running-a-command).
+
 ## Run as a service
 
 `install.sh` (above) already does this — every install is a systemd service

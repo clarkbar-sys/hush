@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -156,6 +157,16 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 			return
 		}
 		proxyFile(w, r, streamClient, a)
+	})
+	// A Task run can stream for minutes, so it rides the no-timeout streamClient
+	// like /file does, not the 2s fleet-poll client.
+	mux.HandleFunc("/api/machines/{host}/exec", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyExec(w, r, streamClient, a)
 	})
 	mux.HandleFunc("/api/agents", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -482,6 +493,87 @@ func proxyFile(w http.ResponseWriter, r *http.Request, client *http.Client, a Ag
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		log.Printf("proxy file %s: %v", a.Name, err)
 	}
+}
+
+// proxyExec forwards a Task run to an agent's /exec and streams the Server-Sent
+// Events back to the phone, flushing each frame so output appears live. Like
+// proxyFile it rides the no-timeout streamClient, since a run can take minutes,
+// and it relays the agent's status verbatim so "exec disabled" (403) or "agent
+// unreachable" (502) surface cleanly. Exec is the sharpest capability hush has,
+// so every run is logged with who ran it (Tailscale login in tsnet mode), where,
+// and the command — the audit trail the read-only endpoints don't need.
+func proxyExec(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	if err != nil {
+		http.Error(w, "bad request body", http.StatusBadRequest)
+		return
+	}
+	caller := callerFrom(r.Context())
+	if caller == "" {
+		caller = "lan"
+	}
+	log.Printf("exec on %s by %s: %s", a.Name, caller, execCmdPreview(body))
+
+	u := strings.TrimRight(a.Addr, "/") + "/exec"
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, u, bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, "bad upstream request", http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "agent unreachable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	if ct := resp.Header.Get("Content-Type"); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(resp.StatusCode)
+	flushCopy(w, resp.Body)
+}
+
+// flushCopy streams src to w, flushing after every chunk so SSE frames reach the
+// client as they arrive instead of buffering until the body closes.
+func flushCopy(w http.ResponseWriter, src io.Reader) {
+	flusher, _ := w.(http.Flusher)
+	buf := make([]byte, 4096)
+	for {
+		n, err := src.Read(buf)
+		if n > 0 {
+			if _, werr := w.Write(buf[:n]); werr != nil {
+				return
+			}
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// execCmdPreview pulls the command out of an /exec request body for the audit
+// log, trimmed so a giant one-liner can't flood the logs.
+func execCmdPreview(body []byte) string {
+	var req struct {
+		Cmd string `json:"cmd"`
+	}
+	_ = json.Unmarshal(body, &req)
+	c := strings.TrimSpace(req.Cmd)
+	if len(c) > 200 {
+		c = c[:200] + "…"
+	}
+	return c
 }
 
 func collectFleet(client *http.Client, agents []Agent) []Machine {
