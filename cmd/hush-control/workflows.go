@@ -122,6 +122,30 @@ func (s *workflowStore) Add(wf Workflow) (Workflow, error) {
 	return wf, nil
 }
 
+// Update replaces an existing blueprint's name and steps in place, preserving
+// its id and CreatedAt so a saved workflow keeps its identity across edits. It
+// reports whether a workflow with that id existed, so the handler can answer
+// 404 for an unknown id, and returns the stored copy on success.
+func (s *workflowStore) Update(id, name string, steps []Step) (Workflow, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, w := range s.wfs {
+		if w.ID != id {
+			continue
+		}
+		updated := make([]Workflow, len(s.wfs))
+		copy(updated, s.wfs)
+		updated[i].Name = name
+		updated[i].Steps = steps
+		if err := saveWorkflows(s.path, updated); err != nil {
+			return Workflow{}, true, fmt.Errorf("save %s: %w", s.path, err)
+		}
+		s.wfs = updated
+		return updated[i], true, nil
+	}
+	return Workflow{}, false, nil
+}
+
 // Delete removes a blueprint by id, persisting the result. It reports whether
 // anything was removed so the handler can answer 404 for an unknown id.
 func (s *workflowStore) Delete(id string) (bool, error) {
@@ -191,38 +215,49 @@ func slugify(name string) string {
 	return strings.Trim(sb.String(), "-")
 }
 
-// validateWorkflow checks a create request and, on success, returns a stored
-// Workflow with its id and timestamp filled in. resolve reports whether a step's
-// host is actually in the fleet, so we reject a blueprint that points at a
-// machine hush doesn't know before it's ever run.
-func validateWorkflow(name string, steps []Step, resolve func(string) bool) (Workflow, error) {
+// checkWorkflow validates a name and its steps, returning the trimmed name and
+// cleaned steps on success. resolve reports whether a step's host is actually in
+// the fleet, so we reject a blueprint that points at a machine hush doesn't know
+// before it's ever run. Both create and update flow through here so a workflow's
+// rules can't drift between the two.
+func checkWorkflow(name string, steps []Step, resolve func(string) bool) (string, []Step, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return Workflow{}, errors.New("name is required")
+		return "", nil, errors.New("name is required")
 	}
 	if len(steps) == 0 {
-		return Workflow{}, errors.New("a workflow needs at least one step")
+		return "", nil, errors.New("a workflow needs at least one step")
 	}
 	if len(steps) > maxSteps {
-		return Workflow{}, fmt.Errorf("a workflow can have at most %d steps", maxSteps)
+		return "", nil, fmt.Errorf("a workflow can have at most %d steps", maxSteps)
 	}
 	clean := make([]Step, 0, len(steps))
 	for i, st := range steps {
 		host := strings.TrimSpace(st.Host)
 		cmd := strings.TrimSpace(st.Cmd)
 		if host == "" {
-			return Workflow{}, fmt.Errorf("step %d: pick a machine", i+1)
+			return "", nil, fmt.Errorf("step %d: pick a machine", i+1)
 		}
 		if cmd == "" {
-			return Workflow{}, fmt.Errorf("step %d: command is required", i+1)
+			return "", nil, fmt.Errorf("step %d: command is required", i+1)
 		}
 		if len(cmd) > maxCmdLen {
-			return Workflow{}, fmt.Errorf("step %d: command is too long", i+1)
+			return "", nil, fmt.Errorf("step %d: command is too long", i+1)
 		}
 		if !resolve(host) {
-			return Workflow{}, fmt.Errorf("step %d: %s is not in the fleet", i+1, host)
+			return "", nil, fmt.Errorf("step %d: %s is not in the fleet", i+1, host)
 		}
 		clean = append(clean, Step{Host: host, Cmd: cmd})
+	}
+	return name, clean, nil
+}
+
+// validateWorkflow checks a create request and, on success, returns a stored
+// Workflow with its id and timestamp filled in.
+func validateWorkflow(name string, steps []Step, resolve func(string) bool) (Workflow, error) {
+	name, clean, err := checkWorkflow(name, steps, resolve)
+	if err != nil {
+		return Workflow{}, err
 	}
 	return Workflow{
 		ID:        newWorkflowID(name),

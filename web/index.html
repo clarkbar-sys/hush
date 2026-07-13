@@ -421,9 +421,14 @@
   .wf-saved .wf-run { font-family:var(--mono); font-size:12px; color:var(--accent); background:transparent;
     border:1px solid var(--border); border-radius:8px; padding:7px 12px; cursor:pointer; flex:none; }
   .wf-saved .wf-run:hover { border-color:var(--accent); }
+  .wf-saved .wf-edit { font-family:var(--mono); font-size:14px; color:var(--faint); background:transparent;
+    border:1px solid var(--border); border-radius:8px; padding:7px 10px; cursor:pointer; flex:none; }
+  .wf-saved .wf-edit:hover { color:var(--accent); border-color:var(--accent); }
   .wf-saved .wf-rm { font-family:var(--mono); font-size:14px; color:var(--faint); background:transparent;
     border:1px solid var(--border); border-radius:8px; padding:7px 10px; cursor:pointer; flex:none; }
   .wf-saved .wf-rm:hover { color:var(--crit); border-color:var(--crit-soft); }
+  .wf-editcancel { font-family:var(--mono); font-size:10.5px; color:var(--accent); background:transparent;
+    border:none; padding:0; margin-left:6px; cursor:pointer; text-decoration:underline; }
   /* ---- Workflow run view: step headers punctuate the shared live log ---- */
   .runterm .wf-head { display:block; margin:10px 0 4px; padding:5px 8px; border-radius:6px;
     background:var(--panel-2); color:var(--muted); border-left:2px solid var(--border); font-weight:600; }
@@ -1252,8 +1257,9 @@
 
   /* ---------- Workflow: a wired sequence of steps, saved and re-runnable ----------
      The Workflow construct — "a wired sequence (cd X → git pull → restart) —
-     reusable, stampable". The sheet lists saved blueprints (Run / Delete) and
-     builds new ones: a name plus an ordered list of {machine, command} steps.
+     reusable, stampable". The sheet lists saved blueprints (Run / Edit / Delete)
+     and builds new ones: a name plus an ordered list of {machine, command} steps.
+     Edit reloads a blueprint into the builder and re-saves it in place (same id).
      Running streams a combined live log, one command after another over the
      tailnet, stopping at the first step that fails — the same /exec each Task
      uses, with sequencing on top. In demo mode blueprints live in memory so the
@@ -1310,6 +1316,7 @@
             <div class="wf-sub">${(w.steps||[]).length} step${(w.steps||[]).length===1?"":"s"} · ${esc(hosts||"—")}</div>
           </div>
           <button class="wf-run" data-run="${esc(w.id)}">⛓ Run</button>
+          <button class="wf-edit" data-edit="${esc(w.id)}" aria-label="Edit">✎</button>
           <button class="wf-rm" data-rm="${esc(w.id)}" aria-label="Delete">✕</button>
         </div>`;
       }).join("")}</div>` : `<div class="field-note">No workflows yet — build one below.</div>`;
@@ -1326,12 +1333,13 @@
       </div>`;
     }).join("");
 
+    const editing = !!wfDraft.editId;
     wfBody.innerHTML = `
       <h3>Workflows</h3>
       <p class="sd">a wired sequence — saved once, re-run any time</p>
       ${saved}
       <div class="field" style="margin-top:4px">
-        <label>New workflow</label>
+        <label>${editing ? "Edit workflow" : "New workflow"}${editing ? ` <button class="wf-editcancel" id="wfEditCancel">new instead</button>` : ""}</label>
         <input type="text" id="wfName" placeholder="e.g. Deploy API" value="${esc(wfDraft.name)}" autocapitalize="off" spellcheck="false">
       </div>
       <div id="wfSteps">${stepRows}</div>
@@ -1341,7 +1349,7 @@
       </div>
       <div class="sheet-actions">
         <button class="btn ghost" id="wfCancel">Cancel</button>
-        <button class="btn primary" id="wfSave">Save workflow</button>
+        <button class="btn primary" id="wfSave">${editing ? "Update workflow" : "Save workflow"}</button>
       </div>`;
 
     if(!fleet.length){
@@ -1365,33 +1373,61 @@
     wfBody.querySelectorAll("[data-run]").forEach(b=>{
       b.addEventListener("click", ()=>{ const w = wfSaved.find(x=>x.id===b.dataset.run); if(w){ closeWorkflowSheet(); openWorkflowRunView(w); } });
     });
+    wfBody.querySelectorAll("[data-edit]").forEach(b=>{
+      b.addEventListener("click", ()=>editWorkflow(b.dataset.edit));
+    });
     wfBody.querySelectorAll("[data-rm]").forEach(b=>{
       b.addEventListener("click", ()=>deleteWorkflow(b.dataset.rm));
     });
+    const editCancel = $("#wfEditCancel");
+    if(editCancel) editCancel.addEventListener("click", ()=>{ wfDraft = { name:"", steps:[] }; renderWorkflowSheet(); });
     $("#wfCancel").addEventListener("click", closeWorkflowSheet);
     $("#wfSave").addEventListener("click", saveWorkflow);
   }
 
+  // editWorkflow loads a saved blueprint back into the builder so its name and
+  // steps can be changed and re-saved in place (same id), instead of the old
+  // delete-and-rebuild dance. A deep copy keeps edits from mutating wfSaved
+  // until the update lands.
+  function editWorkflow(id){
+    const w = wfSaved.find(x=>x.id===id);
+    if(!w) return;
+    wfDraft = { editId:id, name:w.name||"", steps:(w.steps||[]).map(s=>({ host:s.host, cmd:s.cmd })) };
+    if(!wfDraft.steps.length) wfDraft.steps = [{ host:"", cmd:"" }];
+    renderWorkflowSheet();
+    const nm = $("#wfName"); if(nm){ nm.focus(); }
+    wfBody.scrollTop = wfBody.scrollHeight;
+  }
+
   async function saveWorkflow(){
+    const editId = wfDraft.editId;
     const name = (wfDraft.name||"").trim();
     const steps = wfDraft.steps.map(s=>({ host:s.host, cmd:(s.cmd||"").trim() })).filter(s=>s.host && s.cmd);
     if(!name){ $("#wfName").focus(); toast("give the workflow a name"); return; }
     if(!steps.length){ toast("add at least one step with a command"); return; }
     if(MODE === "demo"){
-      wfDemo.push({ id:"wf-"+Math.random().toString(36).slice(2,8), name, steps, createdAt:"" });
+      if(editId){
+        const w = wfDemo.find(x=>x.id===editId); if(w){ w.name = name; w.steps = steps; }
+      } else {
+        wfDemo.push({ id:"wf-"+Math.random().toString(36).slice(2,8), name, steps, createdAt:"" });
+      }
       wfSaved = wfDemo.slice(); wfDraft = { name:"", steps:[] }; renderWorkflowSheet();
-      toast("saved (demo)"); return;
+      toast(editId ? "updated (demo)" : "saved (demo)"); return;
     }
-    const btn = $("#wfSave"); btn.disabled = true; btn.textContent = "Saving…";
+    const savingLabel = editId ? "Updating…" : "Saving…";
+    const restoreLabel = editId ? "Update workflow" : "Save workflow";
+    const btn = $("#wfSave"); btn.disabled = true; btn.textContent = savingLabel;
     try {
-      const r = await fetch("api/workflows", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name, steps }) });
+      const url = editId ? "api/workflows/"+encodeURIComponent(editId) : "api/workflows";
+      const method = editId ? "PUT" : "POST";
+      const r = await fetch(url, { method, headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name, steps }) });
       if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
       wfSaved = await loadWorkflows();
       wfDraft = { name:"", steps:[] };
       renderWorkflowSheet();
-      toast("workflow saved");
+      toast(editId ? "workflow updated" : "workflow saved");
     } catch(err){
-      btn.disabled = false; btn.textContent = "Save workflow";
+      btn.disabled = false; btn.textContent = restoreLabel;
       toast((err&&err.message) ? err.message : "couldn't save");
     }
   }
