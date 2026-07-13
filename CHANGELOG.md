@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/clarkbar-sys/hush/compare/v1.8.0...v1.9.0) (2026-07-13)
+
+
+### Features
+
+* add Task construct — one-shot commands, streamed live ([#62](https://github.com/clarkbar-sys/hush/issues/62)) ([bd27f99](https://github.com/clarkbar-sys/hush/commit/bd27f99a2dee71ea8de75125708091986449b12d))
+
 ## [1.8.0](https://github.com/clarkbar-sys/hush/compare/v1.7.1...v1.8.0) (2026-07-13)
 
 
