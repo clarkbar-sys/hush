@@ -705,11 +705,36 @@
           ${M.slice().sort((a,b)=>sevRank[b.status]-sevRank[a.status]).map(nodeCard).join("")}
         </div>
         ${(M.length+PENDING.length) ? "" : `<p class="note">no machines reporting yet</p>`}
+
+        <details class="rollup"${wfSaved.length?" open":""}>
+          <summary class="sec-title">Workflows <span class="n">${wfSaved.length}</span></summary>
+          <div class="list">${wfSaved.length ? wfSaved.map(wfFleetRow).join("")
+            : `<div class="empty">no saved workflows — build one from + Build</div>`}</div>
+        </details>
       </main>`;
     app.querySelectorAll(".node[data-id]").forEach(el=>{
       el.addEventListener("click", ()=>enterMachine(el.dataset.id));
     });
+    app.querySelectorAll("[data-wf]").forEach(el=>{
+      el.addEventListener("click", ()=>openWorkflowSheet());
+    });
     JUST_ARRIVED.clear(); // the pop animation above only needs to play once
+  }
+
+  // wfFleetRow is the Fleet-page rollup's row for one saved workflow —
+  // mirrors svcRow/jobRow's shape so it reads consistently with the
+  // Services/Jobs rollups on the machine page. Click opens the Workflows
+  // sheet rather than running immediately, since a click here is easy to
+  // land by accident while just browsing the fleet.
+  function wfFleetRow(w){
+    const steps = w.steps || [];
+    const hosts = [...new Set(steps.map(s=>s.host))].join(", ");
+    return `<button class="row" data-wf="${esc(w.id)}">
+      <span class="gly">⛓</span>
+      <span class="nm">${esc(w.name)}</span>
+      <span class="rt">${esc(hosts || "—")}</span>
+      <span class="state sched"><span class="sd"></span>${steps.length} step${steps.length===1?"":"s"}</span>
+    </button>`;
   }
 
   // A machine just added through "Add machine", shown until its first real
@@ -1263,6 +1288,13 @@
       const list = await r.json();
       return Array.isArray(list) ? list : [];
     } catch(e){ return []; }
+  }
+
+  // Keeps wfSaved fresh so the Fleet page's Workflows rollup has data even
+  // if the user never opens the Workflows sheet.
+  async function pollWorkflows(){
+    wfSaved = await loadWorkflows();
+    render();
   }
 
   function renderWorkflowSheet(){
@@ -2067,6 +2099,8 @@
   setInterval(checkVersion, 15*60*1000);
   pollDiscover();
   setInterval(pollDiscover, 20000);
+  pollWorkflows();
+  setInterval(pollWorkflows, 20000);
 
   /* register the service worker so the console is installable and opens
      offline. Only works in a secure context (tsnet HTTPS or localhost);
