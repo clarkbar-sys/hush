@@ -739,7 +739,7 @@
     else if(m.status==="warn") badge = `<span class="badge warn">▲&nbsp;<span class="lbl">${(m.alert||"elevated").split("·")[0].trim()}</span></span>`;
     else badge = `<span class="badge ok">●&nbsp;<span class="lbl">nominal</span></span>`;
     const gpuRing = m.gpu!=null ? `
-          <div class="ring">${dualRing(m.gpu,m.vram,44)}<span class="v">${m.gpu}%</span><span class="k">gpu</span><span class="k2"><i></i>${m.vram}% vram</span></div>` : "";
+          <div class="ring">${dualRing(m.gpu,m.vram,44)}<span class="v">${m.gpu}%</span><span class="k">gpu</span></div>` : "";
     const hist = m.loadHist && m.loadHist.length>1 ? m.loadHist : [m.cpu||0, m.cpu||0];
     return `
       <button class="node s-${m.status} ${m.online?"":"offline"}${JUST_ARRIVED.has(m.id)?" new":""}" data-id="${m.id}">
@@ -751,7 +751,7 @@
           ${rolePill}
         </div>
         <div class="rings">
-          <div class="ring">${dualRing(m.cpu,m.mem,44)}<span class="v">${m.cpu}%</span><span class="k">cpu</span><span class="k2"><i></i>${m.mem}% mem</span></div>
+          <div class="ring">${dualRing(m.cpu,m.mem,44)}<span class="v">${m.cpu}%</span><span class="k">cpu</span></div>
           <div class="ring">${ring(m.disk,44)}<span class="v">${m.disk}%</span><span class="k">disk</span></div>
           ${gpuRing}
         </div>
