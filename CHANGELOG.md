@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/clarkbar-sys/hush/compare/v1.12.0...v1.13.0) (2026-07-13)
+
+
+### Features
+
+* flag out-of-date agents with a per-machine update popup ([#77](https://github.com/clarkbar-sys/hush/issues/77)) ([dd78eca](https://github.com/clarkbar-sys/hush/commit/dd78ecafbb5d6932b5479972db74448dfe3d68b8))
+
 ## [1.12.0](https://github.com/clarkbar-sys/hush/compare/v1.11.0...v1.12.0) (2026-07-13)
 
 
