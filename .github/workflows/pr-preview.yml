@@ -1,0 +1,47 @@
+name: PR preview (web console)
+
+# Publishes the console's static shell (web/) to GitHub Pages under
+# pr-preview/pr-<N>/ for each pull request, so a reviewer can open a link and
+# see the console running in its built-in demo mode — a full fake fleet with no
+# hush-control backend required (index.html's `fetch("api/fleet")` fails and it
+# drops into MODE=demo). The preview refreshes on every push and is torn down
+# automatically when the PR closes.
+#
+# Requires GitHub Pages to be enabled for this repo, serving from the gh-pages
+# branch (Settings -> Pages -> Build and deployment -> Deploy from a branch ->
+# gh-pages / root). The first run creates the gh-pages branch; enable Pages
+# once and every PR gets a preview thereafter. Previews from forked PRs are
+# skipped — a fork's GITHUB_TOKEN is read-only, so it cannot push the preview.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+concurrency:
+  # One deploy per PR; a newer push supersedes an in-flight one.
+  group: pr-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # push the preview to the gh-pages branch
+  pull-requests: write # comment the preview link on the PR
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    # Skip forks: their token can't push the gh-pages branch, so the deploy
+    # would only fail noisily. Same-repo branch PRs (the normal flow here) run.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Stage the static preview
+        if: github.event.action != 'closed'
+        run: ./scripts/build-web-preview.sh _preview
+
+      - name: Deploy preview
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: _preview
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview

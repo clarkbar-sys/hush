@@ -11,6 +11,9 @@ Thumbs.db
 tmp/
 .cache/
 
+# ── Staged web preview (scripts/build-web-preview.sh output) ──
+/_preview/
+
 # ── Secrets & local env (never commit these) ─────────────────
 .env
 .env.*
