@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/clarkbar-sys/hush/compare/v1.11.0...v1.12.0) (2026-07-13)
+
+
+### Features
+
+* edit saved workflows in place from the web console ([#73](https://github.com/clarkbar-sys/hush/issues/73)) ([65386d8](https://github.com/clarkbar-sys/hush/commit/65386d80d6d1e926658cc7f52ad98b78a6001fa6))
+
 ## [1.11.0](https://github.com/clarkbar-sys/hush/compare/v1.10.0...v1.11.0) (2026-07-13)
 
 
