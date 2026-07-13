@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/clarkbar-sys/hush/compare/v1.13.0...v1.14.0) (2026-07-13)
+
+
+### Features
+
+* saved Tasks — the reusable atom Workflows are built from ([#80](https://github.com/clarkbar-sys/hush/issues/80)) ([372d87e](https://github.com/clarkbar-sys/hush/commit/372d87efecab041aa177ad4fac009be9c2e34de1))
+
 ## [1.13.0](https://github.com/clarkbar-sys/hush/compare/v1.12.0...v1.13.0) (2026-07-13)
 
 
