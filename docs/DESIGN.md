@@ -100,7 +100,9 @@ Each phase layers on the same map.
   console. ← we are here
 - **Phase 1 — Actions.** Start / stop / restart Services; live journal tail.
 - **Phase 2 — Creation.** Build new Services and Jobs from the palette.
-- **Phase 3 — Workflows.** The visual blueprint builder (Scheme DSL).
+- **Phase 3 — Workflows.** The visual blueprint builder (Scheme DSL). A first
+  slice lands early: saved multi-step blueprints that sequence the existing
+  `/exec` in plain Go (see below), so Workflows are usable before the Lisp.
 - **Phase 4 — Backups & Store.** The NAS view; intelligent dedup'd backups.
   A first slice lands early: read-only **file browsing** on every machine
   (see below), so the NAS is walkable before dedup'd backups exist.
@@ -154,6 +156,31 @@ introduced it (or newer) can run Tasks — `hush-control` proxies to `/exec`, so
 an older agent simply reports exec as unavailable. In tsnet mode every run is
 gated by the same Tailscale identity as everything else, and `hush-control`
 logs who ran what against which box.
+
+## Workflows — wiring a sequence
+
+The **Workflow** construct ("a wired sequence (`cd X → git pull → restart`) —
+reusable, stampable") is sequencing layered on the Task primitive: a saved,
+ordered list of steps, each a `{machine, command}` pair. `hush-control` stores
+blueprints in `workflows.json` beside `fleet.json` (same writable directory the
+systemd unit already grants) and exposes them at `/api/workflows` —
+`GET`/`POST` to list and save, `DELETE /api/workflows/{id}` to remove, and
+`POST /api/workflows/{id}/run` to execute. A run fans out to the **same
+`/exec`** each Task uses, one step at a time, and streams a combined SSE log
+(`step` → `out` → `stepExit`, then a terminal `done`) so the console can group
+each command's output under its step and show live progress. The builder and
+run view live under **＋ Build → Workflow**.
+
+**Fail-fast, like `set -e`.** Steps run in order and the first one to exit
+non-zero — or error, or end without a status — stops the run; the `done` frame
+carries `failedStep` so the UI marks where it stopped. A blueprint is validated
+at save time (every step's machine must be in the fleet), and each step inherits
+the Task run's bounds: unjailed as the `hush` user, a 5-minute per-step timeout,
+audited by `hush-control` with the caller's Tailscale identity.
+
+**No Scheme yet.** The design reserves Scheme for a visual blueprint DSL; this
+first slice is plain Go over the existing exec plumbing, so Workflows are usable
+now and the Lisp can land later without changing the runtime beneath them.
 
 ## Running it (dev)
 

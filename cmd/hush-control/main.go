@@ -168,6 +168,84 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 		}
 		proxyExec(w, r, streamClient, a)
 	})
+	// Workflows: saved multi-step blueprints. They persist to workflows.json
+	// beside the fleet config and run by fanning out to the same /exec each Task
+	// uses. A run streams for as long as its steps do, so it rides the no-timeout
+	// streamClient like /exec and /file.
+	wstore := newWorkflowStore(workflowsPath(store.path))
+	mux.HandleFunc("/api/workflows", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(wstore.Snapshot()); err != nil {
+				log.Printf("encode workflows: %v", err)
+			}
+		case http.MethodPost:
+			var req struct {
+				Name  string `json:"name"`
+				Steps []Step `json:"steps"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "bad request body", http.StatusBadRequest)
+				return
+			}
+			wf, err := validateWorkflow(req.Name, req.Steps, func(host string) bool {
+				_, ok := store.find(host)
+				return ok
+			})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			saved, err := wstore.Add(wf)
+			if err != nil {
+				log.Printf("add workflow: %v", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			if err := json.NewEncoder(w).Encode(saved); err != nil {
+				log.Printf("encode workflow: %v", err)
+			}
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/workflows/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		removed, err := wstore.Delete(r.PathValue("id"))
+		if err != nil {
+			log.Printf("delete workflow: %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !removed {
+			http.Error(w, "unknown workflow", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/workflows/{id}/run", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		wf, ok := wstore.find(r.PathValue("id"))
+		if !ok {
+			http.Error(w, "unknown workflow", http.StatusNotFound)
+			return
+		}
+		caller := callerFrom(r.Context())
+		if caller == "" {
+			caller = "lan"
+		}
+		log.Printf("workflow %q (%d steps) run by %s", wf.Name, len(wf.Steps), caller)
+		runWorkflow(r.Context(), w, streamClient, store.find, wf)
+	})
 	mux.HandleFunc("/api/agents", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
