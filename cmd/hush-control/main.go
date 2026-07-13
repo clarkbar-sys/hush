@@ -346,8 +346,9 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 	})
 	vc := &versionChecker{client: &http.Client{Timeout: 5 * time.Second}}
 	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		force := r.URL.Query().Get("force") != ""
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(vc.status(r.Context())); err != nil {
+		if err := json.NewEncoder(w).Encode(vc.status(r.Context(), force)); err != nil {
 			log.Printf("encode version: %v", err)
 		}
 	})
@@ -754,11 +755,14 @@ type versionChecker struct {
 // versionTTL is how long a successful check is reused before we ask GitHub again.
 const versionTTL = time.Hour
 
-func (v *versionChecker) status(ctx context.Context) VersionStatus {
+// status returns the cached version check, or performs a fresh upstream
+// lookup when the cache is stale, empty, or the caller passes force=true
+// (used by the console's "check now" click).
+func (v *versionChecker) status(ctx context.Context, force bool) VersionStatus {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	if !v.cachedAt.IsZero() && time.Since(v.cachedAt) < versionTTL && v.cached.Error == "" {
+	if !force && !v.cachedAt.IsZero() && time.Since(v.cachedAt) < versionTTL && v.cached.Error == "" {
 		return v.cached
 	}
 

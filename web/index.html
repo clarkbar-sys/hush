@@ -2012,10 +2012,10 @@
   const updateBody = $("#updateSheetBody");
   let lastVersion = null;
 
-  async function checkVersion(){
+  async function checkVersion(force){
     const chip = $("#verChip");
     try {
-      const r = await fetch("api/version", {cache:"no-store"});
+      const r = await fetch(force ? "api/version?force=1" : "api/version", {cache:"no-store"});
       if(!r.ok) throw new Error("bad status");
       const v = await r.json();
       if(!v.current) throw new Error("no version");
@@ -2027,12 +2027,14 @@
       } else {
         chip.className = "chip ver";
         chip.innerHTML = v.current;
-        chip.title = v.error ? `Update check failed: ${v.error}` : "Running the latest release.";
+        chip.title = v.error ? `Update check failed: ${v.error}` : "Running the latest release. Click to check for updates now.";
       }
       chip.hidden = false;
+      return v;
     } catch(e){
       lastVersion = null;
       chip.hidden = true; // no server-side version (demo / file://) — say nothing
+      return null;
     }
   }
 
@@ -2040,9 +2042,33 @@
     if(lastVersion && lastVersion.updateAvailable && lastVersion.latest){
       openUpdateSheet();
     } else {
-      window.open("https://github.com/clarkbar-sys/hush/releases", "_blank", "noopener");
+      openConfirmCheckSheet();
     }
   });
+
+  function openConfirmCheckSheet(){
+    updateBody.innerHTML = `
+      <h3>Check for updates now?</h3>
+      <p class="sd">This asks GitHub for the latest release immediately instead of waiting for the next scheduled check. GitHub limits unauthenticated API requests per hour, so avoid mashing this button.</p>
+      <div class="sheet-actions">
+        <button class="btn ghost" id="confCancel" style="flex:1">Cancel</button>
+        <button class="btn primary" id="confScan" style="flex:1">Check now</button>
+      </div>`;
+    $("#confCancel").addEventListener("click", closeUpdateSheet);
+    $("#confScan").addEventListener("click", async ()=>{
+      const btn = $("#confScan");
+      btn.disabled = true;
+      btn.textContent = "Checking…";
+      const v = await checkVersion(true);
+      if(v && v.updateAvailable && v.latest){
+        openUpdateSheet();
+      } else {
+        closeUpdateSheet();
+        if(v) toast(v.error ? `update check failed: ${v.error}` : `up to date (${v.current})`);
+      }
+    });
+    updateScrim.classList.add("open");
+  }
 
   function openUpdateSheet(){
     const v = lastVersion;
