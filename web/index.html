@@ -411,6 +411,15 @@
   .wf-add { font-family:var(--mono); font-size:12px; color:var(--accent); background:transparent;
     border:1px dashed var(--border); border-radius:9px; padding:9px 12px; cursor:pointer; width:100%; margin-bottom:14px; }
   .wf-add:hover { border-color:var(--accent); }
+  /* ---- Workflow builder: the saved-Task library you drop steps in from ---- */
+  .wf-tasklib { margin:-4px 0 14px; }
+  .wf-tasklib-h { font-family:var(--mono); font-size:10.5px; color:var(--faint); margin:0 0 7px 2px; }
+  .wf-tasklib-row { display:flex; flex-wrap:wrap; gap:7px; }
+  .wf-taskchip { display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:12px;
+    color:var(--text); background:var(--panel-2); border:1px solid var(--border); border-radius:999px;
+    padding:6px 11px; cursor:pointer; max-width:100%; }
+  .wf-taskchip:hover { border-color:var(--accent); color:var(--accent); }
+  .wf-taskchip span { color:var(--faint); font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .wf-saved { margin-bottom:16px; }
   .wf-saved .wf-item { display:flex; align-items:center; gap:10px; padding:10px 12px;
     background:var(--panel-2); border:1px solid var(--border); border-radius:10px; margin-bottom:8px; }
@@ -604,6 +613,13 @@
   </div>
 </div>
 
+<div class="scrim" id="tsaveScrim">
+  <div class="sheet" role="dialog" aria-label="Save task">
+    <div class="grab"></div>
+    <div id="tsaveBody"></div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -720,10 +736,16 @@
         </div>
         ${(M.length+PENDING.length) ? "" : `<p class="note">no machines reporting yet</p>`}
 
+        <details class="rollup"${taskSaved.length?" open":""}>
+          <summary class="sec-title">Tasks <span class="n">${taskSaved.length}</span></summary>
+          <div class="wf-saved">${taskSaved.length ? taskSaved.map(taskFleetRow).join("")
+            : `<div class="empty">no saved tasks — run one, then Save as Task</div>`}</div>
+        </details>
+
         <details class="rollup"${wfSaved.length?" open":""}>
           <summary class="sec-title">Workflows <span class="n">${wfSaved.length}</span></summary>
           <div class="wf-saved">${wfSaved.length ? wfSaved.map(wfFleetRow).join("")
-            : `<div class="empty">no saved workflows — build one from + Build</div>`}</div>
+            : `<div class="empty">no saved workflows — build one from saved Tasks in + Build</div>`}</div>
         </details>
       </main>`;
     app.querySelectorAll(".node[data-id]").forEach(el=>{
@@ -740,6 +762,19 @@
     });
     app.querySelectorAll("[data-rm]").forEach(b=>{
       b.addEventListener("click", e=>{ e.stopPropagation(); deleteWorkflow(b.dataset.rm); });
+    });
+    // Saved-task rollup rows: same Run / Edit / Delete shape as workflows.
+    app.querySelectorAll("[data-tk]").forEach(el=>{
+      el.addEventListener("click", ()=>openTaskSaveSheetForEdit(el.dataset.tk));
+    });
+    app.querySelectorAll("[data-trun]").forEach(b=>{
+      b.addEventListener("click", e=>{ e.stopPropagation(); runSavedTask(b.dataset.trun); });
+    });
+    app.querySelectorAll("[data-tedit]").forEach(b=>{
+      b.addEventListener("click", e=>{ e.stopPropagation(); openTaskSaveSheetForEdit(b.dataset.tedit); });
+    });
+    app.querySelectorAll("[data-trm]").forEach(b=>{
+      b.addEventListener("click", e=>{ e.stopPropagation(); deleteTask(b.dataset.trm); });
     });
     JUST_ARRIVED.clear(); // the pop animation above only needs to play once
   }
@@ -758,6 +793,22 @@
       <button class="wf-run" data-run="${esc(w.id)}">⛓ Run</button>
       <button class="wf-edit" data-edit="${esc(w.id)}" aria-label="Edit">✎</button>
       <button class="wf-rm" data-rm="${esc(w.id)}" aria-label="Delete">✕</button>
+    </div>`;
+  }
+
+  // taskFleetRow renders one saved Task in the Fleet page's Tasks rollup — the
+  // reusable atom, with the same Run / Edit / Delete affordances a workflow row
+  // carries. The command rides the subtitle so what a Task does is legible at a
+  // glance, the way a workflow's hosts and step-count are.
+  function taskFleetRow(t){
+    return `<div class="wf-item">
+      <div class="wf-meta" data-tk="${esc(t.id)}">
+        <div class="wf-nm">${esc(t.name)}</div>
+        <div class="wf-sub">${esc(t.host || "—")} · ${esc(t.cmd)}</div>
+      </div>
+      <button class="wf-run" data-trun="${esc(t.id)}">⚡ Run</button>
+      <button class="wf-edit" data-tedit="${esc(t.id)}" aria-label="Edit">✎</button>
+      <button class="wf-rm" data-trm="${esc(t.id)}" aria-label="Delete">✕</button>
     </div>`;
   }
 
@@ -1137,7 +1188,9 @@
   // the outcome. Cancel/close aborts the fetch, which drops the connection and
   // (through hush-control) cancels the request context — killing the command's
   // process group on the box.
-  function openRunView(id, cmd){
+  function openRunView(id, cmd, opts){
+    opts = opts || {};
+    const canSave = opts.canSave !== false && MODE !== "demo";
     const ov = document.createElement("div");
     ov.className = "vov";
     ov.innerHTML = `<div class="vsheet">
@@ -1145,12 +1198,16 @@
           <span class="state running" id="rvState"><span class="sd"></span>running</span>
           <div class="vname" title="${esc(cmd)}">${esc(cmd)}</div>
           <div class="vmeta" id="rvMeta">${esc(id)}</div>
+          ${canSave ? `<button class="vbtn" id="rvSave">＋ Save as Task</button>` : ""}
           <button class="vbtn" id="rvStop">■ Cancel</button>
           <button class="vbtn vclose" aria-label="Close">✕</button>
         </div>
         <div class="vbody runbody"><pre class="runterm" id="rvOut"></pre></div>
       </div>`;
     document.body.appendChild(ov);
+    // The bridge from ephemeral to saved: mint a Task from exactly this run.
+    const saveBtn = ov.querySelector("#rvSave");
+    if(saveBtn) saveBtn.addEventListener("click", ()=> openTaskSaveSheet({ name:"", host:id, cmd }));
     const out = ov.querySelector("#rvOut");
     const stateEl = ov.querySelector("#rvState");
     const metaEl = ov.querySelector("#rvMeta");
@@ -1212,7 +1269,7 @@
     };
 
     const runner = MODE === "demo" ? simulateExec(cmd, onEvent, ac.signal)
-      : streamExec(`api/machines/${encodeURIComponent(id)}/exec`, { cmd, timeoutSec: 300 }, onEvent, ac.signal);
+      : streamExec(opts.runUrl || `api/machines/${encodeURIComponent(id)}/exec`, { cmd, timeoutSec: 300 }, onEvent, ac.signal);
     runner.catch(err => {
       if(ac.signal.aborted) return; // canceled path already handled
       finished = true;
@@ -1291,6 +1348,8 @@
   let wfDraft = { name:"", steps:[] };   // the blueprint being built
   let wfSaved = [];                       // saved blueprints (from the server, or demo memory)
   const wfDemo = [];                      // demo-mode store, seeded lazily on first open
+  let taskSaved = [];                     // saved Tasks (the reusable atom) from the server, or demo memory
+  const taskDemo = [];                    // demo-mode task store, seeded lazily on first load
 
   function openWorkflowSheet(){
     wfDraft = { name:"", steps:[] };
@@ -1359,6 +1418,10 @@
       </div>
       <div id="wfSteps">${stepRows}</div>
       <button class="wf-add" id="wfAdd">＋ Add step</button>
+      ${taskSaved.length ? `<div class="wf-tasklib">
+        <div class="wf-tasklib-h">or drop in a saved Task</div>
+        <div class="wf-tasklib-row">${taskSaved.map(t=>`<button class="wf-taskchip" data-addtask="${esc(t.id)}" title="${esc(t.cmd)}">⚡ ${esc(t.name)}<span>${esc(t.host)}</span></button>`).join("")}</div>
+      </div>` : ""}
       <div class="field-note">
         <b>Heads up —</b> each step runs unsandboxed on its machine and stops the run if it fails. It can do anything the hush user can.
       </div>
@@ -1384,6 +1447,19 @@
     $("#wfAdd").addEventListener("click", ()=>{
       wfDraft.steps.push({ host:(fleet[0]&&fleet[0].id)||"", cmd:"" });
       renderWorkflowSheet();
+    });
+    // Drop a saved Task in as a step — this is "a Workflow is built from Tasks".
+    // A blank trailing step (the default first row) is replaced rather than kept,
+    // so adding the first Task doesn't leave an empty step above it.
+    wfBody.querySelectorAll("[data-addtask]").forEach(b=>{
+      b.addEventListener("click", ()=>{
+        const t = taskSaved.find(x=>x.id===b.dataset.addtask);
+        if(!t) return;
+        const last = wfDraft.steps[wfDraft.steps.length-1];
+        if(wfDraft.steps.length===1 && last && !(last.cmd||"").trim()) wfDraft.steps = [];
+        wfDraft.steps.push({ host:t.host, cmd:t.cmd });
+        renderWorkflowSheet();
+      });
     });
     const editCancel = $("#wfEditCancel");
     if(editCancel) editCancel.addEventListener("click", ()=>{ wfDraft = { name:"", steps:[] }; renderWorkflowSheet(); });
@@ -1451,6 +1527,145 @@
     } catch(e){ toast("couldn't delete"); }
     wfSaved = await loadWorkflows();
     renderWorkflowSheet(); render();
+  }
+
+  /* ---------- Saved Tasks: the reusable atom ----------
+     A saved Task is a named {host, cmd} you've decided to keep and re-run — the
+     ephemeral one-shot graduated into a building block. The Fleet page's Tasks
+     rollup lists them (Run / Edit / Delete); "Save as Task" in a run view mints
+     one; the Workflow builder drops them in as steps. In demo mode they live in
+     memory so the feature is legible without a live hush-control behind it. */
+  const tsaveScrim = $("#tsaveScrim");
+  const tsaveBody = $("#tsaveBody");
+  let tsaveDraft = { name:"", host:"", cmd:"" };
+
+  async function loadTasks(){
+    if(MODE === "demo"){
+      if(!taskDemo.length){
+        const host = (M[0] && M[0].id) || "citadel";
+        taskDemo.push({ id:"disk-check-demo", name:"Disk check", host, cmd:"df -h | sort -k5 -rh | head", createdAt:"" });
+        taskDemo.push({ id:"docker-prune-demo", name:"Docker prune", host, cmd:"docker system prune -af", createdAt:"" });
+      }
+      return taskDemo.slice();
+    }
+    try {
+      const r = await fetch("api/tasks", {cache:"no-store"});
+      if(!r.ok) throw new Error("bad status");
+      const list = await r.json();
+      return Array.isArray(list) ? list : [];
+    } catch(e){ return []; }
+  }
+
+  // Keeps taskSaved fresh so the Fleet rollup and the Workflow builder's
+  // task-library both have data even before either sheet is opened.
+  async function pollTasks(){
+    taskSaved = await loadTasks();
+    render();
+  }
+
+  function closeTaskSaveSheet(){ tsaveScrim.classList.remove("open"); }
+  tsaveScrim.addEventListener("click", e=>{ if(e.target===tsaveScrim) closeTaskSaveSheet(); });
+
+  // openTaskSaveSheet opens the create/edit form. Pass a draft to prefill it —
+  // "Save as Task" hands it {host, cmd} straight off a run so the bridge from
+  // ephemeral to saved is one tap.
+  function openTaskSaveSheet(draft){
+    tsaveDraft = Object.assign({ editId:null, name:"", host:"", cmd:"" }, draft||{});
+    tsaveScrim.classList.add("open");
+    renderTaskSaveSheet();
+  }
+  function openTaskSaveSheetForEdit(id){
+    const t = taskSaved.find(x=>x.id===id);
+    if(!t) return;
+    openTaskSaveSheet({ editId:id, name:t.name||"", host:t.host||"", cmd:t.cmd||"" });
+  }
+
+  function renderTaskSaveSheet(){
+    const fleet = M.slice();
+    if(!fleet.some(m=>m.id===tsaveDraft.host)) tsaveDraft.host = (fleet[0]&&fleet[0].id) || tsaveDraft.host || "";
+    const opts = fleet.map(m=>`<option value="${esc(m.id)}"${m.id===tsaveDraft.host?" selected":""}>${esc(m.id)}${m.online?"":" · offline"}</option>`).join("");
+    const editing = !!tsaveDraft.editId;
+    tsaveBody.innerHTML = `
+      <h3>${editing ? "Edit task" : "Save as task"}</h3>
+      <p class="sd">a named command — saved once, re-run any time, drop it into a workflow</p>
+      <div class="field" style="margin-top:4px">
+        <label>Name</label>
+        <input type="text" id="tsName" placeholder="e.g. Restart web" value="${esc(tsaveDraft.name)}" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label>Machine</label>
+        <select id="tsHost">${opts||`<option value="">no machines</option>`}</select>
+      </div>
+      <div class="field">
+        <label>Command</label>
+        <input type="text" id="tsCmd" placeholder="e.g. cd /srv/web && git pull" value="${esc(tsaveDraft.cmd)}" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <div class="hint">runs via <b>sh -c</b> as the unprivileged hush user</div>
+      </div>
+      <div class="field-note">
+        <b>Heads up —</b> a saved task runs unsandboxed on its machine. It can do anything the hush user can.
+      </div>
+      <div class="sheet-actions">
+        <button class="btn ghost" id="tsCancel">Cancel</button>
+        <button class="btn primary" id="tsSave">${editing ? "Update task" : "Save task"}</button>
+      </div>`;
+    if(!fleet.length) tsaveBody.querySelector("#tsSave").disabled = true;
+    $("#tsName").addEventListener("input", e=>{ tsaveDraft.name = e.target.value; });
+    $("#tsHost").addEventListener("change", e=>{ tsaveDraft.host = e.target.value; });
+    $("#tsCmd").addEventListener("input", e=>{ tsaveDraft.cmd = e.target.value; });
+    $("#tsCancel").addEventListener("click", closeTaskSaveSheet);
+    $("#tsSave").addEventListener("click", saveTask);
+  }
+
+  async function saveTask(){
+    const editId = tsaveDraft.editId;
+    const name = (tsaveDraft.name||"").trim();
+    const host = tsaveDraft.host;
+    const cmd = (tsaveDraft.cmd||"").trim();
+    if(!name){ $("#tsName").focus(); toast("give the task a name"); return; }
+    if(!host){ toast("pick a machine"); return; }
+    if(!cmd){ $("#tsCmd").focus(); toast("add a command"); return; }
+    if(MODE === "demo"){
+      if(editId){ const t = taskDemo.find(x=>x.id===editId); if(t){ t.name=name; t.host=host; t.cmd=cmd; } }
+      else { taskDemo.push({ id:"task-"+Math.random().toString(36).slice(2,8), name, host, cmd, createdAt:"" }); }
+      taskSaved = taskDemo.slice(); closeTaskSaveSheet(); render();
+      toast(editId ? "updated (demo)" : "saved (demo)"); return;
+    }
+    const btn = $("#tsSave"); btn.disabled = true; btn.textContent = editId ? "Updating…" : "Saving…";
+    try {
+      const url = editId ? "api/tasks/"+encodeURIComponent(editId) : "api/tasks";
+      const method = editId ? "PUT" : "POST";
+      const r = await fetch(url, { method, headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name, host, cmd }) });
+      if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
+      taskSaved = await loadTasks();
+      closeTaskSaveSheet(); render();
+      toast(editId ? "task updated" : "task saved");
+    } catch(err){
+      btn.disabled = false; btn.textContent = editId ? "Update task" : "Save task";
+      toast((err&&err.message) ? err.message : "couldn't save");
+    }
+  }
+
+  async function deleteTask(id){
+    const t = taskSaved.find(x=>x.id===id);
+    if(!confirm(`Delete task "${(t&&t.name)||id}"? This can't be undone.`)) return;
+    if(MODE === "demo"){
+      const i = taskDemo.findIndex(x=>x.id===id); if(i>=0) taskDemo.splice(i,1);
+      taskSaved = taskDemo.slice(); render(); return;
+    }
+    try {
+      const r = await fetch("api/tasks/"+encodeURIComponent(id), { method:"DELETE" });
+      if(!r.ok && r.status!==204) throw new Error("error "+r.status);
+    } catch(e){ toast("couldn't delete"); }
+    taskSaved = await loadTasks(); render();
+  }
+
+  // runSavedTask streams a saved Task through /api/tasks/{id}/run — the audited
+  // path that resolves the command server-side — reusing the same run overlay an
+  // ad-hoc Task uses. In demo mode openRunView falls back to a simulated run.
+  function runSavedTask(id){
+    const t = taskSaved.find(x=>x.id===id);
+    if(!t) return;
+    openRunView(t.host, t.cmd, { runUrl:`api/tasks/${encodeURIComponent(id)}/run`, canSave:false });
   }
 
   // openWorkflowRunView streams a blueprint's run to the terminal overlay, using
@@ -2183,6 +2398,8 @@
   setInterval(pollDiscover, 20000);
   pollWorkflows();
   setInterval(pollWorkflows, 20000);
+  pollTasks();
+  setInterval(pollTasks, 20000);
 
   /* register the service worker so the console is installable and opens
      offline. Only works in a secure context (tsnet HTTPS or localhost);

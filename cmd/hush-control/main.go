@@ -281,6 +281,126 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 		log.Printf("workflow %q (%d steps) run by %s", wf.Name, len(wf.Steps), caller)
 		runWorkflow(r.Context(), w, streamClient, store.find, wf)
 	})
+	// Saved Tasks: named, re-runnable single commands — the reusable atom a
+	// Workflow's steps are built from. They persist to tasks.json beside the
+	// fleet config and run by proxying to the same /exec an ad-hoc Task uses, so
+	// a saved run is audited and bounded exactly like a one-shot.
+	tstore := newTaskStore(tasksPath(store.path))
+	mux.HandleFunc("/api/tasks", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(tstore.Snapshot()); err != nil {
+				log.Printf("encode tasks: %v", err)
+			}
+		case http.MethodPost:
+			var req struct {
+				Name string `json:"name"`
+				Host string `json:"host"`
+				Cmd  string `json:"cmd"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "bad request body", http.StatusBadRequest)
+				return
+			}
+			t, err := validateTask(req.Name, req.Host, req.Cmd, func(host string) bool {
+				_, ok := store.find(host)
+				return ok
+			})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			saved, err := tstore.Add(t)
+			if err != nil {
+				log.Printf("add task: %v", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			if err := json.NewEncoder(w).Encode(saved); err != nil {
+				log.Printf("encode task: %v", err)
+			}
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			var req struct {
+				Name string `json:"name"`
+				Host string `json:"host"`
+				Cmd  string `json:"cmd"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "bad request body", http.StatusBadRequest)
+				return
+			}
+			name, host, cmd, err := checkTask(req.Name, req.Host, req.Cmd, func(host string) bool {
+				_, ok := store.find(host)
+				return ok
+			})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			saved, found, err := tstore.Update(r.PathValue("id"), name, host, cmd)
+			if err != nil {
+				log.Printf("update task: %v", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if !found {
+				http.Error(w, "unknown task", http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(saved); err != nil {
+				log.Printf("encode task: %v", err)
+			}
+		case http.MethodDelete:
+			removed, err := tstore.Delete(r.PathValue("id"))
+			if err != nil {
+				log.Printf("delete task: %v", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if !removed {
+				http.Error(w, "unknown task", http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/tasks/{id}/run", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		t, ok := tstore.find(r.PathValue("id"))
+		if !ok {
+			http.Error(w, "unknown task", http.StatusNotFound)
+			return
+		}
+		a, ok := store.find(t.Host)
+		if !ok {
+			http.Error(w, t.Host+" is not in the fleet", http.StatusNotFound)
+			return
+		}
+		// Reuse proxyExec verbatim — same streaming, same audit log — by handing
+		// it the saved command as if it had been posted ad-hoc.
+		payload, _ := json.Marshal(struct {
+			Cmd        string `json:"cmd"`
+			TimeoutSec int    `json:"timeoutSec"`
+		}{Cmd: t.Cmd, TimeoutSec: taskTimeoutSec})
+		r.Body = io.NopCloser(bytes.NewReader(payload))
+		r.ContentLength = int64(len(payload))
+		proxyExec(w, r, streamClient, a)
+	})
 	mux.HandleFunc("/api/agents", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
