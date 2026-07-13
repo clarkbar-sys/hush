@@ -137,8 +137,20 @@ and streams its output back as [Server-Sent Events](https://developer.mozilla.or
 (`start` → `out` → `exit`); `hush-control` proxies it at
 `/api/machines/{host}/exec`, flushing each frame so output appears live on the
 phone. The console launches a run from **＋ Build → Task** or a Machine's
-**Tasks** section, then shows a full-screen live terminal. Runs are ephemeral —
-recorded per session, not persisted.
+**Tasks** section, then shows a full-screen live terminal. An ad-hoc run is
+ephemeral — recorded per session, not persisted.
+
+**Saving a Task — the reusable atom.** A run can graduate from ephemeral to a
+named building block: **Save as Task** in the run view mints a `{name, host,
+cmd}` the console keeps in `tasks.json` beside `workflows.json` (same
+already-writable directory), exposed at `/api/tasks` — `GET`/`POST` to list and
+save, `PUT`/`DELETE /api/tasks/{id}` to edit and remove, and `POST
+/api/tasks/{id}/run` to execute. A saved run resolves its command server-side
+and fans out to the **same `/exec`** an ad-hoc Task uses, so it's audited and
+bounded identically — the pinned machine is validated against the fleet at save
+time, the way a Workflow step's is. Saved Tasks surface in the Fleet page's
+**Tasks** rollup (Run / Edit / Delete) and are the pieces a Workflow is built
+from.
 
 **Same boundary as browse: the Unix user, not app logic.** A Task runs `sh -c`
 as the unprivileged `hush` user with no jail and no allowlist of binaries —
@@ -161,7 +173,11 @@ logs who ran what against which box.
 
 The **Workflow** construct ("a wired sequence (`cd X → git pull → restart`) —
 reusable, stampable") is sequencing layered on the Task primitive: a saved,
-ordered list of steps, each a `{machine, command}` pair. `hush-control` stores
+ordered list of steps, each a `{machine, command}` pair. The builder lets you
+type a step inline **or drop in a saved Task** — a Workflow is, at heart, a
+chain of Tasks — copying its `{machine, command}` into a step so the two stores
+stay decoupled (a Workflow keeps working if a Task it was built from is later
+deleted). `hush-control` stores
 blueprints in `workflows.json` beside `fleet.json` (same writable directory the
 systemd unit already grants) and exposes them at `/api/workflows` —
 `GET`/`POST` to list and save, `DELETE /api/workflows/{id}` to remove, and
