@@ -857,7 +857,7 @@
               <span class="rt">${m.online?"/":"offline"}</span></button>`
           : `<div class="empty">loading…</div>`}</div>
 
-        <details class="rollup" open>
+        <details class="rollup">
           <summary class="sec-title">Services <span class="n">${m.services.length}</span></summary>
           <div class="list">${m.services.length ? m.services.map(svcRow).join("")
             : `<div class="empty">${m.online ? "no running or failed units reported" : "machine unreachable"}</div>`}</div>
