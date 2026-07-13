@@ -414,7 +414,7 @@
   .wf-saved { margin-bottom:16px; }
   .wf-saved .wf-item { display:flex; align-items:center; gap:10px; padding:10px 12px;
     background:var(--panel-2); border:1px solid var(--border); border-radius:10px; margin-bottom:8px; }
-  .wf-saved .wf-meta { flex:1; min-width:0; }
+  .wf-saved .wf-meta { flex:1; min-width:0; cursor:pointer; }
   .wf-saved .wf-nm { font-family:var(--mono); font-size:13px; font-weight:600; color:var(--text);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .wf-saved .wf-sub { font-family:var(--mono); font-size:10.5px; color:var(--faint); margin-top:2px;
@@ -722,7 +722,7 @@
 
         <details class="rollup"${wfSaved.length?" open":""}>
           <summary class="sec-title">Workflows <span class="n">${wfSaved.length}</span></summary>
-          <div class="list">${wfSaved.length ? wfSaved.map(wfFleetRow).join("")
+          <div class="wf-saved">${wfSaved.length ? wfSaved.map(wfFleetRow).join("")
             : `<div class="empty">no saved workflows — build one from + Build</div>`}</div>
         </details>
       </main>`;
@@ -730,25 +730,35 @@
       el.addEventListener("click", ()=>enterMachine(el.dataset.id));
     });
     app.querySelectorAll("[data-wf]").forEach(el=>{
-      el.addEventListener("click", ()=>openWorkflowSheet());
+      el.addEventListener("click", ()=>openWorkflowSheetForEdit(el.dataset.wf));
+    });
+    app.querySelectorAll("[data-run]").forEach(b=>{
+      b.addEventListener("click", e=>{ e.stopPropagation(); const w = wfSaved.find(x=>x.id===b.dataset.run); if(w) openWorkflowRunView(w); });
+    });
+    app.querySelectorAll("[data-edit]").forEach(b=>{
+      b.addEventListener("click", e=>{ e.stopPropagation(); openWorkflowSheetForEdit(b.dataset.edit); });
+    });
+    app.querySelectorAll("[data-rm]").forEach(b=>{
+      b.addEventListener("click", e=>{ e.stopPropagation(); deleteWorkflow(b.dataset.rm); });
     });
     JUST_ARRIVED.clear(); // the pop animation above only needs to play once
   }
 
-  // wfFleetRow is the Fleet-page rollup's row for one saved workflow —
-  // mirrors svcRow/jobRow's shape so it reads consistently with the
-  // Services/Jobs rollups on the machine page. Click opens the Workflows
-  // sheet rather than running immediately, since a click here is easy to
-  // land by accident while just browsing the fleet.
+  // wfFleetRow is the Fleet-page rollup's row for one saved workflow — the
+  // list itself now lives only here (the Workflows sheet is build/edit-only),
+  // so Run/Edit/Delete live on the row rather than in a second copy of the list.
   function wfFleetRow(w){
     const steps = w.steps || [];
     const hosts = [...new Set(steps.map(s=>s.host))].join(", ");
-    return `<button class="row" data-wf="${esc(w.id)}">
-      <span class="gly">⛓</span>
-      <span class="nm">${esc(w.name)}</span>
-      <span class="rt">${esc(hosts || "—")}</span>
-      <span class="state sched"><span class="sd"></span>${steps.length} step${steps.length===1?"":"s"}</span>
-    </button>`;
+    return `<div class="wf-item">
+      <div class="wf-meta" data-wf="${esc(w.id)}">
+        <div class="wf-nm">${esc(w.name)}</div>
+        <div class="wf-sub">${esc(hosts || "—")} · ${steps.length} step${steps.length===1?"":"s"}</div>
+      </div>
+      <button class="wf-run" data-run="${esc(w.id)}">⛓ Run</button>
+      <button class="wf-edit" data-edit="${esc(w.id)}" aria-label="Edit">✎</button>
+      <button class="wf-rm" data-rm="${esc(w.id)}" aria-label="Delete">✕</button>
+    </div>`;
   }
 
   // A machine just added through "Add machine", shown until its first real
@@ -1291,6 +1301,14 @@
   function closeWorkflowSheet(){ wfScrim.classList.remove("open"); }
   wfScrim.addEventListener("click", e=>{ if(e.target===wfScrim) closeWorkflowSheet(); });
 
+  // Opens the sheet straight into editing an existing workflow, used by the
+  // Fleet page's Workflows rollup (the sheet itself no longer lists saved
+  // workflows — that list lives only on the Fleet page now).
+  function openWorkflowSheetForEdit(id){
+    wfScrim.classList.add("open");
+    editWorkflow(id);
+  }
+
   async function loadWorkflows(){
     if(MODE === "demo"){
       if(!wfDemo.length){
@@ -1319,20 +1337,6 @@
     const fleet = M.slice();
     if(!wfDraft.steps.length) wfDraft.steps = [{ host:(fleet[0]&&fleet[0].id)||"", cmd:"" }];
 
-    const saved = wfSaved.length ? `
-      <div class="wf-saved">${wfSaved.map(w=>{
-        const hosts = [...new Set((w.steps||[]).map(s=>s.host))].join(", ");
-        return `<div class="wf-item" data-id="${esc(w.id)}">
-          <div class="wf-meta">
-            <div class="wf-nm">${esc(w.name)}</div>
-            <div class="wf-sub">${(w.steps||[]).length} step${(w.steps||[]).length===1?"":"s"} · ${esc(hosts||"—")}</div>
-          </div>
-          <button class="wf-run" data-run="${esc(w.id)}">⛓ Run</button>
-          <button class="wf-edit" data-edit="${esc(w.id)}" aria-label="Edit">✎</button>
-          <button class="wf-rm" data-rm="${esc(w.id)}" aria-label="Delete">✕</button>
-        </div>`;
-      }).join("")}</div>` : `<div class="field-note">No workflows yet — build one below.</div>`;
-
     const stepRows = wfDraft.steps.map((st,i)=>{
       const opts = fleet.map(m=>`<option value="${esc(m.id)}"${m.id===st.host?" selected":""}>${esc(m.id)}${m.online?"":" · offline"}</option>`).join("");
       return `<div class="wf-step" data-i="${i}">
@@ -1349,7 +1353,6 @@
     wfBody.innerHTML = `
       <h3>Workflows</h3>
       <p class="sd">a wired sequence — saved once, re-run any time</p>
-      ${saved}
       <div class="field" style="margin-top:4px">
         <label>${editing ? "Edit workflow" : "New workflow"}${editing ? ` <button class="wf-editcancel" id="wfEditCancel">new instead</button>` : ""}</label>
         <input type="text" id="wfName" placeholder="e.g. Deploy API" value="${esc(wfDraft.name)}" autocapitalize="off" spellcheck="false">
@@ -1381,15 +1384,6 @@
     $("#wfAdd").addEventListener("click", ()=>{
       wfDraft.steps.push({ host:(fleet[0]&&fleet[0].id)||"", cmd:"" });
       renderWorkflowSheet();
-    });
-    wfBody.querySelectorAll("[data-run]").forEach(b=>{
-      b.addEventListener("click", ()=>{ const w = wfSaved.find(x=>x.id===b.dataset.run); if(w){ closeWorkflowSheet(); openWorkflowRunView(w); } });
-    });
-    wfBody.querySelectorAll("[data-edit]").forEach(b=>{
-      b.addEventListener("click", ()=>editWorkflow(b.dataset.edit));
-    });
-    wfBody.querySelectorAll("[data-rm]").forEach(b=>{
-      b.addEventListener("click", ()=>deleteWorkflow(b.dataset.rm));
     });
     const editCancel = $("#wfEditCancel");
     if(editCancel) editCancel.addEventListener("click", ()=>{ wfDraft = { name:"", steps:[] }; renderWorkflowSheet(); });
@@ -1423,7 +1417,7 @@
       } else {
         wfDemo.push({ id:"wf-"+Math.random().toString(36).slice(2,8), name, steps, createdAt:"" });
       }
-      wfSaved = wfDemo.slice(); wfDraft = { name:"", steps:[] }; renderWorkflowSheet();
+      wfSaved = wfDemo.slice(); wfDraft = { name:"", steps:[] }; renderWorkflowSheet(); render();
       toast(editId ? "updated (demo)" : "saved (demo)"); return;
     }
     const savingLabel = editId ? "Updating…" : "Saving…";
@@ -1436,7 +1430,7 @@
       if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
       wfSaved = await loadWorkflows();
       wfDraft = { name:"", steps:[] };
-      renderWorkflowSheet();
+      renderWorkflowSheet(); render();
       toast(editId ? "workflow updated" : "workflow saved");
     } catch(err){
       btn.disabled = false; btn.textContent = restoreLabel;
@@ -1449,14 +1443,14 @@
     if(!confirm(`Delete workflow "${(w&&w.name)||id}"? This can't be undone.`)) return;
     if(MODE === "demo"){
       const i = wfDemo.findIndex(w=>w.id===id); if(i>=0) wfDemo.splice(i,1);
-      wfSaved = wfDemo.slice(); renderWorkflowSheet(); return;
+      wfSaved = wfDemo.slice(); renderWorkflowSheet(); render(); return;
     }
     try {
       const r = await fetch("api/workflows/"+encodeURIComponent(id), { method:"DELETE" });
       if(!r.ok && r.status!==204) throw new Error("error "+r.status);
     } catch(e){ toast("couldn't delete"); }
     wfSaved = await loadWorkflows();
-    renderWorkflowSheet();
+    renderWorkflowSheet(); render();
   }
 
   // openWorkflowRunView streams a blueprint's run to the terminal overlay, using
