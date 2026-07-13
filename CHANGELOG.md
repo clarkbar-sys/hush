@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/clarkbar-sys/hush/compare/v1.10.0...v1.11.0) (2026-07-13)
+
+
+### Features
+
+* lint PR titles for Conventional Commits ([#71](https://github.com/clarkbar-sys/hush/issues/71)) ([dc8bd5d](https://github.com/clarkbar-sys/hush/commit/dc8bd5d71c829e38e74951dd4f77a307a702daf0))
+
 ## [1.10.0](https://github.com/clarkbar-sys/hush/compare/v1.9.0...v1.10.0) (2026-07-13)
 
 
