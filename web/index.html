@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>hush — tailnet fleet console</title>
+<!-- PWA: installable as an Android home-screen app (see web/sw.js, web/manifest.webmanifest) -->
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#060210">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="hush">
+<link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
   :root {
     /* cyber — the console's single locked theme. neon on void, cyan × magenta.
@@ -1465,6 +1474,17 @@
   setInterval(checkVersion, 15*60*1000);
   pollDiscover();
   setInterval(pollDiscover, 20000);
+
+  /* register the service worker so the console is installable and opens
+     offline. Only works in a secure context (tsnet HTTPS or localhost);
+     silently skipped over plain-HTTP LAN, where the console still runs fine. */
+  if ('serviceWorker' in navigator && window.isSecureContext) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.warn('service worker registration failed:', err);
+      });
+    });
+  }
 })();
 </script>
 </body>
