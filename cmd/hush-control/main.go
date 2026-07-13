@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"os/exec"
@@ -123,6 +124,11 @@ func main() {
 // LAN and tsnet modes. The UI is served from the embedded assets unless
 // webDir is set (dev override).
 func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Handler {
+	// Go's mime table doesn't know .webmanifest; without this the PWA manifest
+	// is served as text/plain and browsers grumble. Register the correct type
+	// so http.FileServer(FS) picks it up.
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
+
 	client := &http.Client{Timeout: 2 * time.Second}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/fleet", func(w http.ResponseWriter, r *http.Request) {
