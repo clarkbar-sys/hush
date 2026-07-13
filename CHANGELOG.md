@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/clarkbar-sys/hush/compare/v1.7.1...v1.8.0) (2026-07-13)
+
+
+### Features
+
+* **web:** make the console installable as an Android PWA ([#60](https://github.com/clarkbar-sys/hush/issues/60)) ([dcb859b](https://github.com/clarkbar-sys/hush/commit/dcb859b046cb1bb3f79d49df5e9a23a9a69f1f03))
+
 ## [1.7.1](https://github.com/clarkbar-sys/hush/compare/v1.7.0...v1.7.1) (2026-07-12)
 
 
