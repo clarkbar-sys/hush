@@ -429,13 +429,21 @@
   .wf-saved .wf-rm:hover { color:var(--crit); border-color:var(--crit-soft); }
   .wf-editcancel { font-family:var(--mono); font-size:10.5px; color:var(--accent); background:transparent;
     border:none; padding:0; margin-left:6px; cursor:pointer; text-decoration:underline; }
-  /* ---- Workflow run view: step headers punctuate the shared live log ---- */
-  .runterm .wf-head { display:block; margin:10px 0 4px; padding:5px 8px; border-radius:6px;
-    background:var(--panel-2); color:var(--muted); border-left:2px solid var(--border); font-weight:600; }
-  .runterm .wf-head:first-child { margin-top:0; }
-  .runterm .wf-head.on { border-left-color:var(--accent); color:var(--text); }
-  .runterm .wf-head.ok { border-left-color:var(--good); }
-  .runterm .wf-head.bad { border-left-color:var(--crit); }
+  /* ---- Workflow run view: each step is a rollup — command always visible in
+     the summary, output tucked behind the arrow so a long run stays scannable ---- */
+  .runterm .wf-runstep { display:block; margin:10px 0 4px; }
+  .runterm .wf-runstep:first-child { margin-top:0; }
+  .runterm .wf-runstep > summary.wf-head { display:block; padding:5px 8px 5px 4px; border-radius:6px;
+    background:var(--panel-2); color:var(--muted); border-left:2px solid var(--border); font-weight:600;
+    cursor:pointer; list-style:none; }
+  .runterm .wf-runstep > summary.wf-head::-webkit-details-marker { display:none; }
+  .runterm .wf-runstep > summary.wf-head::before { content:"▸"; display:inline-block; width:11px;
+    color:var(--faint); font-size:9px; transition: transform .15s; }
+  .runterm .wf-runstep[open] > summary.wf-head::before { transform: rotate(90deg); }
+  .runterm .wf-runstep > summary.wf-head.on { border-left-color:var(--accent); color:var(--text); }
+  .runterm .wf-runstep > summary.wf-head.ok { border-left-color:var(--good); }
+  .runterm .wf-runstep > summary.wf-head.bad { border-left-color:var(--crit); }
+  .runterm .wf-out { padding: 2px 0 6px 19px; }
 
   /* ---- bottom hotbar / build ---- */
   .dock { position: sticky; bottom: 0; z-index: 15;
@@ -1471,14 +1479,16 @@
     const stopBtn = ov.querySelector("#wvStop");
     const ac = new AbortController();
     let finished = false;
-    const heads = [];   // step index -> header element
+    const heads = [];   // step index -> summary element (for markHead)
+    const groups = [];  // step index -> { details, outDiv }
+    let curOut = out;   // where append() writes — the current step's output container
 
     const append = (text, cls) => {
       if(text == null || text === "") return;
       const span = document.createElement("span");
       if(cls) span.className = cls;
       span.textContent = text;
-      out.appendChild(span);
+      curOut.appendChild(span);
       out.scrollTop = out.scrollHeight;
     };
     const setState = (cls, label, meta) => {
@@ -1502,12 +1512,20 @@
     const onEvent = ev => {
       if(ev.kind === "step"){
         const i = ev.index || 0;
-        // reaching a new step means the previous one exited clean
-        if(i > 0) markHead(i-1, "ok");
-        const h = document.createElement("span");
+        // reaching a new step means the previous one exited clean — roll it up
+        // so a long run stays scannable; its command stays visible in the summary
+        if(i > 0){ markHead(i-1, "ok"); if(groups[i-1]) groups[i-1].details.open = false; }
+        const details = document.createElement("details");
+        details.className = "wf-runstep";
+        details.open = true;
+        const h = document.createElement("summary");
         h.className = "wf-head on";
         h.textContent = `▶ step ${i+1}/${ev.count||total} · ${ev.host} · ${ev.cmd}`;
-        out.appendChild(h); heads[i] = h;
+        const outDiv = document.createElement("div");
+        outDiv.className = "wf-out";
+        details.appendChild(h); details.appendChild(outDiv);
+        out.appendChild(details);
+        heads[i] = h; groups[i] = { details, outDiv }; curOut = outDiv;
         out.scrollTop = out.scrollHeight;
         setState("running", "running", `step ${i+1}/${ev.count||total}`);
       } else if(ev.kind === "out"){
@@ -1523,7 +1541,11 @@
       } else if(ev.kind === "done"){
         finished = true;
         stopBtn.textContent = "✕ Close";
-        if(ev.ok){ heads.forEach((_,i)=>markHead(i,"ok")); setState("ok", "done", `${ev.ran||total} step${(ev.ran||total)===1?"":"s"} · ok`); }
+        if(ev.ok){
+          heads.forEach((_,i)=>markHead(i,"ok"));
+          groups.forEach(g=>{ g.details.open = false; }); // done — whole run rolls up, arrows reveal any step's command + output
+          setState("ok", "done", `${ev.ran||total} step${(ev.ran||total)===1?"":"s"} · ok`);
+        }
         else { const fs = (ev.failedStep==null?heads.length-1:ev.failedStep); setState("failed", "failed", `stopped at step ${fs+1}`); }
       }
     };
