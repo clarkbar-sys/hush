@@ -384,6 +384,18 @@
   .term { background: var(--panel-2); border:1px solid var(--border-soft); border-radius:9px;
     padding: 14px 12px; min-height: 96px; display:grid; place-items:center; text-align:center;
     font-family: var(--mono); font-size: 12px; color: var(--faint); line-height:1.6; }
+  /* a live task log — left-aligned, scrolling, unlike the centered placeholder term */
+  .runterm { display:block; place-items:unset; text-align:left; color:var(--text);
+    white-space:pre-wrap; word-break:break-word; overflow:auto; margin:0;
+    width:100%; height:min(60vh,520px); max-height:60vh; }
+  .runterm .err { color: var(--crit); }
+  .runbody { padding:0; display:block; }
+  .state.ok { color: var(--good); } .state.ok .sd { background:var(--good); box-shadow:0 0 0 3px var(--good-soft); }
+  .runrow .gly { color: var(--accent); }
+  .field select { width:100%; font-family:var(--mono); font-size:14px; color:var(--text);
+    background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:10px 11px; }
+  .field select:focus { border-color: var(--accent); }
+  .nm.mono { font-family:var(--mono); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
   /* ---- bottom hotbar / build ---- */
   .dock { position: sticky; bottom: 0; z-index: 15;
@@ -529,6 +541,13 @@
   </div>
 </div>
 
+<div class="scrim" id="taskScrim">
+  <div class="sheet" role="dialog" aria-label="Run a task">
+    <div class="grab"></div>
+    <div id="taskSheetBody"></div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -560,6 +579,7 @@
   const state = { view:"fleet", mid:null, cname:null, browsePath:null };
   const byId = id => M.find(m=>m.id===id);
   let PENDING = [];                // machines just added via the UI, awaiting first check-in
+  const RUNS = {};                 // machine id -> recent Task runs this session (ephemeral)
   const JUST_ARRIVED = new Set();  // ids to pop-highlight for one render after their first check-in
   function esc(s){ return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -753,13 +773,19 @@
 
         ${m.jobs.length?`<div class="sec-title">Jobs <span class="n">${m.jobs.length}</span></div>
           <div class="list">${m.jobs.map(jobRow).join("")}</div>`:""}
-        ${m.tasks.length?`<div class="sec-title">Recent tasks <span class="n">${m.tasks.length}</span></div>
-          <div class="list">${m.tasks.map(taskRow).join("")}</div>`:""}
+        ${(()=>{ const items = (RUNS[m.id]||[]).concat(m.tasks||[]);
+          return `<div class="sec-title">Tasks${items.length?` <span class="n">${items.length}</span>`:""}</div>
+          <div class="list">
+            <button class="row runrow" id="task-run"${m.online?"":` disabled style="opacity:.5;cursor:default"`}>
+              <span class="gly">⚡</span><span class="nm">Run a command…</span>
+              <span class="rt">${m.online?"one-shot":"offline"}</span></button>
+            ${items.map(taskRow).join("")}</div>`; })()}
       </main>`;
     $("#bk").addEventListener("click", goFleet);
     app.querySelectorAll("[data-svc]").forEach(el=>{
       el.addEventListener("click", ()=>enterConstruct(el.dataset.svc));
     });
+    { const tr = $("#task-run"); if(tr) tr.addEventListener("click", ()=>{ if(m.online) openTaskSheet(m.id); }); }
     const bo = $("#browse-open");
     if(bo) bo.addEventListener("click", ()=>{ if(!m.online) return; state.browsePath="/"; fillBrowse(m.id); });
     if(state.browsePath!=null) fillBrowse(m.id);
@@ -918,13 +944,243 @@
       <span class="state sched"><span class="sd"></span>${j.next||""}</span>
     </div>`;
   }
+  // taskRow renders one run — either a live session run recorded by RUNS
+  // ({cmd, ts, ok, label}) or a demo-fleet entry ({name, when, ok}).
   function taskRow(t){
+    const name = esc(t.cmd || t.name || "");
+    const when = t.ts ? relTime(t.ts) : (t.when || "");
+    const ok = t.ok !== false;
+    const label = esc(t.label || (ok ? "ok" : "fail"));
     return `<div class="row" style="cursor:default">
       <span class="gly">⚡</span>
-      <span class="nm">${t.name}</span>
-      <span class="rt">${t.when||""}</span>
-      <span class="state ${t.ok?"running":"failed"}"><span class="sd"></span>${t.ok?"ok":"fail"}</span>
+      <span class="nm mono" title="${name}">${name}</span>
+      <span class="rt">${esc(when)}</span>
+      <span class="state ${ok?"ok":"failed"}"><span class="sd"></span>${label}</span>
     </div>`;
+  }
+
+  // relTime renders a coarse "how long ago" for ephemeral run records.
+  function relTime(ts){
+    const s = Math.round((Date.now()-ts)/1000);
+    if(s < 45) return "just now";
+    const m = Math.round(s/60); if(m < 60) return m+"m ago";
+    return Math.round(m/60)+"h ago";
+  }
+
+  /* ---------- Task: run a one-shot command, streamed live ----------
+     The Task construct — "a one-shot run of a program — ephemeral". The sheet
+     picks a machine and a command; running opens a full-screen live view that
+     streams the agent's Server-Sent Events (start → out → exit) and records the
+     outcome into RUNS so the Machine view's Tasks section reflects it. */
+  const taskScrim = $("#taskScrim");
+  const taskBody = $("#taskSheetBody");
+  let taskDraft = { id:null, cmd:"" };
+
+  function openTaskSheet(preId){
+    const online = M.filter(m=>m.online);
+    taskDraft = { id: preId || (online[0] && online[0].id) || null, cmd:"" };
+    renderTaskSheet();
+    taskScrim.classList.add("open");
+  }
+  function closeTaskSheet(){ taskScrim.classList.remove("open"); }
+  taskScrim.addEventListener("click", e=>{ if(e.target===taskScrim) closeTaskSheet(); });
+
+  function renderTaskSheet(){
+    const online = M.filter(m=>m.online);
+    if(!online.length){
+      taskBody.innerHTML = `<h3>Run a task</h3>
+        <p class="sd">a one-shot command on one machine</p>
+        <div class="field-note">No machines are online to run on.</div>
+        <div class="sheet-actions"><button class="btn primary" id="tClose" style="flex:1">Close</button></div>`;
+      $("#tClose").addEventListener("click", closeTaskSheet);
+      return;
+    }
+    if(!online.some(m=>m.id===taskDraft.id)) taskDraft.id = online[0].id;
+    const opts = online.map(m=>`<option value="${esc(m.id)}"${m.id===taskDraft.id?" selected":""}>${esc(m.id)}${m.os?` · ${esc(m.os)}`:""}</option>`).join("");
+    taskBody.innerHTML = `
+      <h3>Run a task</h3>
+      <p class="sd">a one-shot command — streamed live, nothing persisted</p>
+      <div class="field">
+        <label>Machine</label>
+        <select id="tMachine">${opts}</select>
+      </div>
+      <div class="field">
+        <label>Command</label>
+        <input type="text" id="tCmd" placeholder="e.g. uptime" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(taskDraft.cmd)}">
+        <div class="hint">runs via <b>sh -c</b> as the unprivileged hush user</div>
+      </div>
+      <div class="field-note">
+        <b>Heads up —</b> this runs on <b>${esc(taskDraft.id)}</b> with no sandbox. It can do anything the hush user can — the OS permissions are the only fence.
+      </div>
+      <div class="sheet-actions">
+        <button class="btn ghost" id="tCancel">Cancel</button>
+        <button class="btn primary" id="tRun">⚡ Run</button>
+      </div>`;
+    const cmdEl = $("#tCmd");
+    $("#tMachine").addEventListener("change", e=>{ taskDraft.id = e.target.value; renderHostNote(); });
+    cmdEl.addEventListener("input", e=>{ taskDraft.cmd = e.target.value; });
+    cmdEl.addEventListener("keydown", e=>{ if(e.key==="Enter") runTask(); });
+    $("#tCancel").addEventListener("click", closeTaskSheet);
+    $("#tRun").addEventListener("click", runTask);
+    cmdEl.focus();
+  }
+  // Keep the danger note's named host in sync when the machine select changes,
+  // without stealing focus from the command field.
+  function renderHostNote(){
+    const n = taskBody.querySelector(".field-note");
+    if(n) n.innerHTML = `<b>Heads up —</b> this runs on <b>${esc(taskDraft.id)}</b> with no sandbox. It can do anything the hush user can — the OS permissions are the only fence.`;
+  }
+  function runTask(){
+    const cmd = (taskDraft.cmd || "").trim();
+    const id = taskDraft.id;
+    if(!cmd){ $("#tCmd").focus(); return; }
+    if(!id) return;
+    closeTaskSheet();
+    openRunView(id, cmd);
+  }
+
+  // openRunView streams one run to a full-screen terminal overlay and records
+  // the outcome. Cancel/close aborts the fetch, which drops the connection and
+  // (through hush-control) cancels the request context — killing the command's
+  // process group on the box.
+  function openRunView(id, cmd){
+    const ov = document.createElement("div");
+    ov.className = "vov";
+    ov.innerHTML = `<div class="vsheet">
+        <div class="vbar">
+          <span class="state running" id="rvState"><span class="sd"></span>running</span>
+          <div class="vname" title="${esc(cmd)}">${esc(cmd)}</div>
+          <div class="vmeta" id="rvMeta">${esc(id)}</div>
+          <button class="vbtn" id="rvStop">■ Cancel</button>
+          <button class="vbtn vclose" aria-label="Close">✕</button>
+        </div>
+        <div class="vbody runbody"><pre class="runterm" id="rvOut"></pre></div>
+      </div>`;
+    document.body.appendChild(ov);
+    const out = ov.querySelector("#rvOut");
+    const stateEl = ov.querySelector("#rvState");
+    const metaEl = ov.querySelector("#rvMeta");
+    const stopBtn = ov.querySelector("#rvStop");
+    const ac = new AbortController();
+    let finished = false, recorded = false;
+
+    const append = (text, cls) => {
+      if(text == null || text === "") return;
+      const span = document.createElement("span");
+      if(cls) span.className = cls;
+      span.textContent = text;
+      out.appendChild(span);
+      out.scrollTop = out.scrollHeight;
+    };
+    const setState = (cls, label, meta) => {
+      stateEl.className = "state " + cls;
+      stateEl.innerHTML = `<span class="sd"></span>${esc(label)}`;
+      if(meta != null) metaEl.textContent = meta;
+    };
+    const record = (ok, label) => {
+      if(recorded) return; recorded = true;
+      RUNS[id] = RUNS[id] || [];
+      RUNS[id].unshift({ cmd, ts: Date.now(), ok, label });
+      RUNS[id] = RUNS[id].slice(0, 8);
+      if(state.view === "machine" && state.mid === id) render();
+    };
+    const close = () => { ac.abort(); ov.remove(); document.removeEventListener("keydown", onkey); };
+    const onkey = e => { if(e.key === "Escape") close(); };
+    document.addEventListener("keydown", onkey);
+    ov.querySelector(".vclose").addEventListener("click", close);
+    ov.addEventListener("click", e => { if(e.target === ov) close(); });
+    stopBtn.addEventListener("click", () => {
+      if(finished){ close(); return; }
+      ac.abort();
+      finished = true;
+      stopBtn.textContent = "✕ Close";
+      setState("stopped", "canceled", id);
+      record(false, "canceled");
+    });
+
+    const onEvent = ev => {
+      if(ev.kind === "start"){ setState("running", "running", `${id} · pid ${ev.pid}`); }
+      else if(ev.kind === "out"){ append(ev.data, ev.stream === "stderr" ? "err" : null); }
+      else if(ev.kind === "error"){ append((ev.data||"error")+"\n", "err"); }
+      else if(ev.kind === "exit"){
+        finished = true;
+        stopBtn.textContent = "✕ Close";
+        // code is omitted from the JSON when it's 0 (Go's omitempty), so a
+        // missing code means success — not an undefined exit.
+        const code = ev.code == null ? 0 : ev.code;
+        const ok = code === 0 && !ev.signal;
+        const label = ev.signal ? ev.signal : ("exit " + code);
+        const bits = [label, fmtDur(ev.ms)];
+        if(ev.truncated) bits.push("output truncated");
+        setState(ok ? "ok" : "failed", label, `${id} · ${bits.slice(1).join(" · ")}`);
+        record(ok, label);
+      }
+    };
+
+    const runner = MODE === "demo" ? simulateExec(cmd, onEvent, ac.signal)
+      : streamExec(`api/machines/${encodeURIComponent(id)}/exec`, { cmd, timeoutSec: 300 }, onEvent, ac.signal);
+    runner.catch(err => {
+      if(ac.signal.aborted) return; // canceled path already handled
+      finished = true;
+      stopBtn.textContent = "✕ Close";
+      const msg = (err && err.message) ? err.message : "connection failed";
+      append("\n" + msg + "\n", "err");
+      setState("failed", err && err.status ? ("error " + err.status) : "error", id);
+      record(false, "error");
+    });
+  }
+
+  // streamExec POSTs a run and parses the Server-Sent Events off the response
+  // body, delivering each decoded event to onEvent as it arrives.
+  async function streamExec(url, payload, onEvent, signal){
+    const res = await fetch(url, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload), signal
+    });
+    if(!res.ok || !res.body){
+      const txt = await res.text().catch(()=> "");
+      throw { status: res.status, message: (txt || "").trim() || ("error " + res.status) };
+    }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for(;;){
+      const { value, done } = await reader.read();
+      if(done) break;
+      buf += dec.decode(value, { stream:true });
+      let i;
+      while((i = buf.indexOf("\n\n")) >= 0){
+        const frame = buf.slice(0, i); buf = buf.slice(i + 2);
+        const line = frame.split("\n").find(l => l.startsWith("data:"));
+        if(!line) continue;
+        try { onEvent(JSON.parse(line.slice(5).trim())); } catch(e){}
+      }
+    }
+  }
+
+  // simulateExec fakes a run for demo/offline mode, so the feature is legible
+  // without a live hush-control behind it.
+  function simulateExec(cmd, onEvent, signal){
+    return new Promise((resolve, reject) => {
+      if(signal.aborted) return reject(new Error("aborted"));
+      const t = [];
+      const at = (ms, fn) => t.push(setTimeout(fn, ms));
+      const bail = () => { t.forEach(clearTimeout); reject(new Error("aborted")); };
+      signal.addEventListener("abort", bail, { once:true });
+      onEvent({ kind:"start", pid: 4000 + Math.floor(Math.random()*900) });
+      at(220, ()=> onEvent({ kind:"out", stream:"stdout", data:`$ ${cmd}\n` }));
+      at(520, ()=> onEvent({ kind:"out", stream:"stdout", data:"demo mode — no agent connected.\n" }));
+      at(820, ()=> onEvent({ kind:"out", stream:"stdout", data:"this is a simulated run.\n" }));
+      at(1100, ()=> { signal.removeEventListener("abort", bail); onEvent({ kind:"exit", code:0, ms:1100 }); resolve(); });
+    });
+  }
+
+  // fmtDur renders a run's wall-clock duration compactly.
+  function fmtDur(ms){
+    if(ms == null) return "";
+    if(ms < 1000) return ms + "ms";
+    const s = ms/1000;
+    return (s < 10 ? s.toFixed(1) : Math.round(s)) + "s";
   }
 
   function renderConstruct(){
@@ -1115,9 +1371,10 @@
   $("#palette").querySelectorAll(".pitem").forEach(el=>{
     el.addEventListener("click", ()=>{
       scrim.classList.remove("open");
-      // Machine graduates straight into the working add-machine sheet; the rest
-      // are still placeholders.
+      // Machine and Task are the constructs that actually do something today;
+      // the rest are still placeholders.
       if(el.dataset.c === "Machine"){ openAddSheet(); return; }
+      if(el.dataset.c === "Task"){ openTaskSheet(null); return; }
       toast(`＋ ${el.dataset.c} builder — coming in a later phase`);
     });
   });

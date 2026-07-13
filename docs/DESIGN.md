@@ -127,6 +127,34 @@ hush. The agent's systemd unit is hardened but intentionally omits
 `ProtectHome`/`PrivateTmp`, which would blank out readable paths and make the
 sandbox — rather than the user — the real fence.
 
+## Tasks — running a command
+
+The **Task** construct ("a one-shot run of a program — ephemeral") is the write
+half of the browse model above: the agent's `POST /exec` runs a shell command
+and streams its output back as [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events)
+(`start` → `out` → `exit`); `hush-control` proxies it at
+`/api/machines/{host}/exec`, flushing each frame so output appears live on the
+phone. The console launches a run from **＋ Build → Task** or a Machine's
+**Tasks** section, then shows a full-screen live terminal. Runs are ephemeral —
+recorded per session, not persisted.
+
+**Same boundary as browse: the Unix user, not app logic.** A Task runs `sh -c`
+as the unprivileged `hush` user with no jail and no allowlist of binaries —
+whatever that user can do in a shell, a Task can do. This is the deliberate
+end of the model the Store section describes ("the same model a future *run a
+command on this machine* capability wants"). A run is bounded, not sandboxed:
+its own process group (so a timeout or a client hang-up kills the whole tree),
+a default 5-minute / max 60-minute timeout, and a 1 MiB output cap.
+
+**Exec is on by default, opt-out per agent.** A box opts out with `-exec=false`
+(or `HUSH_AGENT_EXEC=0`, so a systemd env file can toggle it without editing
+`ExecStart`), after which `/exec` returns `403` and the agent is read-only.
+Because `/exec` is new agent code, only agents running the release that
+introduced it (or newer) can run Tasks — `hush-control` proxies to `/exec`, so
+an older agent simply reports exec as unavailable. In tsnet mode every run is
+gated by the same Tailscale identity as everything else, and `hush-control`
+logs who ran what against which box.
+
 ## Running it (dev)
 
 ```bash

@@ -1,6 +1,8 @@
 // Command hush-agent runs on every machine in the fleet. It exposes the host's
-// vitals as JSON over the tailnet. In Phase 0 it is read-only: no endpoint
-// changes anything on the box.
+// vitals as JSON over the tailnet, and serves /exec — the Task construct's
+// one-shot command runner — on by default. A box can opt out with -exec=false
+// (or HUSH_AGENT_EXEC=0), after which /exec returns 403 and everything else
+// stays read-only.
 //
 // Deploy is one static binary with no runtime dependencies:
 //
@@ -27,7 +29,17 @@ import (
 func main() {
 	listen := flag.String("listen", ":8765", `address to listen on, or "tailnet" to bind this machine's Tailscale IP (tailnet-only; "tailnet:PORT" for a non-default port)`)
 	showVersion := flag.Bool("version", false, "print the hush-agent version and exit")
+	allowExec := flag.Bool("exec", true, "serve /exec, the Task construct's one-shot command runner (on by default; -exec=false disables). Commands run as the unprivileged hush user")
 	flag.Parse()
+
+	// Exec is on by default; a box can opt out with -exec=false or, so the
+	// systemd unit's env file can toggle it without editing ExecStart, by setting
+	// HUSH_AGENT_EXEC to a falsey value. A present env var always wins over the
+	// flag default.
+	execEnabled := *allowExec
+	if v, ok := os.LookupEnv("HUSH_AGENT_EXEC"); ok {
+		execEnabled = v != "0" && v != "false" && v != "no"
+	}
 
 	if *showVersion {
 		fmt.Printf("hush-agent %s\n", version.Current())
@@ -50,10 +62,24 @@ func main() {
 	})
 	mux.HandleFunc("/browse", handleBrowse)
 	mux.HandleFunc("/file", handleFile)
+	// /exec is always routed so a box that opted out returns a clear "disabled"
+	// rather than a bare 404 (which would be indistinguishable from an old agent).
+	mux.HandleFunc("/exec", func(w http.ResponseWriter, r *http.Request) {
+		if !execEnabled {
+			http.Error(w, "exec is disabled on this agent (started with -exec=false)", http.StatusForbidden)
+			return
+		}
+		handleExec(w, r)
+	})
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
 
+	if execEnabled {
+		log.Printf("hush-agent: /exec enabled — one-shot commands run as uid %d", os.Geteuid())
+	} else {
+		log.Printf("hush-agent: /exec disabled (-exec=false)")
+	}
 	log.Printf("hush-agent listening on %s", listenAddr)
 	log.Fatal(http.ListenAndServe(listenAddr, mux))
 }
