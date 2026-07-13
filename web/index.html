@@ -231,6 +231,11 @@
   .sec-title .n { color: var(--muted); }
   .sec-title::after { content:""; flex:1; height:1px; background: var(--border-soft); }
 
+  .rollup > summary.sec-title { cursor:pointer; list-style:none; }
+  .rollup > summary.sec-title::-webkit-details-marker { display:none; }
+  .rollup > summary.sec-title::before { content:"▸"; color:var(--faint); font-size:9px; transition: transform .15s; }
+  .rollup[open] > summary.sec-title::before { transform: rotate(90deg); }
+
   .list { display:flex; flex-direction:column; gap: 8px; }
   .empty { font-family:var(--mono); font-size:11.5px; color:var(--faint);
     padding: 10px 12px; border:1px dashed var(--border); border-radius:10px; }
@@ -724,16 +729,18 @@
           </div>
         </div>
 
-        <div class="sec-title">Services <span class="n">${m.services.length}</span></div>
-        <div class="list">${m.services.length ? m.services.map(svcRow).join("")
-          : `<div class="empty">${m.online ? "no running or failed units reported" : "machine unreachable"}</div>`}</div>
-
         <div class="sec-title">Files <span class="n">store</span></div>
         <div class="list" id="browse">${state.browsePath==null
           ? `<button class="row" id="browse-open"${m.online?"":" disabled style=\"opacity:.5;cursor:default\""}>
               <span class="gly">▤</span><span class="nm">Browse filesystem</span>
               <span class="rt">${m.online?"/":"offline"}</span></button>`
           : `<div class="empty">loading…</div>`}</div>
+
+        <details class="rollup" open>
+          <summary class="sec-title">Services <span class="n">${m.services.length}</span></summary>
+          <div class="list">${m.services.length ? m.services.map(svcRow).join("")
+            : `<div class="empty">${m.online ? "no running or failed units reported" : "machine unreachable"}</div>`}</div>
+        </details>
 
         ${m.jobs.length?`<div class="sec-title">Jobs <span class="n">${m.jobs.length}</span></div>
           <div class="list">${m.jobs.map(jobRow).join("")}</div>`:""}
