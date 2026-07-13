@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/clarkbar-sys/hush/compare/v1.9.0...v1.10.0) (2026-07-13)
+
+
+### Features
+
+* add Workflow construct — saved, sequenced multi-step runs ([#64](https://github.com/clarkbar-sys/hush/issues/64)) ([9611ac6](https://github.com/clarkbar-sys/hush/commit/9611ac643f32fdd54c8be80d01ac1a949d32c143))
+
 ## [1.9.0](https://github.com/clarkbar-sys/hush/compare/v1.8.0...v1.9.0) (2026-07-13)
 
 
