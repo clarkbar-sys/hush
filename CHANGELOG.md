@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.0](https://github.com/clarkbar-sys/hush/compare/v1.14.0...v1.15.0) (2026-07-13)
+
+
+### Features
+
+* Job construct — cron-scheduled commands on the agent ([#84](https://github.com/clarkbar-sys/hush/issues/84)) ([4d61af5](https://github.com/clarkbar-sys/hush/commit/4d61af536a8a0d93eb6ccd957f7ff79b37791948))
+
 ## [1.14.0](https://github.com/clarkbar-sys/hush/compare/v1.13.0...v1.14.0) (2026-07-13)
 
 
