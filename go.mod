@@ -2,7 +2,10 @@ module github.com/clarkbar-sys/hush
 
 go 1.26.4
 
-require tailscale.com v1.100.0
+require (
+	github.com/robfig/cron/v3 v3.0.1
+	tailscale.com v1.100.0
+)
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
