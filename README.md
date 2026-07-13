@@ -148,12 +148,15 @@ deliberate tap; discovery only ever suggests.
 
 The **Task** construct runs a one-shot command on a machine and streams its
 output live to the console — **＋ Build → Task**, or the **Tasks** section of any
-Machine view. This is the one thing an agent does that changes a box, so it is
-**opt-in per agent**: start `hush-agent` with `-exec` (or set
-`HUSH_AGENT_EXEC=1` in its env file and restart) to enable it. An agent without
-it stays read-only and refuses `/exec`. Commands run via `sh -c` as the
-unprivileged `hush` user with no sandbox — the OS permissions of that user are
-the only boundary, the same model as file browsing. See
+Machine view. Commands run via `sh -c` as the unprivileged `hush` user with no
+sandbox — the OS permissions of that user are the only boundary, the same model
+as file browsing.
+
+It's **on by default**; a box opts out by starting `hush-agent` with
+`-exec=false` (or setting `HUSH_AGENT_EXEC=0` in its env file and restarting),
+after which `/exec` returns `403` and the agent is read-only. Because `/exec`
+is new agent code, only agents running this release or newer can run Tasks —
+older ones report exec as unavailable until you re-run the installer. See
 [`docs/DESIGN.md`](./docs/DESIGN.md#tasks--running-a-command).
 
 ## Run as a service

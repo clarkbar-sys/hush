@@ -146,11 +146,14 @@ command on this machine* capability wants"). A run is bounded, not sandboxed:
 its own process group (so a timeout or a client hang-up kills the whole tree),
 a default 5-minute / max 60-minute timeout, and a 1 MiB output cap.
 
-**Exec is opt-in, per agent.** Because it is the one capability that changes a
-box, the agent registers `/exec` only when started with `-exec` (or
-`HUSH_AGENT_EXEC=1`); an untouched agent stays read-only and returns `403` from
-`/exec`. In tsnet mode every run is gated by the same Tailscale identity as
-everything else, and `hush-control` logs who ran what against which box.
+**Exec is on by default, opt-out per agent.** A box opts out with `-exec=false`
+(or `HUSH_AGENT_EXEC=0`, so a systemd env file can toggle it without editing
+`ExecStart`), after which `/exec` returns `403` and the agent is read-only.
+Because `/exec` is new agent code, only agents running the release that
+introduced it (or newer) can run Tasks — `hush-control` proxies to `/exec`, so
+an older agent simply reports exec as unavailable. In tsnet mode every run is
+gated by the same Tailscale identity as everything else, and `hush-control`
+logs who ran what against which box.
 
 ## Running it (dev)
 
