@@ -2004,23 +2004,37 @@
     }
   }
 
-  $("#verChip").addEventListener("click", async ()=>{
+  $("#verChip").addEventListener("click", ()=>{
     if(lastVersion && lastVersion.updateAvailable && lastVersion.latest){
       openUpdateSheet();
-      return;
-    }
-    const chip = $("#verChip");
-    const prevHTML = chip.innerHTML;
-    chip.innerHTML = "checking…";
-    const v = await checkVersion(true);
-    if(v && v.updateAvailable && v.latest){
-      openUpdateSheet();
-    } else if(v){
-      toast(v.error ? `update check failed: ${v.error}` : `up to date (${v.current})`);
     } else {
-      chip.innerHTML = prevHTML;
+      openConfirmCheckSheet();
     }
   });
+
+  function openConfirmCheckSheet(){
+    updateBody.innerHTML = `
+      <h3>Check for updates now?</h3>
+      <p class="sd">This asks GitHub for the latest release immediately instead of waiting for the next scheduled check. GitHub limits unauthenticated API requests per hour, so avoid mashing this button.</p>
+      <div class="sheet-actions">
+        <button class="btn ghost" id="confCancel" style="flex:1">Cancel</button>
+        <button class="btn primary" id="confScan" style="flex:1">Check now</button>
+      </div>`;
+    $("#confCancel").addEventListener("click", closeUpdateSheet);
+    $("#confScan").addEventListener("click", async ()=>{
+      const btn = $("#confScan");
+      btn.disabled = true;
+      btn.textContent = "Checking…";
+      const v = await checkVersion(true);
+      if(v && v.updateAvailable && v.latest){
+        openUpdateSheet();
+      } else {
+        closeUpdateSheet();
+        if(v) toast(v.error ? `update check failed: ${v.error}` : `up to date (${v.current})`);
+      }
+    });
+    updateScrim.classList.add("open");
+  }
 
   function openUpdateSheet(){
     const v = lastVersion;
