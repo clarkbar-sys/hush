@@ -248,3 +248,43 @@ func TestAPIAgentsTestEndpoint(t *testing.T) {
 		t.Fatalf("fleet has %d agents after a test-only probe, want 0", len(got))
 	}
 }
+
+func TestFetchOneFlagsOutdatedAgent(t *testing.T) {
+	newAgentServer := func(agentVersion string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			json.NewEncoder(w).Encode(vitals.Snapshot{Host: "beacon", OS: "Debian 12", Status: "good", Version: agentVersion})
+		}))
+	}
+	client := &http.Client{}
+
+	cases := []struct {
+		name             string
+		agentVersion     string
+		latest           string
+		wantOutdated     bool
+		wantLatestOnMach string
+	}{
+		{"older than latest", "v1.2.0", "v1.3.0", true, "v1.3.0"},
+		{"already current", "v1.3.0", "v1.3.0", false, "v1.3.0"},
+		{"newer than latest", "v1.4.0", "v1.3.0", false, "v1.3.0"},
+		{"latest unknown", "v1.2.0", "", false, ""},
+		{"dev build never flagged", "dev", "v1.3.0", false, "v1.3.0"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := newAgentServer(tc.agentVersion)
+			defer agent.Close()
+
+			m := fetchOne(client, Agent{Name: "beacon", Addr: agent.URL}, tc.latest)
+			if m.AgentUpdateAvailable != tc.wantOutdated {
+				t.Errorf("AgentUpdateAvailable = %v, want %v", m.AgentUpdateAvailable, tc.wantOutdated)
+			}
+			if m.LatestVersion != tc.wantLatestOnMach {
+				t.Errorf("LatestVersion = %q, want %q", m.LatestVersion, tc.wantLatestOnMach)
+			}
+			if m.AgentVersion != tc.agentVersion {
+				t.Errorf("AgentVersion = %q, want %q", m.AgentVersion, tc.agentVersion)
+			}
+		})
+	}
+}

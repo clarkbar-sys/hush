@@ -200,6 +200,7 @@
   .badge.warn { color: var(--warn); background: var(--warn-soft); }
   .badge.crit { color: var(--crit); background: var(--crit-soft); }
   .badge.ok { color: var(--good); background: var(--good-soft); }
+  .badge.upd { color: var(--good); background: var(--good-soft); cursor: pointer; }
 
   /* ---- machine view ---- */
   .mhead { background: var(--panel); border:1px solid var(--border); border-radius: var(--r);
@@ -806,6 +807,7 @@
         <div class="sparkwrap">${sparkline(hist, 200, 26)}</div>
         <div class="foot">
           <span class="cons"><b>${m.services.length}</b>&nbsp;svc <b>${m.jobs.length}</b>&nbsp;job</span>
+          ${m.agentUpdateAvailable?`<span class="badge upd">⇧&nbsp;<span class="lbl">update</span></span>`:""}
           ${badge}
         </div>
       </button>`;
@@ -831,7 +833,7 @@
           <div class="top">
             <div>
               <div class="host"><span class="aura" style="--sev:var(--${sv});--sev-soft:var(--${sv}-soft);background:var(--${sv})"></span>${m.id}</div>
-              <div class="sub"><span>${m.os||"—"}</span>${m.ip?`<span>${m.ip}</span>`:""}${m.up?`<span>up ${m.up}</span>`:""}${m.gpu!=null&&m.gpuName?`<span style="color:var(--accent)">${m.gpuName}${m.vramText?` · ${m.vramText}`:""}</span>`:""}${m.role?`<span style="color:var(--accent)">${m.role}</span>`:""}${m.agentVersion?`<span>agent ${m.agentVersion}</span>`:""}</div>
+              <div class="sub"><span>${m.os||"—"}</span>${m.ip?`<span>${m.ip}</span>`:""}${m.up?`<span>up ${m.up}</span>`:""}${m.gpu!=null&&m.gpuName?`<span style="color:var(--accent)">${m.gpuName}${m.vramText?` · ${m.vramText}`:""}</span>`:""}${m.role?`<span style="color:var(--accent)">${m.role}</span>`:""}${m.agentVersion?(m.agentUpdateAvailable?`<span class="badge upd" id="agentUpdBadge">⇧&nbsp;<span class="lbl">agent ${esc(m.agentVersion)} → ${esc(m.latestVersion)}</span></span>`:`<span>agent ${esc(m.agentVersion)}</span>`):""}</div>
             </div>
             <span class="pill ${m.status}"><span class="d"></span>${!m.online?"offline":m.status==="good"?"healthy":m.status==="warn"?"degraded":"critical"}</span>
           </div>
@@ -872,6 +874,8 @@
             ${items.map(taskRow).join("")}</div>`; })()}
       </main>`;
     $("#bk").addEventListener("click", goFleet);
+    const agentUpdBadge = $("#agentUpdBadge");
+    if(agentUpdBadge) agentUpdBadge.addEventListener("click", ()=>openAgentUpdateSheet(m));
     app.querySelectorAll("[data-svc]").forEach(el=>{
       el.addEventListener("click", ()=>enterConstruct(el.dataset.svc));
     });
@@ -1722,7 +1726,7 @@
       mk({ id:"nas", agentVersion:"v1.3.0", os:"TrueNAS · ZFS", ip:"100.71.4.2", role:"store", status:"good", cpu:11, mem:34, disk:81, up:"92d", load:"0.4", gpu:null,
         services:[{name:"hush-agent",state:"running",mem:"17 MB"},{name:"smbd",state:"running",mem:"88 MB"},{name:"zfs-scrub",state:"running",mem:"6 MB"}],
         jobs:[{name:"pull-backups",next:"in 3h 12m",sched:"0 3 * * *"}] }),
-      mk({ id:"forge", agentVersion:"v1.2.0", os:"Arch Linux", ip:"100.71.2.5", role:"", status:"warn", cpu:88, mem:71, disk:52, up:"6d", load:"14.2",
+      mk({ id:"forge", agentVersion:"v1.2.0", latestVersion:"v1.3.0", agentUpdateAvailable:true, os:"Arch Linux", ip:"100.71.2.5", role:"", status:"warn", cpu:88, mem:71, disk:52, up:"6d", load:"14.2",
         gpu:62, vram:71, gpuName:"RTX 4070", vramText:"8.5 / 12 GB", alert:"load 14.2 · CI backlog building",
         services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"buildkite-agent",state:"running",mem:"120 MB"},{name:"docker",state:"running",mem:"340 MB"}],
         jobs:[{name:"cache-prune",next:"in 40m",sched:"*/30 * * * *"}] }),
@@ -2143,6 +2147,32 @@
   }
   function closeUpdateSheet(){ updateScrim.classList.remove("open"); }
   updateScrim.addEventListener("click", e=>{ if(e.target===updateScrim) closeUpdateSheet(); });
+
+  /* ---------- per-machine agent update popup ---------- */
+  function openAgentUpdateSheet(m){
+    const isMac = (m.os||"").toLowerCase()==="darwin";
+    const cmd = isMac
+      ? "go install github.com/clarkbar-sys/hush/cmd/hush-agent@latest"
+      : "curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh | sudo sh\nsudo systemctl restart hush-agent";
+    const note = isMac
+      ? "macOS has no systemd unit to install — this rebuilds the binary with the Go toolchain. Restart the running hush-agent process yourself afterward."
+      : "Re-runs the one-line installer to fetch the new binary, then restarts the service so it picks it up.";
+    updateBody.innerHTML = `
+      <h3>Update available on ${esc(m.id)}: ${esc(m.latestVersion)}</h3>
+      <p class="sd">running ${esc(m.agentVersion)} — run this on ${esc(m.id)} over SSH:</p>
+      <div class="cmdbox"><code>${esc(cmd)}</code><button class="btn" id="agentUpdCopy">Copy</button></div>
+      <div class="field-note">${note}</div>
+      <div class="sheet-actions">
+        <a class="btn ghost" href="https://github.com/clarkbar-sys/hush/releases/tag/${encodeURIComponent(m.latestVersion)}" target="_blank" rel="noopener" style="text-decoration:none;text-align:center">Release notes</a>
+        <button class="btn primary" id="agentUpdClose" style="flex:1">Done</button>
+      </div>`;
+    $("#agentUpdCopy").addEventListener("click", async ()=>{
+      try { await navigator.clipboard.writeText(cmd); toast("copied to clipboard"); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
+    $("#agentUpdClose").addEventListener("click", closeUpdateSheet);
+    updateScrim.classList.add("open");
+  }
 
   /* ---------- go ---------- */
   poll();

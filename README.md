@@ -202,6 +202,15 @@ lights up as `v1.2.0 → v1.3.0` and links to the release notes. The check is
 read-only, cached for an hour, and done **only by hush-control** — one call
 from the one box, never a fleet of agents hammering the API.
 
+Every `hush-agent` already reports its own version in its vitals, so
+`hush-control` compares each one against that same cached release check and
+flags outdated agents on the console — an `↑ update` badge on the machine's
+Fleet card, and a chip next to `agent vX.Y.Z` on its Machine page. Tapping
+either opens a sheet with the command to update that specific box: the
+one-line installer + a service restart on Linux, or `go install
+.../cmd/hush-agent@latest` on macOS (no systemd there). Still no agent ever
+calls GitHub itself — this reuses hush-control's existing cached check.
+
 **Auto-update (hush-control only).** The `install.sh` `control` /
 `control-tsnet` installs also set up `hush-control-update.timer`, which runs a
 small **root** oneshot (`hush-control -self-update`) daily. It fetches the

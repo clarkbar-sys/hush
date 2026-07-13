@@ -38,26 +38,28 @@ type Agent struct {
 
 // Machine is the shape the web UI consumes (one entry of /api/fleet).
 type Machine struct {
-	ID           string           `json:"id"`
-	AgentVersion string           `json:"agentVersion,omitempty"`
-	OS           string           `json:"os"`
-	IP           string           `json:"ip"`
-	Role         string           `json:"role"`
-	Status       string           `json:"status"`
-	CPU          int              `json:"cpu"`
-	Mem          int              `json:"mem"`
-	Disk         int              `json:"disk"`
-	GPU          *int             `json:"gpu"`
-	VRAM         *int             `json:"vram"`
-	GPUName      string           `json:"gpuName,omitempty"`
-	VRAMText     string           `json:"vramText,omitempty"`
-	Up           string           `json:"up"`
-	Load         string           `json:"load"`
-	Services     []vitals.Service `json:"services"`
-	Jobs         []any            `json:"jobs"`
-	Tasks        []any            `json:"tasks"`
-	Online       bool             `json:"online"`
-	Alert        string           `json:"alert,omitempty"`
+	ID                   string           `json:"id"`
+	AgentVersion         string           `json:"agentVersion,omitempty"`
+	LatestVersion        string           `json:"latestVersion,omitempty"`        // latest published release, when known
+	AgentUpdateAvailable bool             `json:"agentUpdateAvailable,omitempty"` // true when AgentVersion is older than LatestVersion
+	OS                   string           `json:"os"`
+	IP                   string           `json:"ip"`
+	Role                 string           `json:"role"`
+	Status               string           `json:"status"`
+	CPU                  int              `json:"cpu"`
+	Mem                  int              `json:"mem"`
+	Disk                 int              `json:"disk"`
+	GPU                  *int             `json:"gpu"`
+	VRAM                 *int             `json:"vram"`
+	GPUName              string           `json:"gpuName,omitempty"`
+	VRAMText             string           `json:"vramText,omitempty"`
+	Up                   string           `json:"up"`
+	Load                 string           `json:"load"`
+	Services             []vitals.Service `json:"services"`
+	Jobs                 []any            `json:"jobs"`
+	Tasks                []any            `json:"tasks"`
+	Online               bool             `json:"online"`
+	Alert                string           `json:"alert,omitempty"`
 }
 
 // Report is the downloadable fleet snapshot served by /api/report: the same
@@ -131,9 +133,10 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 
 	client := &http.Client{Timeout: 2 * time.Second}
+	vc := &versionChecker{client: &http.Client{Timeout: 5 * time.Second}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/fleet", func(w http.ResponseWriter, r *http.Request) {
-		fleet := collectFleet(client, store.Snapshot())
+		fleet := collectFleet(client, store.Snapshot(), vc.status(r.Context(), false).Latest)
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(fleet); err != nil {
 			log.Printf("encode fleet: %v", err)
@@ -360,7 +363,7 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 	})
 	mux.HandleFunc("/api/report", func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now().UTC()
-		machines := collectFleet(client, store.Snapshot())
+		machines := collectFleet(client, store.Snapshot(), vc.status(r.Context(), false).Latest)
 		report := Report{
 			GeneratedAt:    now.Format(time.RFC3339),
 			ControlVersion: version.Current(),
@@ -376,7 +379,6 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 			log.Printf("encode report: %v", err)
 		}
 	})
-	vc := &versionChecker{client: &http.Client{Timeout: 5 * time.Second}}
 	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
 		force := r.URL.Query().Get("force") != ""
 		w.Header().Set("Content-Type", "application/json")
@@ -687,21 +689,25 @@ func execCmdPreview(body []byte) string {
 	return c
 }
 
-func collectFleet(client *http.Client, agents []Agent) []Machine {
+// collectFleet fans out to every agent's /vitals. latest is the latest
+// published release tag (empty when unknown), used to flag agents running an
+// older version — the same tag covers both binaries, since hush-agent and
+// hush-control ship together in one GitHub release.
+func collectFleet(client *http.Client, agents []Agent, latest string) []Machine {
 	out := make([]Machine, len(agents))
 	var wg sync.WaitGroup
 	for i, a := range agents {
 		wg.Add(1)
 		go func(i int, a Agent) {
 			defer wg.Done()
-			out[i] = fetchOne(client, a)
+			out[i] = fetchOne(client, a, latest)
 		}(i, a)
 	}
 	wg.Wait()
 	return out
 }
 
-func fetchOne(client *http.Client, a Agent) Machine {
+func fetchOne(client *http.Client, a Agent, latest string) Machine {
 	// Default to the "unreachable" state; a successful fetch overwrites it.
 	m := Machine{
 		ID:       a.Name,
@@ -732,6 +738,8 @@ func fetchOne(client *http.Client, a Agent) Machine {
 	m.Alert = ""
 	m.Status = s.Status
 	m.AgentVersion = s.Version
+	m.LatestVersion = latest
+	m.AgentUpdateAvailable = latest != "" && updater.Newer(latest, s.Version)
 	if a.Name == "" && s.Host != "" {
 		m.ID = s.Host
 	}
