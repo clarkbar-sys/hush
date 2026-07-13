@@ -396,6 +396,41 @@
     background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:10px 11px; }
   .field select:focus { border-color: var(--accent); }
   .nm.mono { font-family:var(--mono); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* ---- Workflow builder: an ordered list of {machine, command} steps ---- */
+  .wf-step { display:flex; gap:8px; align-items:flex-start; margin-bottom:9px; }
+  .wf-step .wf-idx { font-family:var(--mono); font-size:11px; color:var(--faint);
+    width:20px; flex:none; padding-top:11px; text-align:right; }
+  .wf-step .wf-fields { flex:1; min-width:0; display:grid; grid-template-columns: 1fr 1.4fr; gap:8px; }
+  .wf-step select, .wf-step input { width:100%; font-family:var(--mono); font-size:13px; color:var(--text);
+    background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:9px 10px; }
+  .wf-step select:focus, .wf-step input:focus { border-color:var(--accent); outline:none; }
+  .wf-step .wf-del { flex:none; font-family:var(--mono); font-size:15px; line-height:1; color:var(--faint);
+    background:transparent; border:1px solid var(--border); border-radius:9px; padding:9px 11px; cursor:pointer; }
+  .wf-step .wf-del:hover { color:var(--crit); border-color:var(--crit-soft); }
+  .wf-add { font-family:var(--mono); font-size:12px; color:var(--accent); background:transparent;
+    border:1px dashed var(--border); border-radius:9px; padding:9px 12px; cursor:pointer; width:100%; margin-bottom:14px; }
+  .wf-add:hover { border-color:var(--accent); }
+  .wf-saved { margin-bottom:16px; }
+  .wf-saved .wf-item { display:flex; align-items:center; gap:10px; padding:10px 12px;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:10px; margin-bottom:8px; }
+  .wf-saved .wf-meta { flex:1; min-width:0; }
+  .wf-saved .wf-nm { font-family:var(--mono); font-size:13px; font-weight:600; color:var(--text);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wf-saved .wf-sub { font-family:var(--mono); font-size:10.5px; color:var(--faint); margin-top:2px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wf-saved .wf-run { font-family:var(--mono); font-size:12px; color:var(--accent); background:transparent;
+    border:1px solid var(--border); border-radius:8px; padding:7px 12px; cursor:pointer; flex:none; }
+  .wf-saved .wf-run:hover { border-color:var(--accent); }
+  .wf-saved .wf-rm { font-family:var(--mono); font-size:14px; color:var(--faint); background:transparent;
+    border:1px solid var(--border); border-radius:8px; padding:7px 10px; cursor:pointer; flex:none; }
+  .wf-saved .wf-rm:hover { color:var(--crit); border-color:var(--crit-soft); }
+  /* ---- Workflow run view: step headers punctuate the shared live log ---- */
+  .runterm .wf-head { display:block; margin:10px 0 4px; padding:5px 8px; border-radius:6px;
+    background:var(--panel-2); color:var(--muted); border-left:2px solid var(--border); font-weight:600; }
+  .runterm .wf-head:first-child { margin-top:0; }
+  .runterm .wf-head.on { border-left-color:var(--accent); color:var(--text); }
+  .runterm .wf-head.ok { border-left-color:var(--good); }
+  .runterm .wf-head.bad { border-left-color:var(--crit); }
 
   /* ---- bottom hotbar / build ---- */
   .dock { position: sticky; bottom: 0; z-index: 15;
@@ -545,6 +580,13 @@
   <div class="sheet" role="dialog" aria-label="Run a task">
     <div class="grab"></div>
     <div id="taskSheetBody"></div>
+  </div>
+</div>
+
+<div class="scrim" id="wfScrim">
+  <div class="sheet" role="dialog" aria-label="Workflows">
+    <div class="grab"></div>
+    <div id="wfSheetBody"></div>
   </div>
 </div>
 
@@ -1183,6 +1225,271 @@
     return (s < 10 ? s.toFixed(1) : Math.round(s)) + "s";
   }
 
+  /* ---------- Workflow: a wired sequence of steps, saved and re-runnable ----------
+     The Workflow construct — "a wired sequence (cd X → git pull → restart) —
+     reusable, stampable". The sheet lists saved blueprints (Run / Delete) and
+     builds new ones: a name plus an ordered list of {machine, command} steps.
+     Running streams a combined live log, one command after another over the
+     tailnet, stopping at the first step that fails — the same /exec each Task
+     uses, with sequencing on top. In demo mode blueprints live in memory so the
+     feature is legible without a live hush-control behind it. */
+  const wfScrim = $("#wfScrim");
+  const wfBody = $("#wfSheetBody");
+  let wfDraft = { name:"", steps:[] };   // the blueprint being built
+  let wfSaved = [];                       // saved blueprints (from the server, or demo memory)
+  const wfDemo = [];                      // demo-mode store, seeded lazily on first open
+
+  function openWorkflowSheet(){
+    wfDraft = { name:"", steps:[] };
+    wfScrim.classList.add("open");
+    wfBody.innerHTML = `<h3>Workflows</h3><p class="sd">loading saved blueprints…</p>`;
+    loadWorkflows().then(list => { wfSaved = list; renderWorkflowSheet(); });
+  }
+  function closeWorkflowSheet(){ wfScrim.classList.remove("open"); }
+  wfScrim.addEventListener("click", e=>{ if(e.target===wfScrim) closeWorkflowSheet(); });
+
+  async function loadWorkflows(){
+    if(MODE === "demo"){
+      if(!wfDemo.length){
+        // one worked example so the builder isn't a blank page in demo mode
+        wfDemo.push({ id:"deploy-api-demo", name:"Deploy API", createdAt:"",
+          steps:[{host:"citadel",cmd:"cd /srv/api && git pull"},{host:"citadel",cmd:"systemctl restart api"}] });
+      }
+      return wfDemo.slice();
+    }
+    try {
+      const r = await fetch("api/workflows", {cache:"no-store"});
+      if(!r.ok) throw new Error("bad status");
+      const list = await r.json();
+      return Array.isArray(list) ? list : [];
+    } catch(e){ return []; }
+  }
+
+  function renderWorkflowSheet(){
+    const fleet = M.slice();
+    if(!wfDraft.steps.length) wfDraft.steps = [{ host:(fleet[0]&&fleet[0].id)||"", cmd:"" }];
+
+    const saved = wfSaved.length ? `
+      <div class="wf-saved">${wfSaved.map(w=>{
+        const hosts = [...new Set((w.steps||[]).map(s=>s.host))].join(", ");
+        return `<div class="wf-item" data-id="${esc(w.id)}">
+          <div class="wf-meta">
+            <div class="wf-nm">${esc(w.name)}</div>
+            <div class="wf-sub">${(w.steps||[]).length} step${(w.steps||[]).length===1?"":"s"} · ${esc(hosts||"—")}</div>
+          </div>
+          <button class="wf-run" data-run="${esc(w.id)}">⛓ Run</button>
+          <button class="wf-rm" data-rm="${esc(w.id)}" aria-label="Delete">✕</button>
+        </div>`;
+      }).join("")}</div>` : `<div class="field-note">No workflows yet — build one below.</div>`;
+
+    const stepRows = wfDraft.steps.map((st,i)=>{
+      const opts = fleet.map(m=>`<option value="${esc(m.id)}"${m.id===st.host?" selected":""}>${esc(m.id)}${m.online?"":" · offline"}</option>`).join("");
+      return `<div class="wf-step" data-i="${i}">
+        <div class="wf-idx">${i+1}</div>
+        <div class="wf-fields">
+          <select data-field="host" data-i="${i}">${opts||`<option value="">no machines</option>`}</select>
+          <input type="text" data-field="cmd" data-i="${i}" placeholder="e.g. cd /srv/api && git pull" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(st.cmd)}">
+        </div>
+        <button class="wf-del" data-del="${i}" aria-label="Remove step"${wfDraft.steps.length>1?"":" style=\"visibility:hidden\""}>✕</button>
+      </div>`;
+    }).join("");
+
+    wfBody.innerHTML = `
+      <h3>Workflows</h3>
+      <p class="sd">a wired sequence — saved once, re-run any time</p>
+      ${saved}
+      <div class="field" style="margin-top:4px">
+        <label>New workflow</label>
+        <input type="text" id="wfName" placeholder="e.g. Deploy API" value="${esc(wfDraft.name)}" autocapitalize="off" spellcheck="false">
+      </div>
+      <div id="wfSteps">${stepRows}</div>
+      <button class="wf-add" id="wfAdd">＋ Add step</button>
+      <div class="field-note">
+        <b>Heads up —</b> each step runs unsandboxed on its machine and stops the run if it fails. It can do anything the hush user can.
+      </div>
+      <div class="sheet-actions">
+        <button class="btn ghost" id="wfCancel">Cancel</button>
+        <button class="btn primary" id="wfSave">Save workflow</button>
+      </div>`;
+
+    if(!fleet.length){
+      wfBody.querySelector("#wfSave").disabled = true;
+      wfBody.querySelector("#wfAdd").disabled = true;
+    }
+    $("#wfName").addEventListener("input", e=>{ wfDraft.name = e.target.value; });
+    wfBody.querySelectorAll("[data-field]").forEach(el=>{
+      el.addEventListener("input", e=>{
+        const i = +e.target.dataset.i;
+        wfDraft.steps[i][e.target.dataset.field] = e.target.value;
+      });
+    });
+    wfBody.querySelectorAll("[data-del]").forEach(b=>{
+      b.addEventListener("click", ()=>{ wfDraft.steps.splice(+b.dataset.del,1); renderWorkflowSheet(); });
+    });
+    $("#wfAdd").addEventListener("click", ()=>{
+      wfDraft.steps.push({ host:(fleet[0]&&fleet[0].id)||"", cmd:"" });
+      renderWorkflowSheet();
+    });
+    wfBody.querySelectorAll("[data-run]").forEach(b=>{
+      b.addEventListener("click", ()=>{ const w = wfSaved.find(x=>x.id===b.dataset.run); if(w){ closeWorkflowSheet(); openWorkflowRunView(w); } });
+    });
+    wfBody.querySelectorAll("[data-rm]").forEach(b=>{
+      b.addEventListener("click", ()=>deleteWorkflow(b.dataset.rm));
+    });
+    $("#wfCancel").addEventListener("click", closeWorkflowSheet);
+    $("#wfSave").addEventListener("click", saveWorkflow);
+  }
+
+  async function saveWorkflow(){
+    const name = (wfDraft.name||"").trim();
+    const steps = wfDraft.steps.map(s=>({ host:s.host, cmd:(s.cmd||"").trim() })).filter(s=>s.host && s.cmd);
+    if(!name){ $("#wfName").focus(); toast("give the workflow a name"); return; }
+    if(!steps.length){ toast("add at least one step with a command"); return; }
+    if(MODE === "demo"){
+      wfDemo.push({ id:"wf-"+Math.random().toString(36).slice(2,8), name, steps, createdAt:"" });
+      wfSaved = wfDemo.slice(); wfDraft = { name:"", steps:[] }; renderWorkflowSheet();
+      toast("saved (demo)"); return;
+    }
+    const btn = $("#wfSave"); btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      const r = await fetch("api/workflows", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name, steps }) });
+      if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
+      wfSaved = await loadWorkflows();
+      wfDraft = { name:"", steps:[] };
+      renderWorkflowSheet();
+      toast("workflow saved");
+    } catch(err){
+      btn.disabled = false; btn.textContent = "Save workflow";
+      toast((err&&err.message) ? err.message : "couldn't save");
+    }
+  }
+
+  async function deleteWorkflow(id){
+    if(MODE === "demo"){
+      const i = wfDemo.findIndex(w=>w.id===id); if(i>=0) wfDemo.splice(i,1);
+      wfSaved = wfDemo.slice(); renderWorkflowSheet(); return;
+    }
+    try {
+      const r = await fetch("api/workflows/"+encodeURIComponent(id), { method:"DELETE" });
+      if(!r.ok && r.status!==204) throw new Error("error "+r.status);
+    } catch(e){ toast("couldn't delete"); }
+    wfSaved = await loadWorkflows();
+    renderWorkflowSheet();
+  }
+
+  // openWorkflowRunView streams a blueprint's run to the terminal overlay, using
+  // step headers to punctuate the shared log. Cancel aborts the fetch, which
+  // drops the connection and (through hush-control) cancels the in-flight step.
+  function openWorkflowRunView(wf){
+    const total = (wf.steps||[]).length;
+    const ov = document.createElement("div");
+    ov.className = "vov";
+    ov.innerHTML = `<div class="vsheet">
+        <div class="vbar">
+          <span class="state running" id="wvState"><span class="sd"></span>running</span>
+          <div class="vname" title="${esc(wf.name)}">⛓ ${esc(wf.name)}</div>
+          <div class="vmeta" id="wvMeta">${total} step${total===1?"":"s"}</div>
+          <button class="vbtn" id="wvStop">■ Cancel</button>
+          <button class="vbtn vclose" aria-label="Close">✕</button>
+        </div>
+        <div class="vbody runbody"><pre class="runterm" id="wvOut"></pre></div>
+      </div>`;
+    document.body.appendChild(ov);
+    const out = ov.querySelector("#wvOut");
+    const stateEl = ov.querySelector("#wvState");
+    const metaEl = ov.querySelector("#wvMeta");
+    const stopBtn = ov.querySelector("#wvStop");
+    const ac = new AbortController();
+    let finished = false;
+    const heads = [];   // step index -> header element
+
+    const append = (text, cls) => {
+      if(text == null || text === "") return;
+      const span = document.createElement("span");
+      if(cls) span.className = cls;
+      span.textContent = text;
+      out.appendChild(span);
+      out.scrollTop = out.scrollHeight;
+    };
+    const setState = (cls, label, meta) => {
+      stateEl.className = "state " + cls;
+      stateEl.innerHTML = `<span class="sd"></span>${esc(label)}`;
+      if(meta != null) metaEl.textContent = meta;
+    };
+    const markHead = (i, cls) => { if(heads[i]) heads[i].className = "wf-head " + cls; };
+    const close = () => { ac.abort(); ov.remove(); document.removeEventListener("keydown", onkey); };
+    const onkey = e => { if(e.key === "Escape") close(); };
+    document.addEventListener("keydown", onkey);
+    ov.querySelector(".vclose").addEventListener("click", close);
+    ov.addEventListener("click", e => { if(e.target === ov) close(); });
+    stopBtn.addEventListener("click", () => {
+      if(finished){ close(); return; }
+      ac.abort(); finished = true;
+      stopBtn.textContent = "✕ Close";
+      setState("stopped", "canceled");
+    });
+
+    const onEvent = ev => {
+      if(ev.kind === "step"){
+        const i = ev.index || 0;
+        // reaching a new step means the previous one exited clean
+        if(i > 0) markHead(i-1, "ok");
+        const h = document.createElement("span");
+        h.className = "wf-head on";
+        h.textContent = `▶ step ${i+1}/${ev.count||total} · ${ev.host} · ${ev.cmd}`;
+        out.appendChild(h); heads[i] = h;
+        out.scrollTop = out.scrollHeight;
+        setState("running", "running", `step ${i+1}/${ev.count||total}`);
+      } else if(ev.kind === "out"){
+        append(ev.data, ev.stream === "stderr" ? "err" : null);
+      } else if(ev.kind === "stepExit"){
+        const code = ev.code == null ? 0 : ev.code;
+        const ok = code === 0 && !ev.signal;
+        markHead(ev.index||0, ok ? "ok" : "bad");
+        if(!ok) append(`\n[step ${(ev.index||0)+1} ${ev.signal || ("exit "+code)}]\n`, "err");
+      } else if(ev.kind === "error"){
+        append("\n"+(ev.data||"error")+"\n", "err");
+        markHead(ev.index||0, "bad");
+      } else if(ev.kind === "done"){
+        finished = true;
+        stopBtn.textContent = "✕ Close";
+        if(ev.ok){ heads.forEach((_,i)=>markHead(i,"ok")); setState("ok", "done", `${ev.ran||total} step${(ev.ran||total)===1?"":"s"} · ok`); }
+        else { const fs = (ev.failedStep==null?heads.length-1:ev.failedStep); setState("failed", "failed", `stopped at step ${fs+1}`); }
+      }
+    };
+
+    const runner = MODE === "demo" ? simulateWorkflow(wf, onEvent, ac.signal)
+      : streamExec(`api/workflows/${encodeURIComponent(wf.id)}/run`, {}, onEvent, ac.signal);
+    runner.catch(err => {
+      if(ac.signal.aborted) return;
+      finished = true;
+      stopBtn.textContent = "✕ Close";
+      const msg = (err && err.message) ? err.message : "connection failed";
+      append("\n" + msg + "\n", "err");
+      setState("failed", err && err.status ? ("error " + err.status) : "error");
+    });
+  }
+
+  // simulateWorkflow fakes a run for demo/offline mode, walking the steps with a
+  // little delay so the sequencing reads the same as a live run.
+  function simulateWorkflow(wf, onEvent, signal){
+    return new Promise((resolve, reject) => {
+      if(signal.aborted) return reject(new Error("aborted"));
+      const steps = wf.steps || [];
+      const t = [];
+      const at = (ms, fn) => t.push(setTimeout(fn, ms));
+      const bail = () => { t.forEach(clearTimeout); reject(new Error("aborted")); };
+      signal.addEventListener("abort", bail, { once:true });
+      let clock = 0;
+      steps.forEach((st,i)=>{
+        at(clock += 250, ()=> onEvent({ kind:"step", index:i, count:steps.length, host:st.host, cmd:st.cmd }));
+        at(clock += 300, ()=> onEvent({ kind:"out", stream:"stdout", index:i, data:`$ ${st.cmd}\n(demo — no agent connected)\n` }));
+        at(clock += 250, ()=> onEvent({ kind:"stepExit", index:i, code:0, ms:550 }));
+      });
+      at(clock += 250, ()=> { signal.removeEventListener("abort", bail); onEvent({ kind:"done", ok:true, ran:steps.length }); resolve(); });
+    });
+  }
+
   function renderConstruct(){
     const m = byId(state.mid);
     const s = (m.services||[]).find(x=>x.name===state.cname) || {name:state.cname, state:"stopped"};
@@ -1371,10 +1678,11 @@
   $("#palette").querySelectorAll(".pitem").forEach(el=>{
     el.addEventListener("click", ()=>{
       scrim.classList.remove("open");
-      // Machine and Task are the constructs that actually do something today;
-      // the rest are still placeholders.
+      // Machine, Task, and Workflow are the constructs that actually do
+      // something today; the rest are still placeholders.
       if(el.dataset.c === "Machine"){ openAddSheet(); return; }
       if(el.dataset.c === "Task"){ openTaskSheet(null); return; }
+      if(el.dataset.c === "Workflow"){ openWorkflowSheet(); return; }
       toast(`＋ ${el.dataset.c} builder — coming in a later phase`);
     });
   });
