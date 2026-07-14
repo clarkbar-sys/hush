@@ -169,6 +169,36 @@ an older agent simply reports exec as unavailable. In tsnet mode every run is
 gated by the same Tailscale identity as everything else, and `hush-control`
 logs who ran what against which box.
 
+## Jobs — scheduling a command
+
+The **Job** construct ("a cron / timer — fires on a schedule") is the Task
+primitive with a schedule bolted on: a saved command the agent runs unattended,
+on its own box, as the unprivileged `hush` user. The scheduler lives on the
+**agent** — a cron engine keyed by job id, its definitions persisted to
+`jobs.json` in the agent's state dir, its per-fire run history (last run, exit
+code, duration) kept in memory since a restart honestly forgets fires it never
+performed. The agent exposes `GET /jobs` (definitions + status), `POST /jobs`
+(create from `{name, schedule, cmd}`), and `DELETE /jobs/{id}`;
+`hush-control` proxies these at `/api/machines/{host}/jobs` and
+`/api/machines/{host}/jobs/{id}`. Unlike Tasks and Workflows — whose stores live
+in `hush-control` — a Job's home is the box it fires on, so the proxy is a
+**pass-through** the way `/browse` is, not a control-side store.
+
+The console drives it from **＋ Build → Job** (or a Machine's Jobs section): pick
+a machine, name the job, give it a 5-field cron spec (or a macro like `@daily`),
+and a command. The Machine view lists each job with its schedule and the outcome
+of its last fire — status leads, since "did the nightly backup pass" is the thing
+worth seeing at a glance — with a delete that unschedules it immediately. Jobs
+are fetched per-machine on demand, not dragged through the fleet poll.
+
+**Jobs are off by default, opt-in per agent.** A box serves `/jobs` only when its
+agent is started with `-jobs` (unattended scheduled execution is a sharper
+capability than an attended `/exec` run, so it isn't on by the exec default);
+until then `/jobs` returns `403`, which the console surfaces as "jobs disabled on
+this box" rather than an error. Every create and delete is audited by
+`hush-control` with the caller's Tailscale identity, the way a Task run is — a
+Job is, after all, a Task that runs itself.
+
 ## Workflows — wiring a sequence
 
 The **Workflow** construct ("a wired sequence (`cd X → git pull → restart`) —
