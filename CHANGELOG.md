@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.0](https://github.com/clarkbar-sys/hush/compare/v1.15.0...v1.16.0) (2026-07-14)
+
+
+### Features
+
+* Job construct — schedule cron commands from the console ([#86](https://github.com/clarkbar-sys/hush/issues/86)) ([c3013a3](https://github.com/clarkbar-sys/hush/commit/c3013a30a1c7dcdee66f2c4ef3170846419d879b))
+
 ## [1.15.0](https://github.com/clarkbar-sys/hush/compare/v1.14.0...v1.15.0) (2026-07-13)
 
 
