@@ -172,6 +172,26 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 		}
 		proxyExec(w, r, streamClient, a)
 	})
+	// Jobs: the cron scheduler lives on the agent, so these are pass-through
+	// proxies (like /browse), not a control-side store. List/create/delete are
+	// quick request-response calls, so they ride the 2s fleet-poll client, not
+	// the streaming one. A box with jobs disabled answers 403, relayed verbatim.
+	mux.HandleFunc("/api/machines/{host}/jobs", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyJobs(w, r, client, a)
+	})
+	mux.HandleFunc("/api/machines/{host}/jobs/{id}", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyJob(w, r, client, a, r.PathValue("id"))
+	})
 	// Workflows: saved multi-step blueprints. They persist to workflows.json
 	// beside the fleet config and run by fanning out to the same /exec each Task
 	// uses. A run streams for as long as its steps do, so it rides the no-timeout

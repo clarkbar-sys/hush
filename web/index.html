@@ -298,6 +298,11 @@
   .state.failed  { color: var(--crit); } .state.failed  .sd { background:var(--crit); box-shadow:0 0 0 3px var(--crit-soft); }
   .state.stopped { color: var(--faint); } .state.stopped .sd { background:var(--faint); }
   .state.sched   { color: var(--accent); } .state.sched .sd { background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  /* the Job row's delete affordance — quiet until hovered, so a scheduled
+     command reads as status first and a control second. */
+  .jrm { flex:none; margin-left:8px; font-family:var(--mono); font-size:13px; color:var(--faint);
+    background:transparent; border:1px solid var(--border); border-radius:7px; padding:3px 8px; cursor:pointer; }
+  .jrm:hover { color:var(--crit); border-color:var(--crit-soft); }
 
   /* ---- construct detail ---- */
   .card { background: var(--panel); border:1px solid var(--border); border-radius: var(--r);
@@ -620,6 +625,13 @@
   </div>
 </div>
 
+<div class="scrim" id="jobScrim">
+  <div class="sheet" role="dialog" aria-label="Schedule a job">
+    <div class="grab"></div>
+    <div id="jobSheetBody"></div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -652,6 +664,9 @@
   const byId = id => M.find(m=>m.id===id);
   let PENDING = [];                // machines just added via the UI, awaiting first check-in
   const RUNS = {};                 // machine id -> recent Task runs this session (ephemeral)
+  const JOBS = {};                 // machine id -> live jobs (jobView[]), cached across fleet polls
+  const JOBS_OFF = new Set();      // machine ids whose agent has jobs disabled (started without -jobs)
+  const jobsLoading = new Set();   // machine ids with an in-flight loadJobs, so a re-render can't double-fetch
   const JUST_ARRIVED = new Set();  // ids to pop-highlight for one render after their first check-in
   function esc(s){ return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -914,8 +929,14 @@
             : `<div class="empty">${m.online ? "no running or failed units reported" : "machine unreachable"}</div>`}</div>
         </details>
 
-        ${m.jobs.length?`<div class="sec-title">Jobs <span class="n">${m.jobs.length}</span></div>
-          <div class="list">${m.jobs.map(jobRow).join("")}</div>`:""}
+        ${(()=>{ const jobs = m.jobs||[]; const off = JOBS_OFF.has(m.id);
+          return `<div class="sec-title">Jobs${jobs.length?` <span class="n">${jobs.length}</span>`:""}</div>
+          <div class="list">
+            ${off ? `<div class="empty">jobs are disabled on this box — start its agent with <b>-jobs</b></div>`
+              : `<button class="row runrow" id="job-new"${m.online?"":` disabled style="opacity:.5;cursor:default"`}>
+                  <span class="gly">◷</span><span class="nm">Schedule a job…</span>
+                  <span class="rt">${m.online?"cron":"offline"}</span></button>`}
+            ${jobs.map(j=>jobRow(j, m.id)).join("")}</div>`; })()}
         ${(()=>{ const items = (RUNS[m.id]||[]).concat(m.tasks||[]);
           return `<div class="sec-title">Tasks${items.length?` <span class="n">${items.length}</span>`:""}</div>
           <div class="list">
@@ -931,6 +952,14 @@
       el.addEventListener("click", ()=>enterConstruct(el.dataset.svc));
     });
     { const tr = $("#task-run"); if(tr) tr.addEventListener("click", ()=>{ if(m.online) openTaskSheet(m.id); }); }
+    { const jn = $("#job-new"); if(jn) jn.addEventListener("click", ()=>{ if(m.online) openJobSheet(m.id); }); }
+    app.querySelectorAll("[data-jrm]").forEach(b=>{
+      b.addEventListener("click", ()=> deleteJob(b.dataset.jmid, b.dataset.jrm, b.dataset.jname));
+    });
+    // Jobs live on the agent, so pull them lazily on entry rather than dragging
+    // every box's cron list through the 2s fleet poll. Demo jobs come baked into
+    // the fixture, so only live mode fetches.
+    if(MODE!=="demo" && m.online) loadJobs(m.id);
     const bo = $("#browse-open");
     if(bo) bo.addEventListener("click", ()=>{ if(!m.online) return; state.browsePath="/"; fillBrowse(m.id); });
     if(state.browsePath!=null) fillBrowse(m.id);
@@ -1081,14 +1110,41 @@
       <span class="state ${s.state}"><span class="sd"></span>${s.state}</span>
     </button>`;
   }
-  function jobRow(j){
-    return `<div class="row" style="cursor:default">
+  // jobRow renders one Job on the Machine view. It speaks two shapes: the live
+  // agent's jobView ({id, name, schedule, cmd, status:{running, runs, lastCode,
+  // lastRun}}) and the demo fleet's lighter {name, sched, next}. Status leads —
+  // whether the last fire passed is the thing worth seeing at a glance — with a
+  // quiet delete on the right. The command rides the row title so what a job
+  // does is legible on hover.
+  function jobRow(j, mid){
+    const name = esc(j.name || "");
+    const sched = esc(j.schedule || j.sched || "");
+    const st = j.status || {};
+    let cls, label;
+    if(j.next!==undefined && !st.runs && !st.running){     // demo: no run history yet
+      cls = "sched"; label = esc(j.next || "scheduled");
+    } else if(st.running){
+      cls = "running"; label = "running";
+    } else if(st.runs){
+      const ok = st.lastCode === 0;
+      cls = ok ? "ok" : "failed";
+      label = (ok ? "ok" : "fail") + (st.lastRun ? " · " + relTimeISO(st.lastRun) : "");
+    } else {
+      cls = "sched"; label = "scheduled";
+    }
+    const key = j.id || j.name || "";
+    const del = mid ? `<button class="jrm" data-jrm="${esc(key)}" data-jmid="${esc(mid)}" data-jname="${name}" aria-label="Delete job" title="Delete job">✕</button>` : "";
+    return `<div class="row" style="cursor:default" title="${esc(j.cmd||"")}">
       <span class="gly">◷</span>
-      <span class="nm">${j.name}</span>
-      <span class="rt">${j.sched||""}</span>
-      <span class="state sched"><span class="sd"></span>${j.next||""}</span>
+      <span class="nm">${name}</span>
+      <span class="rt">${sched}</span>
+      <span class="state ${cls}"><span class="sd"></span>${label}</span>
+      ${del}
     </div>`;
   }
+  // relTimeISO adapts relTime (which wants an epoch-ms) to the agent's RFC3339
+  // lastRun stamps, degrading to "" on anything unparseable.
+  function relTimeISO(iso){ const t = Date.parse(iso); return isNaN(t) ? "" : relTime(t); }
   // taskRow renders one run — either a live session run recorded by RUNS
   // ({cmd, ts, ok, label}) or a demo-fleet entry ({name, when, ok}).
   function taskRow(t){
@@ -1850,6 +1906,10 @@
   function ingestLive(data){
     M = data.map(m=>{
       normalize(m);
+      // /api/fleet ships jobs empty (they're fetched per-machine on demand); keep
+      // showing what we've already loaded for this box so the count and the
+      // Machine-view list don't blink out on every poll.
+      if(JOBS[m.id]) m.jobs = JOBS[m.id];
       const h = cpuHist[m.id] || Array(HIST).fill(m.cpu);
       h.push(m.cpu); while(h.length>HIST) h.shift();
       cpuHist[m.id] = h;
@@ -1966,6 +2026,147 @@
     });
   }
 
+  /* ---------- Jobs: the cron construct, scheduled on the agent ----------
+     A Job is "a cron / timer — fires on a schedule": a saved command the agent
+     runs unattended, on its own box, as the unprivileged hush user — the same
+     primitive a Task runs, with a schedule bolted on. The scheduler lives on the
+     agent (commit #84), so the console is a thin client over hush-control's
+     pass-through proxy: GET/POST /api/machines/{id}/jobs and DELETE .../{jobId}.
+     Jobs are fetched per-machine on demand (not through the fleet poll) and
+     cached in JOBS so the Machine view stays stable between polls. A box whose
+     agent was started without -jobs answers 403 — surfaced as "jobs disabled",
+     not an error. In demo mode jobs live in the fixture so the verb is legible
+     without a live control plane behind it. */
+  const jobScrim = $("#jobScrim");
+  const jobBody = $("#jobSheetBody");
+  let jobDraft = { id:null, name:"", schedule:"", cmd:"" };
+
+  // loadJobs pulls one box's jobs into the JOBS cache and re-renders if we're
+  // still looking at it. A 403 means the agent has jobs disabled; anything else
+  // unreachable just leaves the cache untouched so a blip doesn't wipe the list.
+  async function loadJobs(id){
+    if(MODE === "demo" || jobsLoading.has(id)) return;
+    jobsLoading.add(id);
+    try {
+      const r = await fetch(`api/machines/${encodeURIComponent(id)}/jobs`, {cache:"no-store"});
+      if(r.status === 403){ JOBS_OFF.add(id); JOBS[id] = []; }
+      else if(r.ok){
+        JOBS_OFF.delete(id);
+        const list = await r.json();
+        JOBS[id] = Array.isArray(list) ? list : [];
+      } else return;
+      const m = byId(id); if(m) m.jobs = JOBS[id];
+      if(state.view === "machine" && state.mid === id) render();
+    } catch(e){ /* transient — keep whatever we had */ }
+    finally { jobsLoading.delete(id); }
+  }
+
+  function closeJobSheet(){ jobScrim.classList.remove("open"); }
+  jobScrim.addEventListener("click", e=>{ if(e.target===jobScrim) closeJobSheet(); });
+
+  function openJobSheet(preId){
+    const online = M.filter(m=>m.online);
+    jobDraft = { id: preId || (online[0] && online[0].id) || null, name:"", schedule:"", cmd:"" };
+    if(preId && JOBS_OFF.has(preId)){ toast("jobs are disabled on that box — start its agent with -jobs"); return; }
+    renderJobSheet();
+    jobScrim.classList.add("open");
+  }
+
+  function renderJobSheet(){
+    const online = M.filter(m=>m.online);
+    if(!online.length){
+      jobBody.innerHTML = `<h3>Schedule a job</h3>
+        <p class="sd">a command that fires on a cron schedule</p>
+        <div class="field-note">No machines are online to schedule on.</div>
+        <div class="sheet-actions"><button class="btn primary" id="jClose" style="flex:1">Close</button></div>`;
+      $("#jClose").addEventListener("click", closeJobSheet);
+      return;
+    }
+    if(!online.some(m=>m.id===jobDraft.id)) jobDraft.id = online[0].id;
+    const opts = online.map(m=>`<option value="${esc(m.id)}"${m.id===jobDraft.id?" selected":""}>${esc(m.id)}${m.os?` · ${esc(m.os)}`:""}</option>`).join("");
+    jobBody.innerHTML = `
+      <h3>Schedule a job</h3>
+      <p class="sd">a command that fires on a cron schedule — unattended, on the box</p>
+      <div class="field">
+        <label>Machine</label>
+        <select id="jMachine">${opts}</select>
+      </div>
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="jName" placeholder="e.g. nightly-backup" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(jobDraft.name)}">
+      </div>
+      <div class="field">
+        <label>Schedule</label>
+        <input type="text" id="jSched" placeholder="e.g. 0 3 * * *  (or @daily)" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(jobDraft.schedule)}">
+        <div class="hint">5-field cron, or a macro like <b>@daily</b> / <b>@hourly</b></div>
+      </div>
+      <div class="field">
+        <label>Command</label>
+        <input type="text" id="jCmd" placeholder="e.g. restic backup /srv" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(jobDraft.cmd)}">
+        <div class="hint">runs via <b>sh -c</b> as the unprivileged hush user</div>
+      </div>
+      <div class="field-note">
+        <b>Heads up —</b> this fires on <b>${esc(jobDraft.id)}</b> with no sandbox, on its own schedule. It can do anything the hush user can — the OS permissions are the only fence.
+      </div>
+      <div class="sheet-actions">
+        <button class="btn ghost" id="jCancel">Cancel</button>
+        <button class="btn primary" id="jSave">◷ Schedule</button>
+      </div>`;
+    $("#jMachine").addEventListener("change", e=>{ jobDraft.id = e.target.value; renderJobHostNote(); });
+    $("#jName").addEventListener("input", e=>{ jobDraft.name = e.target.value; });
+    $("#jSched").addEventListener("input", e=>{ jobDraft.schedule = e.target.value; });
+    $("#jCmd").addEventListener("input", e=>{ jobDraft.cmd = e.target.value; });
+    $("#jCancel").addEventListener("click", closeJobSheet);
+    $("#jSave").addEventListener("click", createJob);
+    $("#jName").focus();
+  }
+  function renderJobHostNote(){
+    const n = jobBody.querySelector(".field-note");
+    if(n) n.innerHTML = `<b>Heads up —</b> this fires on <b>${esc(jobDraft.id)}</b> with no sandbox, on its own schedule. It can do anything the hush user can — the OS permissions are the only fence.`;
+  }
+
+  async function createJob(){
+    const id = jobDraft.id;
+    const name = (jobDraft.name||"").trim();
+    const schedule = (jobDraft.schedule||"").trim();
+    const cmd = (jobDraft.cmd||"").trim();
+    if(!id) return;
+    if(!name){ $("#jName").focus(); toast("give the job a name"); return; }
+    if(!schedule){ $("#jSched").focus(); toast("add a schedule"); return; }
+    if(!cmd){ $("#jCmd").focus(); toast("add a command"); return; }
+    if(MODE === "demo"){
+      const m = byId(id); if(m){ (m.jobs = m.jobs || []).push({ id:"job-"+Math.random().toString(36).slice(2,8), name, schedule, cmd, status:{} }); }
+      closeJobSheet(); render(); toast("scheduled (demo)"); return;
+    }
+    const btn = $("#jSave"); btn.disabled = true; btn.textContent = "Scheduling…";
+    try {
+      const r = await fetch(`api/machines/${encodeURIComponent(id)}/jobs`, {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ name, schedule, cmd }) });
+      if(r.status === 403){ JOBS_OFF.add(id); throw new Error("jobs are disabled on that box — start its agent with -jobs"); }
+      if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
+      await loadJobs(id);
+      closeJobSheet(); render();
+      toast("job scheduled");
+    } catch(err){
+      btn.disabled = false; btn.textContent = "◷ Schedule";
+      toast((err&&err.message) ? err.message : "couldn't schedule");
+    }
+  }
+
+  async function deleteJob(mid, jobId, name){
+    if(!confirm(`Delete job "${name||jobId}"? It stops firing immediately.`)) return;
+    if(MODE === "demo"){
+      const m = byId(mid); if(m && m.jobs){ const i = m.jobs.findIndex(j=>(j.id||j.name)===jobId); if(i>=0) m.jobs.splice(i,1); }
+      render(); return;
+    }
+    try {
+      const r = await fetch(`api/machines/${encodeURIComponent(mid)}/jobs/${encodeURIComponent(jobId)}`, { method:"DELETE" });
+      if(!r.ok && r.status!==204) throw new Error("error "+r.status);
+    } catch(e){ toast("couldn't delete"); }
+    await loadJobs(mid); render();
+  }
+
   /* ---------- build sheet ---------- */
   const scrim = $("#scrim");
   $("#palette").innerHTML = CONSTRUCTS.map(c=>{
@@ -1983,9 +2184,10 @@
   $("#palette").querySelectorAll(".pitem").forEach(el=>{
     el.addEventListener("click", ()=>{
       scrim.classList.remove("open");
-      // Machine, Task, and Workflow are the constructs that actually do
+      // Machine, Job, Task, and Workflow are the constructs that actually do
       // something today; the rest are still placeholders.
       if(el.dataset.c === "Machine"){ openAddSheet(); return; }
+      if(el.dataset.c === "Job"){ openJobSheet(null); return; }
       if(el.dataset.c === "Task"){ openTaskSheet(null); return; }
       if(el.dataset.c === "Workflow"){ openWorkflowSheet(); return; }
       toast(`＋ ${el.dataset.c} builder — coming in a later phase`);
