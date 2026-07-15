@@ -16,6 +16,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -23,13 +24,16 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/clarkbar-sys/hush/internal/browse"
 	hexec "github.com/clarkbar-sys/hush/internal/exec"
+	"github.com/clarkbar-sys/hush/internal/updater"
 	"github.com/clarkbar-sys/hush/internal/version"
 	"github.com/clarkbar-sys/hush/internal/vitals"
 )
@@ -37,6 +41,7 @@ import (
 func main() {
 	listen := flag.String("listen", ":8765", `address to listen on, or "tailnet" to bind this machine's Tailscale IP (tailnet-only; "tailnet:PORT" for a non-default port)`)
 	showVersion := flag.Bool("version", false, "print the hush-agent version and exit")
+	selfUpdate := flag.Bool("self-update", false, "check for a newer release and replace this binary in place, then exit (run as root by hush-agent-update.service)")
 	allowExec := flag.Bool("exec", true, "serve /exec, the Task construct's one-shot command runner (on by default; -exec=false disables). Commands run as the unprivileged hush user")
 	allowJobs := flag.Bool("jobs", false, "serve /jobs, the Job construct's cron scheduler (off by default; -jobs enables). Jobs fire unattended as the unprivileged hush user")
 	runAsFlag := flag.String("run-as", "", "comma-separated OS users a Task may run as via `sudo -u` (e.g. media,deploy). Empty = off. Needs a matching sudoers grant; never list root or a sudo-capable user")
@@ -75,6 +80,9 @@ func main() {
 	if *showVersion {
 		fmt.Printf("hush-agent %s\n", version.Current())
 		os.Exit(0)
+	}
+	if *selfUpdate {
+		os.Exit(runSelfUpdate())
 	}
 
 	listenAddr, err := resolveListen(*listen)
@@ -259,4 +267,52 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", info.Name()))
 	}
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+}
+
+// runSelfUpdate performs a one-shot self-update and returns a process exit
+// code. It is the entry point for `hush-agent -self-update`, invoked as root by
+// hush-agent-update.service. The long-lived agent stays unprivileged (the hush
+// user) and never calls GitHub itself; this root oneshot is the only piece that
+// reaches out and rewrites the binary. On a successful swap it restarts the
+// running service so the new binary takes over.
+func runSelfUpdate() int {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	client := &http.Client{Timeout: 2 * time.Minute}
+	res, err := updater.SelfUpdate(ctx, client, "hush-agent")
+	if err != nil {
+		log.Printf("self-update: %v", err)
+		return 1
+	}
+	if !res.Updated {
+		log.Printf("self-update: already at the latest release (%s)", res.From)
+		return 0
+	}
+	log.Printf("self-update: %s -> %s; restarting service", res.From, res.To)
+	if err := restartService(ctx); err != nil {
+		// The binary is already swapped; the next restart picks it up. Surface
+		// the failure but don't pretend the update didn't happen.
+		log.Printf("self-update: replaced binary but restart failed: %v", err)
+		return 1
+	}
+	return 0
+}
+
+// restartService bounces hush-agent.service so the freshly swapped binary is
+// what runs. try-restart is a no-op for an inactive unit, and a "not found"
+// (the agent wasn't installed as a systemd service) is treated as success:
+// there's nothing to restart, and the swapped binary is picked up whenever the
+// operator next starts it.
+func restartService(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "systemctl", "try-restart", "hush-agent.service")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	msg := strings.TrimSpace(string(out))
+	if strings.Contains(msg, "not found") {
+		return nil // not installed as a service on this box
+	}
+	return fmt.Errorf("systemctl try-restart hush-agent.service: %v: %s", err, msg)
 }

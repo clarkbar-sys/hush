@@ -230,17 +230,23 @@ one-line installer + a service restart on Linux, or `go install
 .../cmd/hush-agent@latest` on macOS (no systemd there). Still no agent ever
 calls GitHub itself — this reuses hush-control's existing cached check.
 
-**Auto-update (hush-control only).** The `install.sh` `control` /
-`control-tsnet` installs also set up `hush-control-update.timer`, which runs a
-small **root** oneshot (`hush-control -self-update`) daily. It fetches the
-latest release, verifies the asset's SHA-256 against the digest GitHub returns
-over its authenticated API, atomically swaps `/usr/local/bin/hush-control`, and
-restarts the service. The long-running control process stays unprivileged (the
-`hush` user); this oneshot is the only piece that runs as root, and only
-briefly. Trigger one on demand with `sudo systemctl start
-hush-control-update.service`, or pause auto-updates with `sudo systemctl
-disable --now hush-control-update.timer`. Agents are intentionally left out —
-they stay read-only and are updated by re-running the one-line installer.
+**Auto-update.** Both binaries carry the same self-update path. The `install.sh`
+`control` / `control-tsnet` installs set up `hush-control-update.timer`, and the
+`agent` install sets up `hush-agent-update.timer`; each runs a small **root**
+oneshot (`hush-control -self-update` / `hush-agent -self-update`) daily. It
+fetches the latest release, verifies the asset's SHA-256 against the digest
+GitHub returns over its API, atomically swaps `/usr/local/bin/hush-control` (or
+`hush-agent`), and restarts the service. The long-running processes stay
+unprivileged (the `hush` user); these oneshots are the only piece that runs as
+root, and only briefly — the agent still never calls GitHub from its
+long-running, read-only service. Because the agent timer runs on every box in a
+fleet rather than the single control host, its `RandomizedDelaySec` is widened
+to 6h so a fleet's checks spread across the day instead of stampeding the API at
+once. Trigger one on demand with `sudo systemctl start
+hush-agent-update.service` (or `hush-control-update.service`), or pause
+auto-updates with `sudo systemctl disable --now hush-agent-update.timer` (or the
+`hush-control` one). A box with the timer paused still shows its update badge on
+the console and can be updated by re-running the one-line installer.
 
 ## Components
 

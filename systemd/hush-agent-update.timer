@@ -1,0 +1,17 @@
+[Unit]
+Description=hush-agent — periodic self-update check
+Documentation=https://github.com/clarkbar-sys/hush
+
+[Timer]
+# Check about a day after boot, then daily. Unlike hush-control (one box),
+# hush-agent runs on every machine in the fleet, so a whole fleet's timers
+# would otherwise fire together and stampede the GitHub API. RandomizedDelaySec
+# is widened to 6h here to spread those calls across the day, and Persistent
+# catches up a check missed while the box was off.
+OnBootSec=1h
+OnUnitActiveSec=24h
+RandomizedDelaySec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
