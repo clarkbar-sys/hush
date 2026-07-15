@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	hexec "github.com/clarkbar-sys/hush/internal/exec"
 	"github.com/clarkbar-sys/hush/internal/store"
 )
 
@@ -19,9 +20,10 @@ import (
 type Task struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
-	Host      string `json:"host"`      // machine id (agent name or IP) the task runs on
-	Cmd       string `json:"cmd"`       // shell command line, run via sh -c on that box
-	CreatedAt string `json:"createdAt"` // RFC3339 UTC
+	Host      string `json:"host"`           // machine id (agent name or IP) the task runs on
+	Cmd       string `json:"cmd"`            // shell command line, run via sh -c on that box
+	User      string `json:"user,omitempty"` // optional: OS user to run as via sudo -u (must be on the agent's -run-as list); empty = the hush user
+	CreatedAt string `json:"createdAt"`      // RFC3339 UTC
 }
 
 // taskTimeoutSec bounds a saved Task's run, mirroring stepTimeoutSec and the
@@ -52,14 +54,15 @@ func newTaskStore(path string) *taskStore {
 // empty so a broken tasks.json can't take the fleet map down with it.
 func loadTasks(path string) []Task { return store.Load[Task](path, "tasks") }
 
-// Update replaces a saved task's name, host, and command, preserving its id and
-// CreatedAt so it keeps its identity across edits. It reports whether a task with
-// that id existed, so the handler can answer 404 for an unknown id.
-func (s *taskStore) Update(id, name, host, cmd string) (Task, bool, error) {
+// Update replaces a saved task's name, host, command, and run-as user, preserving
+// its id and CreatedAt so it keeps its identity across edits. It reports whether a
+// task with that id existed, so the handler can answer 404 for an unknown id.
+func (s *taskStore) Update(id, name, host, cmd, user string) (Task, bool, error) {
 	return s.JSON.Update(id, func(t *Task) {
 		t.Name = name
 		t.Host = host
 		t.Cmd = cmd
+		t.User = user
 	})
 }
 
@@ -69,36 +72,43 @@ func (s *taskStore) Update(id, name, host, cmd string) (Task, bool, error) {
 func newTaskID(name string) string { return newWorkflowID(name) }
 
 // checkTask validates a saved task's fields, returning the trimmed name, host,
-// and command on success. resolve reports whether the host is actually in the
-// fleet, so we reject a task pinned to a machine hush doesn't know before it's
-// ever run — the same gate checkWorkflow applies to every step. Both create and
-// update flow through here so a task's rules can't drift between the two.
-func checkTask(name, host, cmd string, resolve func(string) bool) (string, string, string, error) {
+// command, and run-as user on success. resolve reports whether the host is
+// actually in the fleet, so we reject a task pinned to a machine hush doesn't
+// know before it's ever run — the same gate checkWorkflow applies to every step.
+// Both create and update flow through here so a task's rules can't drift between
+// the two. An empty user is fine (runs as the hush user); a non-empty one must be
+// a syntactically valid username — the agent's -run-as allowlist is the real
+// gate, but we reject obvious junk here so it never lands in tasks.json.
+func checkTask(name, host, cmd, user string, resolve func(string) bool) (string, string, string, string, error) {
 	name = strings.TrimSpace(name)
 	host = strings.TrimSpace(host)
 	cmd = strings.TrimSpace(cmd)
+	user = strings.TrimSpace(user)
 	if name == "" {
-		return "", "", "", errors.New("name is required")
+		return "", "", "", "", errors.New("name is required")
 	}
 	if host == "" {
-		return "", "", "", errors.New("pick a machine")
+		return "", "", "", "", errors.New("pick a machine")
 	}
 	if cmd == "" {
-		return "", "", "", errors.New("command is required")
+		return "", "", "", "", errors.New("command is required")
 	}
 	if len(cmd) > maxCmdLen {
-		return "", "", "", errors.New("command is too long")
+		return "", "", "", "", errors.New("command is too long")
+	}
+	if user != "" && !hexec.ValidUserName(user) {
+		return "", "", "", "", errors.New("run-as user is not a valid username")
 	}
 	if !resolve(host) {
-		return "", "", "", fmt.Errorf("%s is not in the fleet", host)
+		return "", "", "", "", fmt.Errorf("%s is not in the fleet", host)
 	}
-	return name, host, cmd, nil
+	return name, host, cmd, user, nil
 }
 
 // validateTask checks a create request and, on success, returns a stored Task
 // with its id and timestamp filled in.
-func validateTask(name, host, cmd string, resolve func(string) bool) (Task, error) {
-	name, host, cmd, err := checkTask(name, host, cmd, resolve)
+func validateTask(name, host, cmd, user string, resolve func(string) bool) (Task, error) {
+	name, host, cmd, user, err := checkTask(name, host, cmd, user, resolve)
 	if err != nil {
 		return Task{}, err
 	}
@@ -107,6 +117,7 @@ func validateTask(name, host, cmd string, resolve func(string) bool) (Task, erro
 		Name:      name,
 		Host:      host,
 		Cmd:       cmd,
+		User:      user,
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}, nil
 }

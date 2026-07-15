@@ -42,6 +42,12 @@ type Snapshot struct {
 	Load     string    `json:"load"`
 	Services []Service `json:"services"`
 	Status   string    `json:"status"` // good | warn | crit
+	// RunAs is the set of OS users a Task may run as on this box via `sudo -u`,
+	// as configured by the agent's -run-as allowlist. It's advertised here so the
+	// console can offer a per-machine "run as" picker instead of free text. Empty
+	// or absent means the box offers no run-as users (the feature is off). This is
+	// capability metadata the agent fills in, not something vitals.Collect reads.
+	RunAs []string `json:"runAs,omitempty"`
 }
 
 // --- CPU: sampled in the background so /vitals stays instant -----------------

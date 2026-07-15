@@ -100,10 +100,20 @@ func main() {
 		defer sched.Stop()
 	}
 
+	// advertisedRunAs is the run-as allowlist as reported in /vitals, so the
+	// console can offer a per-machine picker. It's only meaningful with exec on,
+	// so a box with exec disabled advertises none even if -run-as was set.
+	var advertisedRunAs []string
+	if execEnabled {
+		advertisedRunAs = sortedKeys(runAs)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/vitals", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(vitals.Collect()); err != nil {
+		snap := vitals.Collect()
+		snap.RunAs = advertisedRunAs
+		if err := json.NewEncoder(w).Encode(snap); err != nil {
 			log.Printf("encode vitals: %v", err)
 		}
 	})
