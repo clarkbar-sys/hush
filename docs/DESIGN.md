@@ -169,6 +169,24 @@ an older agent simply reports exec as unavailable. In tsnet mode every run is
 gated by the same Tailscale identity as everything else, and `hush-control`
 logs who ran what against which box.
 
+**Run-as — scoping a Task to another user.** By default `/exec` runs as the
+`hush` user; a box can also offer a set of **run-as users** (the agent's
+`-run-as` / `HUSH_AGENT_RUNAS` allowlist), and a Task, saved Task, or Workflow
+step may name one to run as via `sudo -n -u <user>`. This is the least-privilege
+alternative to giving `hush` blanket passwordless sudo: the box lists the
+identities it offers — never `root` — and each run becomes one of them, so the
+blast radius is bounded to those unprivileged users. The allowlist is the hard
+ceiling — `/exec` refuses (`403`) any user not on it *before* running anything,
+and because the agent is unauthenticated on the tailnet, that ceiling is
+load-bearing. The username rides `sudo` as its own argument (never interpolated
+into the shell line) and must match a conservative username charset; `-n` makes
+a missing sudoers grant fail fast rather than hang on a password prompt. The
+agent advertises its list in `/vitals`, so the console offers a per-machine
+picker and — since `hush-control` is unprivileged and must **never** edit
+sudoers itself (that would let anyone reaching the agent escalate) — *generates*
+the root command to install the matching `hush-runas` grant rather than applying
+it, for the operator to run over SSH.
+
 ## Jobs — scheduling a command
 
 The **Job** construct ("a cron / timer — fires on a schedule") is the Task
