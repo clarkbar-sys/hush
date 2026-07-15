@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,20 +25,23 @@ func TestNewTaskIDUniqueAndSlugged(t *testing.T) {
 func TestValidateTask(t *testing.T) {
 	inFleet := func(host string) bool { return host == "citadel" || host == "nas" }
 
-	if _, err := validateTask("  ", "citadel", "uptime", inFleet); err == nil {
+	if _, err := validateTask("  ", "citadel", "uptime", "", inFleet); err == nil {
 		t.Error("blank name should be rejected")
 	}
-	if _, err := validateTask("x", "  ", "uptime", inFleet); err == nil {
+	if _, err := validateTask("x", "  ", "uptime", "", inFleet); err == nil {
 		t.Error("blank host should be rejected")
 	}
-	if _, err := validateTask("x", "citadel", "", inFleet); err == nil {
+	if _, err := validateTask("x", "citadel", "", "", inFleet); err == nil {
 		t.Error("blank command should be rejected")
 	}
-	if _, err := validateTask("x", "ghost", "ls", inFleet); err == nil {
+	if _, err := validateTask("x", "ghost", "ls", "", inFleet); err == nil {
 		t.Error("unknown host should be rejected")
 	}
+	if _, err := validateTask("x", "citadel", "ls", "root; rm -rf /", inFleet); err == nil {
+		t.Error("malformed run-as user should be rejected")
+	}
 
-	tk, err := validateTask("Disk check", "nas", "  df -h  ", inFleet)
+	tk, err := validateTask("Disk check", "nas", "  df -h  ", "  media  ", inFleet)
 	if err != nil {
 		t.Fatalf("valid task rejected: %v", err)
 	}
@@ -46,6 +50,9 @@ func TestValidateTask(t *testing.T) {
 	}
 	if tk.Cmd != "df -h" {
 		t.Errorf("command not trimmed: %q", tk.Cmd)
+	}
+	if tk.User != "media" {
+		t.Errorf("run-as user not trimmed/stored: %q", tk.User)
 	}
 }
 
@@ -73,11 +80,11 @@ func TestTaskStoreRoundTrip(t *testing.T) {
 		t.Error("find(t1) missed a persisted task")
 	}
 
-	up, found, err := reloaded.Update("t1", "one v2", "box", "echo bye")
+	up, found, err := reloaded.Update("t1", "one v2", "box", "echo bye", "media")
 	if err != nil || !found {
 		t.Fatalf("update = %v, %v", found, err)
 	}
-	if up.Name != "one v2" || up.Cmd != "echo bye" {
+	if up.Name != "one v2" || up.Cmd != "echo bye" || up.User != "media" {
 		t.Errorf("update didn't apply: %+v", up)
 	}
 
@@ -87,6 +94,43 @@ func TestTaskStoreRoundTrip(t *testing.T) {
 	}
 	if removed, _ := reloaded.Delete("t1"); removed {
 		t.Error("second delete should report nothing removed")
+	}
+}
+
+// A saved Task's run-as user must reach the agent's /exec, so a Task saved to
+// run as another user actually does. A recording agent captures the forwarded
+// body and we assert the user rode along.
+func TestSavedTaskForwardsRunAsUser(t *testing.T) {
+	var gotBody []byte
+	agent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		io.WriteString(w, "data: {\"kind\":\"exit\",\"code\":0}\n\n")
+	}))
+	defer agent.Close()
+
+	dir := t.TempDir()
+	store := newAgentStore(filepath.Join(dir, "fleet.json"), []Agent{{Name: "box", Addr: agent.URL}})
+	mux := buildMux(store, muxDiscoverer(store), "")
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(`{"name":"asMedia","host":"box","cmd":"whoami","user":"media"}`)))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create = %d: %s", rec.Code, rec.Body.String())
+	}
+	var created Task
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.User != "media" {
+		t.Fatalf("created task lost its user: %+v", created)
+	}
+
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/tasks/"+created.ID+"/run", nil))
+	if !strings.Contains(string(gotBody), `"user":"media"`) {
+		t.Errorf("agent /exec body missing run-as user: %s", gotBody)
 	}
 }
 

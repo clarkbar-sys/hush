@@ -59,6 +59,7 @@ type Machine struct {
 	Services             []vitals.Service `json:"services"`
 	Jobs                 []any            `json:"jobs"`
 	Tasks                []any            `json:"tasks"`
+	RunAs                []string         `json:"runAs,omitempty"` // users a Task may run as here (agent -run-as); drives the console picker
 	Online               bool             `json:"online"`
 	Alert                string           `json:"alert,omitempty"`
 }
@@ -319,12 +320,13 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 				Name string `json:"name"`
 				Host string `json:"host"`
 				Cmd  string `json:"cmd"`
+				User string `json:"user"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, "bad request body", http.StatusBadRequest)
 				return
 			}
-			t, err := validateTask(req.Name, req.Host, req.Cmd, func(host string) bool {
+			t, err := validateTask(req.Name, req.Host, req.Cmd, req.User, func(host string) bool {
 				_, ok := store.find(host)
 				return ok
 			})
@@ -354,12 +356,13 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 				Name string `json:"name"`
 				Host string `json:"host"`
 				Cmd  string `json:"cmd"`
+				User string `json:"user"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, "bad request body", http.StatusBadRequest)
 				return
 			}
-			name, host, cmd, err := checkTask(req.Name, req.Host, req.Cmd, func(host string) bool {
+			name, host, cmd, user, err := checkTask(req.Name, req.Host, req.Cmd, req.User, func(host string) bool {
 				_, ok := store.find(host)
 				return ok
 			})
@@ -367,7 +370,7 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			saved, found, err := tstore.Update(r.PathValue("id"), name, host, cmd)
+			saved, found, err := tstore.Update(r.PathValue("id"), name, host, cmd, user)
 			if err != nil {
 				log.Printf("update task: %v", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -413,11 +416,13 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 			return
 		}
 		// Reuse proxyExec verbatim — same streaming, same audit log — by handing
-		// it the saved command as if it had been posted ad-hoc.
+		// it the saved command as if it had been posted ad-hoc. The saved run-as
+		// user (if any) rides along so the agent runs it via sudo -u.
 		payload, _ := json.Marshal(struct {
 			Cmd        string `json:"cmd"`
 			TimeoutSec int    `json:"timeoutSec"`
-		}{Cmd: t.Cmd, TimeoutSec: taskTimeoutSec})
+			User       string `json:"user,omitempty"`
+		}{Cmd: t.Cmd, TimeoutSec: taskTimeoutSec, User: t.User})
 		r.Body = io.NopCloser(bytes.NewReader(payload))
 		r.ContentLength = int64(len(payload))
 		proxyExec(w, r, streamClient, a)
@@ -876,6 +881,7 @@ func fetchOne(client *http.Client, a Agent, latest string) Machine {
 	m.OS, m.Up, m.Load = s.OS, s.Up, s.Load
 	m.CPU, m.Mem, m.Disk = s.CPU, s.Mem, s.Disk
 	m.GPU, m.VRAM, m.GPUName, m.VRAMText = s.GPU, s.VRAM, s.GPUName, s.VRAMText
+	m.RunAs = s.RunAs
 	if len(s.Services) > 0 {
 		m.Services = s.Services
 	}

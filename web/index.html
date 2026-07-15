@@ -433,6 +433,8 @@
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .wf-saved .wf-sub { font-family:var(--mono); font-size:10.5px; color:var(--faint); margin-top:2px;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .as-user { font-weight:500; font-size:10px; color:var(--accent); border:1px solid var(--border);
+    border-radius:6px; padding:1px 5px; margin-left:5px; vertical-align:middle; }
   .wf-saved .wf-run { font-family:var(--mono); font-size:12px; color:var(--accent); background:transparent;
     border:1px solid var(--border); border-radius:8px; padding:7px 12px; cursor:pointer; flex:none; }
   .wf-saved .wf-run:hover { border-color:var(--accent); }
@@ -818,7 +820,7 @@
   function taskFleetRow(t){
     return `<div class="wf-item">
       <div class="wf-meta" data-tk="${esc(t.id)}">
-        <div class="wf-nm">${esc(t.name)}</div>
+        <div class="wf-nm">${esc(t.name)}${t.user?` <span class="as-user">as ${esc(t.user)}</span>`:""}</div>
         <div class="wf-sub">${esc(t.host || "—")} · ${esc(t.cmd)}</div>
       </div>
       <button class="wf-run" data-trun="${esc(t.id)}">⚡ Run</button>
@@ -1175,11 +1177,29 @@
      outcome into RUNS so the Machine view's Tasks section reflects it. */
   const taskScrim = $("#taskScrim");
   const taskBody = $("#taskSheetBody");
-  let taskDraft = { id:null, cmd:"" };
+  let taskDraft = { id:null, cmd:"", user:"" };
+
+  function machineById(id){ return M.find(m=>m.id===id); }
+
+  // runAsField builds the optional "run as" picker for a Task/Save sheet from a
+  // machine's advertised -run-as list (m.runAs). A box that advertises no users
+  // gets no field at all — the command runs as the hush user exactly as before —
+  // so the control only appears where it can actually do something.
+  function runAsField(m, selected){
+    const users = (m && m.runAs) || [];
+    if(!users.length) return "";
+    const opts = [`<option value="">hush user (default)</option>`]
+      .concat(users.map(u=>`<option value="${esc(u)}"${u===selected?" selected":""}>${esc(u)}</option>`)).join("");
+    return `<div class="field">
+        <label>Run as</label>
+        <select class="runas-sel">${opts}</select>
+        <div class="hint">runs via <b>sudo -u</b> as the chosen user</div>
+      </div>`;
+  }
 
   function openTaskSheet(preId){
     const online = M.filter(m=>m.online);
-    taskDraft = { id: preId || (online[0] && online[0].id) || null, cmd:"" };
+    taskDraft = { id: preId || (online[0] && online[0].id) || null, cmd:"", user:"" };
     renderTaskSheet();
     taskScrim.classList.add("open");
   }
@@ -1210,6 +1230,7 @@
         <input type="text" id="tCmd" placeholder="e.g. uptime" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(taskDraft.cmd)}">
         <div class="hint">runs via <b>sh -c</b> as the unprivileged hush user</div>
       </div>
+      <div id="tRunAsWrap">${runAsField(machineById(taskDraft.id), taskDraft.user)}</div>
       <div class="field-note">
         <b>Heads up —</b> this runs on <b>${esc(taskDraft.id)}</b> with no sandbox. It can do anything the hush user can — the OS permissions are the only fence.
       </div>
@@ -1218,12 +1239,25 @@
         <button class="btn primary" id="tRun">⚡ Run</button>
       </div>`;
     const cmdEl = $("#tCmd");
-    $("#tMachine").addEventListener("change", e=>{ taskDraft.id = e.target.value; renderHostNote(); });
+    $("#tMachine").addEventListener("change", e=>{ taskDraft.id = e.target.value; taskDraft.user = ""; renderHostNote(); renderTaskRunAs(); });
+    bindTaskRunAs();
     cmdEl.addEventListener("input", e=>{ taskDraft.cmd = e.target.value; });
     cmdEl.addEventListener("keydown", e=>{ if(e.key==="Enter") runTask(); });
     $("#tCancel").addEventListener("click", closeTaskSheet);
     $("#tRun").addEventListener("click", runTask);
     cmdEl.focus();
+  }
+  // The run-as picker is per-machine, so switching machines rebuilds it (and
+  // clears any prior selection, which may not be valid on the new box).
+  function renderTaskRunAs(){
+    const wrap = $("#tRunAsWrap");
+    if(!wrap) return;
+    wrap.innerHTML = runAsField(machineById(taskDraft.id), taskDraft.user);
+    bindTaskRunAs();
+  }
+  function bindTaskRunAs(){
+    const sel = taskBody.querySelector(".runas-sel");
+    if(sel) sel.addEventListener("change", e=>{ taskDraft.user = e.target.value; });
   }
   // Keep the danger note's named host in sync when the machine select changes,
   // without stealing focus from the command field.
@@ -1237,7 +1271,7 @@
     if(!cmd){ $("#tCmd").focus(); return; }
     if(!id) return;
     closeTaskSheet();
-    openRunView(id, cmd);
+    openRunView(id, cmd, { user: taskDraft.user });
   }
 
   // openRunView streams one run to a full-screen terminal overlay and records
@@ -1263,7 +1297,7 @@
     document.body.appendChild(ov);
     // The bridge from ephemeral to saved: mint a Task from exactly this run.
     const saveBtn = ov.querySelector("#rvSave");
-    if(saveBtn) saveBtn.addEventListener("click", ()=> openTaskSaveSheet({ name:"", host:id, cmd }));
+    if(saveBtn) saveBtn.addEventListener("click", ()=> openTaskSaveSheet({ name:"", host:id, cmd, user: opts.user||"" }));
     const out = ov.querySelector("#rvOut");
     const stateEl = ov.querySelector("#rvState");
     const metaEl = ov.querySelector("#rvMeta");
@@ -1324,8 +1358,10 @@
       }
     };
 
+    const payload = { cmd, timeoutSec: 300 };
+    if(opts.user) payload.user = opts.user;
     const runner = MODE === "demo" ? simulateExec(cmd, onEvent, ac.signal)
-      : streamExec(opts.runUrl || `api/machines/${encodeURIComponent(id)}/exec`, { cmd, timeoutSec: 300 }, onEvent, ac.signal);
+      : streamExec(opts.runUrl || `api/machines/${encodeURIComponent(id)}/exec`, payload, onEvent, ac.signal);
     runner.catch(err => {
       if(ac.signal.aborted) return; // canceled path already handled
       finished = true;
@@ -1593,7 +1629,7 @@
      memory so the feature is legible without a live hush-control behind it. */
   const tsaveScrim = $("#tsaveScrim");
   const tsaveBody = $("#tsaveBody");
-  let tsaveDraft = { name:"", host:"", cmd:"" };
+  let tsaveDraft = { name:"", host:"", cmd:"", user:"" };
 
   async function loadTasks(){
     if(MODE === "demo"){
@@ -1626,14 +1662,14 @@
   // "Save as Task" hands it {host, cmd} straight off a run so the bridge from
   // ephemeral to saved is one tap.
   function openTaskSaveSheet(draft){
-    tsaveDraft = Object.assign({ editId:null, name:"", host:"", cmd:"" }, draft||{});
+    tsaveDraft = Object.assign({ editId:null, name:"", host:"", cmd:"", user:"" }, draft||{});
     tsaveScrim.classList.add("open");
     renderTaskSaveSheet();
   }
   function openTaskSaveSheetForEdit(id){
     const t = taskSaved.find(x=>x.id===id);
     if(!t) return;
-    openTaskSaveSheet({ editId:id, name:t.name||"", host:t.host||"", cmd:t.cmd||"" });
+    openTaskSaveSheet({ editId:id, name:t.name||"", host:t.host||"", cmd:t.cmd||"", user:t.user||"" });
   }
 
   function renderTaskSaveSheet(){
@@ -1657,6 +1693,7 @@
         <input type="text" id="tsCmd" placeholder="e.g. cd /srv/web && git pull" value="${esc(tsaveDraft.cmd)}" autocapitalize="off" autocorrect="off" spellcheck="false">
         <div class="hint">runs via <b>sh -c</b> as the unprivileged hush user</div>
       </div>
+      <div id="tsRunAsWrap">${runAsField(machineById(tsaveDraft.host), tsaveDraft.user)}</div>
       <div class="field-note">
         <b>Heads up —</b> a saved task runs unsandboxed on its machine. It can do anything the hush user can.
       </div>
@@ -1666,10 +1703,21 @@
       </div>`;
     if(!fleet.length) tsaveBody.querySelector("#tsSave").disabled = true;
     $("#tsName").addEventListener("input", e=>{ tsaveDraft.name = e.target.value; });
-    $("#tsHost").addEventListener("change", e=>{ tsaveDraft.host = e.target.value; });
+    $("#tsHost").addEventListener("change", e=>{ tsaveDraft.host = e.target.value; tsaveDraft.user = ""; renderSaveRunAs(); });
+    bindSaveRunAs();
     $("#tsCmd").addEventListener("input", e=>{ tsaveDraft.cmd = e.target.value; });
     $("#tsCancel").addEventListener("click", closeTaskSaveSheet);
     $("#tsSave").addEventListener("click", saveTask);
+  }
+  function renderSaveRunAs(){
+    const wrap = $("#tsRunAsWrap");
+    if(!wrap) return;
+    wrap.innerHTML = runAsField(machineById(tsaveDraft.host), tsaveDraft.user);
+    bindSaveRunAs();
+  }
+  function bindSaveRunAs(){
+    const sel = tsaveBody.querySelector(".runas-sel");
+    if(sel) sel.addEventListener("change", e=>{ tsaveDraft.user = e.target.value; });
   }
 
   async function saveTask(){
@@ -1677,12 +1725,13 @@
     const name = (tsaveDraft.name||"").trim();
     const host = tsaveDraft.host;
     const cmd = (tsaveDraft.cmd||"").trim();
+    const user = (tsaveDraft.user||"").trim();
     if(!name){ $("#tsName").focus(); toast("give the task a name"); return; }
     if(!host){ toast("pick a machine"); return; }
     if(!cmd){ $("#tsCmd").focus(); toast("add a command"); return; }
     if(MODE === "demo"){
-      if(editId){ const t = taskDemo.find(x=>x.id===editId); if(t){ t.name=name; t.host=host; t.cmd=cmd; } }
-      else { taskDemo.push({ id:"task-"+Math.random().toString(36).slice(2,8), name, host, cmd, createdAt:"" }); }
+      if(editId){ const t = taskDemo.find(x=>x.id===editId); if(t){ t.name=name; t.host=host; t.cmd=cmd; t.user=user; } }
+      else { taskDemo.push({ id:"task-"+Math.random().toString(36).slice(2,8), name, host, cmd, user, createdAt:"" }); }
       taskSaved = taskDemo.slice(); closeTaskSaveSheet(); render();
       toast(editId ? "updated (demo)" : "saved (demo)"); return;
     }
@@ -1690,7 +1739,7 @@
     try {
       const url = editId ? "api/tasks/"+encodeURIComponent(editId) : "api/tasks";
       const method = editId ? "PUT" : "POST";
-      const r = await fetch(url, { method, headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name, host, cmd }) });
+      const r = await fetch(url, { method, headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name, host, cmd, user }) });
       if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
       taskSaved = await loadTasks();
       closeTaskSaveSheet(); render();
