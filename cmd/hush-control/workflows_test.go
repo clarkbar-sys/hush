@@ -57,9 +57,12 @@ func TestValidateWorkflow(t *testing.T) {
 	if _, err := validateWorkflow("x", []Step{{Host: "ghost", Cmd: "ls"}}, inFleet); err == nil {
 		t.Error("unknown host should be rejected")
 	}
+	if _, err := validateWorkflow("x", []Step{{Host: "citadel", Cmd: "ls", User: "root; id"}}, inFleet); err == nil {
+		t.Error("malformed run-as user should be rejected")
+	}
 
 	wf, err := validateWorkflow("Deploy API", []Step{
-		{Host: "citadel", Cmd: "  git pull  "},
+		{Host: "citadel", Cmd: "  git pull  ", User: "  deploy  "},
 		{Host: "nas", Cmd: "systemctl restart api"},
 	}, inFleet)
 	if err != nil {
@@ -70,6 +73,50 @@ func TestValidateWorkflow(t *testing.T) {
 	}
 	if wf.Steps[0].Cmd != "git pull" {
 		t.Errorf("command not trimmed: %q", wf.Steps[0].Cmd)
+	}
+	if wf.Steps[0].User != "deploy" {
+		t.Errorf("step run-as user not trimmed/stored: %q", wf.Steps[0].User)
+	}
+	if wf.Steps[1].User != "" {
+		t.Errorf("step without a user should stay empty: %q", wf.Steps[1].User)
+	}
+}
+
+// A step's run-as user must reach that step's agent /exec, so a Workflow step
+// pinned to another user actually runs as it. A recording agent captures the
+// forwarded body and we assert the user rode along.
+func TestRunWorkflowForwardsStepRunAsUser(t *testing.T) {
+	var gotBody []byte
+	agent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		io.WriteString(w, "data: {\"kind\":\"exit\",\"code\":0}\n\n")
+	}))
+	defer agent.Close()
+
+	dir := t.TempDir()
+	store := newAgentStore(filepath.Join(dir, "fleet.json"), []Agent{{Name: "box", Addr: agent.URL}})
+	mux := buildMux(store, muxDiscoverer(store), "")
+
+	body := `{"name":"asDeploy","steps":[{"host":"box","cmd":"whoami","user":"deploy"}]}`
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/workflows", strings.NewReader(body)))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create = %d: %s", rec.Code, rec.Body.String())
+	}
+	var created Workflow
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if len(created.Steps) != 1 || created.Steps[0].User != "deploy" {
+		t.Fatalf("created workflow lost its step user: %+v", created)
+	}
+
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/workflows/"+created.ID+"/run", nil))
+	if !strings.Contains(string(gotBody), `"user":"deploy"`) {
+		t.Errorf("agent /exec body missing step run-as user: %s", gotBody)
 	}
 }
 

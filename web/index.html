@@ -407,6 +407,7 @@
   .wf-step .wf-idx { font-family:var(--mono); font-size:11px; color:var(--faint);
     width:20px; flex:none; padding-top:11px; text-align:right; }
   .wf-step .wf-fields { flex:1; min-width:0; display:grid; grid-template-columns: 1fr 1.4fr; gap:8px; }
+  .wf-step .wf-runas { grid-column:1 / -1; color:var(--accent); }
   .wf-step select, .wf-step input { width:100%; font-family:var(--mono); font-size:13px; color:var(--text);
     background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:9px 10px; }
   .wf-step select:focus, .wf-step input:focus { border-color:var(--accent); outline:none; }
@@ -1486,15 +1487,21 @@
 
   function renderWorkflowSheet(){
     const fleet = M.slice();
-    if(!wfDraft.steps.length) wfDraft.steps = [{ host:(fleet[0]&&fleet[0].id)||"", cmd:"" }];
+    if(!wfDraft.steps.length) wfDraft.steps = [{ host:(fleet[0]&&fleet[0].id)||"", cmd:"", user:"" }];
 
     const stepRows = wfDraft.steps.map((st,i)=>{
       const opts = fleet.map(m=>`<option value="${esc(m.id)}"${m.id===st.host?" selected":""}>${esc(m.id)}${m.online?"":" · offline"}</option>`).join("");
+      const users = (machineById(st.host) || {}).runAs || [];
+      const raSel = users.length ? `<select data-field="user" data-i="${i}" class="wf-runas">
+            <option value="">as hush user (default)</option>
+            ${users.map(u=>`<option value="${esc(u)}"${u===st.user?" selected":""}>as ${esc(u)}</option>`).join("")}
+          </select>` : "";
       return `<div class="wf-step" data-i="${i}">
         <div class="wf-idx">${i+1}</div>
         <div class="wf-fields">
           <select data-field="host" data-i="${i}">${opts||`<option value="">no machines</option>`}</select>
           <input type="text" data-field="cmd" data-i="${i}" placeholder="e.g. cd /srv/api && git pull" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(st.cmd)}">
+          ${raSel}
         </div>
         <button class="wf-del" data-del="${i}" aria-label="Remove step"${wfDraft.steps.length>1?"":" style=\"visibility:hidden\""}>✕</button>
       </div>`;
@@ -1533,11 +1540,22 @@
         wfDraft.steps[i][e.target.dataset.field] = e.target.value;
       });
     });
+    // Changing a step's machine rebuilds that step's run-as picker (each box
+    // offers its own users) and clears a choice that may not be valid on the new
+    // one — so re-render the sheet after updating the host.
+    wfBody.querySelectorAll('select[data-field="host"]').forEach(sel=>{
+      sel.addEventListener("change", e=>{
+        const i = +e.target.dataset.i;
+        wfDraft.steps[i].host = e.target.value;
+        wfDraft.steps[i].user = "";
+        renderWorkflowSheet();
+      });
+    });
     wfBody.querySelectorAll("[data-del]").forEach(b=>{
       b.addEventListener("click", ()=>{ wfDraft.steps.splice(+b.dataset.del,1); renderWorkflowSheet(); });
     });
     $("#wfAdd").addEventListener("click", ()=>{
-      wfDraft.steps.push({ host:(fleet[0]&&fleet[0].id)||"", cmd:"" });
+      wfDraft.steps.push({ host:(fleet[0]&&fleet[0].id)||"", cmd:"", user:"" });
       renderWorkflowSheet();
     });
     // Drop a saved Task in as a step — this is "a Workflow is built from Tasks".
@@ -1549,7 +1567,7 @@
         if(!t) return;
         const last = wfDraft.steps[wfDraft.steps.length-1];
         if(wfDraft.steps.length===1 && last && !(last.cmd||"").trim()) wfDraft.steps = [];
-        wfDraft.steps.push({ host:t.host, cmd:t.cmd });
+        wfDraft.steps.push({ host:t.host, cmd:t.cmd, user:t.user||"" });
         renderWorkflowSheet();
       });
     });
@@ -1566,8 +1584,8 @@
   function editWorkflow(id){
     const w = wfSaved.find(x=>x.id===id);
     if(!w) return;
-    wfDraft = { editId:id, name:w.name||"", steps:(w.steps||[]).map(s=>({ host:s.host, cmd:s.cmd })) };
-    if(!wfDraft.steps.length) wfDraft.steps = [{ host:"", cmd:"" }];
+    wfDraft = { editId:id, name:w.name||"", steps:(w.steps||[]).map(s=>({ host:s.host, cmd:s.cmd, user:s.user||"" })) };
+    if(!wfDraft.steps.length) wfDraft.steps = [{ host:"", cmd:"", user:"" }];
     renderWorkflowSheet();
     const nm = $("#wfName"); if(nm){ nm.focus(); }
     wfBody.scrollTop = wfBody.scrollHeight;
@@ -1576,7 +1594,7 @@
   async function saveWorkflow(){
     const editId = wfDraft.editId;
     const name = (wfDraft.name||"").trim();
-    const steps = wfDraft.steps.map(s=>({ host:s.host, cmd:(s.cmd||"").trim() })).filter(s=>s.host && s.cmd);
+    const steps = wfDraft.steps.map(s=>({ host:s.host, cmd:(s.cmd||"").trim(), user:(s.user||"").trim() })).filter(s=>s.host && s.cmd);
     if(!name){ $("#wfName").focus(); toast("give the workflow a name"); return; }
     if(!steps.length){ toast("add at least one step with a command"); return; }
     if(MODE === "demo"){
@@ -1838,7 +1856,7 @@
         details.open = true;
         const h = document.createElement("summary");
         h.className = "wf-head on";
-        h.textContent = `▶ step ${i+1}/${ev.count||total} · ${ev.host} · ${ev.cmd}`;
+        h.textContent = `▶ step ${i+1}/${ev.count||total} · ${ev.host}${ev.user?` (as ${ev.user})`:""} · ${ev.cmd}`;
         const outDiv = document.createElement("div");
         outDiv.className = "wf-out";
         details.appendChild(h); details.appendChild(outDiv);

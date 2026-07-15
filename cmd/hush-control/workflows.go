@@ -24,8 +24,9 @@ import (
 // unprivileged hush user, unjailed — so a Workflow adds sequencing and reuse on
 // top of a capability that already exists, nothing more.
 type Step struct {
-	Host string `json:"host"` // machine id (agent name or IP) the step runs on
-	Cmd  string `json:"cmd"`  // shell command line, run via sh -c on that box
+	Host string `json:"host"`           // machine id (agent name or IP) the step runs on
+	Cmd  string `json:"cmd"`            // shell command line, run via sh -c on that box
+	User string `json:"user,omitempty"` // optional: OS user to run as via sudo -u (must be on the agent's -run-as list); empty = the hush user
 }
 
 // Workflow is a saved, reusable blueprint: the design's "wired sequence
@@ -138,6 +139,7 @@ func checkWorkflow(name string, steps []Step, resolve func(string) bool) (string
 	for i, st := range steps {
 		host := strings.TrimSpace(st.Host)
 		cmd := strings.TrimSpace(st.Cmd)
+		user := strings.TrimSpace(st.User)
 		if host == "" {
 			return "", nil, fmt.Errorf("step %d: pick a machine", i+1)
 		}
@@ -147,10 +149,13 @@ func checkWorkflow(name string, steps []Step, resolve func(string) bool) (string
 		if len(cmd) > maxCmdLen {
 			return "", nil, fmt.Errorf("step %d: command is too long", i+1)
 		}
+		if user != "" && !hexec.ValidUserName(user) {
+			return "", nil, fmt.Errorf("step %d: run-as user is not a valid username", i+1)
+		}
 		if !resolve(host) {
 			return "", nil, fmt.Errorf("step %d: %s is not in the fleet", i+1, host)
 		}
-		clean = append(clean, Step{Host: host, Cmd: cmd})
+		clean = append(clean, Step{Host: host, Cmd: cmd, User: user})
 	}
 	return name, clean, nil
 }
@@ -182,6 +187,7 @@ type workflowEvent struct {
 	Count      int    `json:"count,omitempty"`      // total steps (kind=step)
 	Host       string `json:"host,omitempty"`       // step's machine (kind=step)
 	Cmd        string `json:"cmd,omitempty"`        // step's command (kind=step)
+	User       string `json:"user,omitempty"`       // step's run-as user, if any (kind=step)
 	Stream     string `json:"stream,omitempty"`     // stdout | stderr (kind=out)
 	Data       string `json:"data,omitempty"`       // output chunk or error message
 	Code       int    `json:"code,omitempty"`       // step exit code (kind=stepExit)
@@ -226,7 +232,7 @@ func runWorkflow(ctx context.Context, w http.ResponseWriter, client *http.Client
 		if ctx.Err() != nil {
 			return // client hung up mid-run
 		}
-		emit(workflowEvent{Kind: "step", Index: i, Count: len(wf.Steps), Host: step.Host, Cmd: step.Cmd})
+		emit(workflowEvent{Kind: "step", Index: i, Count: len(wf.Steps), Host: step.Host, Cmd: step.Cmd, User: step.User})
 		a, found := resolve(step.Host)
 		if !found {
 			emit(workflowEvent{Kind: "error", Index: i, Data: step.Host + " is not in the fleet"})
@@ -255,7 +261,8 @@ func runStep(ctx context.Context, emit func(workflowEvent), client *http.Client,
 	payload, _ := json.Marshal(struct {
 		Cmd        string `json:"cmd"`
 		TimeoutSec int    `json:"timeoutSec"`
-	}{Cmd: step.Cmd, TimeoutSec: stepTimeoutSec})
+		User       string `json:"user,omitempty"`
+	}{Cmd: step.Cmd, TimeoutSec: stepTimeoutSec, User: step.User})
 
 	u := strings.TrimRight(a.Addr, "/") + "/exec"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(payload))
