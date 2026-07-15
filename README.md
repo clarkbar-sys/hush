@@ -159,6 +159,25 @@ is new agent code, only agents running this release or newer can run Tasks —
 older ones report exec as unavailable until you re-run the installer. See
 [`docs/DESIGN.md`](./docs/DESIGN.md#tasks--running-a-command).
 
+#### Run a Task as another user
+
+By default a Task runs as the unprivileged `hush` user. A box can also offer a
+set of **run-as users** so a Task — ad-hoc, saved, or a Workflow step — runs as
+one of them via `sudo -u`: least privilege per workload, without ever giving
+`hush` blanket root. Start the agent with `-run-as media,deploy` (or
+`HUSH_AGENT_RUNAS=media,deploy` in its env file); the agent advertises that list
+and the console shows a **Run as** picker wherever it applies. Empty (the
+default) leaves the feature off, and `/exec` refuses any user not on the list.
+
+It needs a matching **sudoers grant** — `hush` must be allowed to `sudo -u`
+those users. The installer never writes sudoers (a broken sudoers file is how
+you lock yourself out); instead a Machine's **Run-as users** sheet generates the
+exact root command to paste over SSH, using a `hush-runas` group so the file is
+written once and later changes are just group membership. **Never list `root` or
+a sudo-capable user:** the agent is reachable by anyone on the tailnet, so that
+list is the ceiling on what a caller can become. Users needn't exist yet — allow
+one now, `useradd` it later.
+
 ## Run as a service
 
 `install.sh` (above) already does this — every install is a systemd service
