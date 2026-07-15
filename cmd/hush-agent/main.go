@@ -104,8 +104,16 @@ func main() {
 	// console can offer a per-machine picker. It's only meaningful with exec on,
 	// so a box with exec disabled advertises none even if -run-as was set.
 	var advertisedRunAs []string
+	// runAsCheck verifies the advertised users against the box's real sudoers
+	// grant so /vitals can report which are actually runnable. It's only built
+	// when the feature is on (exec enabled with a non-empty list); otherwise the
+	// snapshot leaves RunAsGranted nil and the console makes no claim.
+	var runAsCheck *runAsChecker
 	if execEnabled {
 		advertisedRunAs = sortedKeys(runAs)
+		if len(advertisedRunAs) > 0 {
+			runAsCheck = newRunAsChecker(advertisedRunAs)
+		}
 	}
 
 	mux := http.NewServeMux()
@@ -113,6 +121,10 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		snap := vitals.Collect()
 		snap.RunAs = advertisedRunAs
+		if runAsCheck != nil {
+			g := runAsCheck.granted()
+			snap.RunAsGranted = &g
+		}
 		if err := json.NewEncoder(w).Encode(snap); err != nil {
 			log.Printf("encode vitals: %v", err)
 		}

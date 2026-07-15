@@ -947,7 +947,7 @@
               <span class="gly">⚡</span><span class="nm">Run a command…</span>
               <span class="rt">${m.online?"one-shot":"offline"}</span></button>
             <button class="row" id="runas-edit">
-              <span class="gly">⧉</span><span class="nm">Run-as users${(m.runAs&&m.runAs.length)?`: ${esc(m.runAs.join(", "))}`:""}</span>
+              <span class="gly">⧉</span><span class="nm">Run-as users${(m.runAs&&m.runAs.length)?`: ${esc(m.runAs.join(", "))}`:""}${runAsUngranted(m).length?` <span style="color:var(--warn)">⚠</span>`:""}</span>
               <span class="rt">sudo -u</span></button>
             ${items.map(taskRow).join("")}</div>`; })()}
       </main>`;
@@ -1190,15 +1190,31 @@
   // machine's advertised -run-as list (m.runAs). A box that advertises no users
   // gets no field at all — the command runs as the hush user exactly as before —
   // so the control only appears where it can actually do something.
+  // runAsUngranted returns the advertised run-as users the agent reported it
+  // can't actually sudo to yet (m.runAsGranted is the verified subset). It's
+  // empty when every user is granted, and also when the box reported no
+  // verification at all (an older agent leaves runAsGranted absent) — we only
+  // warn on a *definite* gap, never on unknowns.
+  function runAsUngranted(m){
+    const g = (m && Array.isArray(m.runAsGranted)) ? m.runAsGranted : null;
+    if(g===null) return [];
+    return (m.runAs||[]).filter(u=>!g.includes(u));
+  }
   function runAsField(m, selected){
     const users = (m && m.runAs) || [];
     if(!users.length) return "";
+    const bad = runAsUngranted(m);
+    const isBad = u => bad.includes(u);
     const opts = [`<option value="">hush user (default)</option>`]
-      .concat(users.map(u=>`<option value="${esc(u)}"${u===selected?" selected":""}>${esc(u)}</option>`)).join("");
+      .concat(users.map(u=>`<option value="${esc(u)}"${u===selected?" selected":""}>${esc(u)}${isBad(u)?" — no sudoers grant":""}</option>`)).join("");
+    const warn = bad.length
+      ? `<div class="hint" style="color:var(--warn)">⚠ no sudoers grant for <b>${esc(bad.join(", "))}</b> — a Task as ${bad.length>1?"one of those users":"that user"} will fail until the box's <b>Run-as users</b> grant is applied.</div>`
+      : "";
     return `<div class="field">
         <label>Run as</label>
         <select class="runas-sel">${opts}</select>
         <div class="hint">runs via <b>sudo -u</b> as the chosen user</div>
+        ${warn}
       </div>`;
   }
 
@@ -2723,6 +2739,7 @@
     updateBody.innerHTML = `
       <h3>Run-as users · ${esc(m.id)}</h3>
       <p class="sd">users a Task on this box may run as via <b>sudo -u</b>. Edit the list, then run the generated command on <b>${esc(m.id)}</b> over SSH.</p>
+      ${(()=>{ const bad=runAsUngranted(m); return bad.length?`<div class="field-note" style="border-color:var(--warn-soft);color:var(--warn)">⚠ <b>${esc(bad.join(", "))}</b> ${bad.length>1?"are":"is"} advertised but ${bad.length>1?"have":"has"} no sudoers grant yet — running the command below applies it.</div>`:""; })()}
       <div class="field" style="margin-top:4px">
         <label>Allowed users (comma-separated)</label>
         <input type="text" id="raUsers" value="${esc(current.join(", "))}" placeholder="e.g. media, deploy" autocapitalize="off" autocorrect="off" spellcheck="false">
