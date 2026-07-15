@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.17.0](https://github.com/clarkbar-sys/hush/compare/v1.16.0...v1.17.0) (2026-07-15)
+
+
+### Features
+
+* **agent:** run Tasks as another user via scoped sudo (-run-as) ([#88](https://github.com/clarkbar-sys/hush/issues/88)) ([3ca634c](https://github.com/clarkbar-sys/hush/commit/3ca634c100f9756779457659153d5aff165e9c39))
+* manage a box's run-as users from the console + document run-as ([#92](https://github.com/clarkbar-sys/hush/issues/92)) ([f62231d](https://github.com/clarkbar-sys/hush/commit/f62231d086b4b8be0a96cce4fa3985130c9d33c2))
+* pick a Task's run-as user from the console ([#90](https://github.com/clarkbar-sys/hush/issues/90)) ([a11d85f](https://github.com/clarkbar-sys/hush/commit/a11d85f763ff1c2cae4b178aef869d9776b297d6))
+* run Workflow steps as another user via scoped sudo ([#91](https://github.com/clarkbar-sys/hush/issues/91)) ([5ca8195](https://github.com/clarkbar-sys/hush/commit/5ca81952f1798d7f4d138c18bb9a8e183bb5a13c))
+
 ## [1.16.0](https://github.com/clarkbar-sys/hush/compare/v1.15.0...v1.16.0) (2026-07-14)
 
 
