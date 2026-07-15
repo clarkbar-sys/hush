@@ -946,6 +946,9 @@
             <button class="row runrow" id="task-run"${m.online?"":` disabled style="opacity:.5;cursor:default"`}>
               <span class="gly">⚡</span><span class="nm">Run a command…</span>
               <span class="rt">${m.online?"one-shot":"offline"}</span></button>
+            <button class="row" id="runas-edit">
+              <span class="gly">⧉</span><span class="nm">Run-as users${(m.runAs&&m.runAs.length)?`: ${esc(m.runAs.join(", "))}`:""}</span>
+              <span class="rt">sudo -u</span></button>
             ${items.map(taskRow).join("")}</div>`; })()}
       </main>`;
     $("#bk").addEventListener("click", goFleet);
@@ -955,6 +958,7 @@
       el.addEventListener("click", ()=>enterConstruct(el.dataset.svc));
     });
     { const tr = $("#task-run"); if(tr) tr.addEventListener("click", ()=>{ if(m.online) openTaskSheet(m.id); }); }
+    { const re = $("#runas-edit"); if(re) re.addEventListener("click", ()=>openRunAsSheet(m)); }
     { const jn = $("#job-new"); if(jn) jn.addEventListener("click", ()=>{ if(m.online) openJobSheet(m.id); }); }
     app.querySelectorAll("[data-jrm]").forEach(b=>{
       b.addEventListener("click", ()=> deleteJob(b.dataset.jmid, b.dataset.jrm, b.dataset.jname));
@@ -2655,6 +2659,88 @@
       catch(e){ toast("couldn't copy — select and copy manually"); }
     });
     $("#agentUpdClose").addEventListener("click", closeUpdateSheet);
+    updateScrim.classList.add("open");
+  }
+
+  /* ---------- run-as users: generate a paste-over-SSH command ----------
+     hush-control is unprivileged and never edits sudoers itself — doing so would
+     let anyone reaching the (unauthenticated) agent escalate. So this sheet only
+     generates the exact root command to run over SSH. It uses a hush-runas group
+     so the sudoers file is written once and later changes are just group
+     membership; the command is idempotent, so pasting it converges the box to
+     the list shown. It keeps the sudo grant and the agent's HUSH_AGENT_RUNAS in
+     sync, then restarts the agent so the new list is advertised. */
+  const RUNAS_RE = /^[a-z_][a-z0-9_-]{0,31}\$?$/;
+
+  // parseRunAsInput splits the comma-separated field into { users, bad } — valid
+  // usernames (deduped, order preserved) and rejected tokens. "root" is called
+  // out separately since it's the one name that would defeat the whole point.
+  function parseRunAsInput(raw){
+    const seen = new Set(), users = [], bad = [];
+    (raw||"").split(",").forEach(tok=>{
+      const u = tok.trim();
+      if(!u) return;
+      if(u==="root" || !RUNAS_RE.test(u)){ bad.push(u); return; }
+      if(!seen.has(u)){ seen.add(u); users.push(u); }
+    });
+    return { users, bad };
+  }
+
+  // genRunAsScript builds the idempotent root command for a desired user list,
+  // given the box's currently-advertised users (to revoke ones being dropped).
+  function genRunAsScript(users, current){
+    const list = users.join(",");
+    const revoke = (current||[]).filter(u=>!users.includes(u));
+    const L = [
+      "# hush run-as — allow this box's Tasks to run as: " + (users.length?users.join(", "):"(none)"),
+      "sudo groupadd -f hush-runas",
+      "echo 'hush ALL=(%hush-runas) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/hush >/dev/null",
+      "sudo chmod 440 /etc/sudoers.d/hush && sudo visudo -cf /etc/sudoers.d/hush",
+    ];
+    users.forEach(u=> L.push(`sudo usermod -aG hush-runas ${u}   # user must exist: sudo useradd -r -s /usr/sbin/nologin ${u}`));
+    revoke.forEach(u=> L.push(`sudo gpasswd -d ${u} hush-runas`));
+    L.push("sudo mkdir -p /etc/hush && sudo touch /etc/hush/agent.env");
+    L.push("sudo sed -i '/^HUSH_AGENT_RUNAS=/d' /etc/hush/agent.env");
+    L.push(`echo 'HUSH_AGENT_RUNAS=${list}' | sudo tee -a /etc/hush/agent.env >/dev/null`);
+    L.push("sudo systemctl restart hush-agent");
+    return L.join("\n");
+  }
+
+  function openRunAsSheet(m){
+    const current = (m.runAs||[]).slice();
+    let cmd = "";
+    const render = ()=>{
+      const raw = $("#raUsers").value;
+      const { users, bad } = parseRunAsInput(raw);
+      cmd = genRunAsScript(users, current);
+      $("#raCmd").textContent = cmd;
+      const warn = $("#raWarn");
+      if(bad.length){
+        const hasRoot = bad.includes("root");
+        warn.innerHTML = `<div class="field-note" style="border-color:var(--crit-soft)">Ignored: ${esc(bad.join(", "))}${hasRoot?" — <b>never</b> grant run-as to root or a sudo-capable user; it would hand fleet-root to anyone who reaches this agent.":" — not valid usernames."}</div>`;
+      } else warn.innerHTML = "";
+    };
+    updateBody.innerHTML = `
+      <h3>Run-as users · ${esc(m.id)}</h3>
+      <p class="sd">users a Task on this box may run as via <b>sudo -u</b>. Edit the list, then run the generated command on <b>${esc(m.id)}</b> over SSH.</p>
+      <div class="field" style="margin-top:4px">
+        <label>Allowed users (comma-separated)</label>
+        <input type="text" id="raUsers" value="${esc(current.join(", "))}" placeholder="e.g. media, deploy" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <div class="hint">never root or a sudo-capable user — that list is the ceiling on what anyone reaching this agent can become</div>
+      </div>
+      <div id="raWarn"></div>
+      <div class="cmdbox"><code id="raCmd"></code><button class="btn" id="raCopy">Copy</button></div>
+      <div class="field-note">Uses a <b>hush-runas</b> group, so the sudoers file is written once and later changes are just group membership. Idempotent — pasting it makes the box match this list. Users must already exist.</div>
+      <div class="sheet-actions">
+        <button class="btn primary" id="raDone" style="flex:1">Done</button>
+      </div>`;
+    $("#raUsers").addEventListener("input", render);
+    $("#raCopy").addEventListener("click", async ()=>{
+      try { await navigator.clipboard.writeText(cmd); toast("copied to clipboard"); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
+    $("#raDone").addEventListener("click", closeUpdateSheet);
+    render();
     updateScrim.classList.add("open");
   }
 
