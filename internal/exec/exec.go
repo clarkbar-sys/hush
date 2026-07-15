@@ -10,8 +10,10 @@ package exec
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -48,6 +50,42 @@ type Event struct {
 type Spec struct {
 	Cmd     string        // shell command line, run via `sh -c`
 	Timeout time.Duration // 0 => DefaultTimeout; clamped to MaxTimeout
+	// User, when set, runs the command as that OS user via `sudo -n -u <user>`
+	// instead of directly as the hush user — the "run as" scoping. Empty keeps
+	// the historical behaviour: the command runs as whatever user the agent is.
+	// The name is passed to sudo as its own argument (never interpolated into the
+	// shell line), and it must satisfy validUserName; the caller is expected to
+	// have already checked it against the agent's allowlist.
+	User string
+}
+
+// userNameRE matches a conservative subset of POSIX/Linux usernames: it starts
+// with a lowercase letter or underscore, continues with lowercase letters,
+// digits, underscores or hyphens, and may end in a single `$` (the convention
+// some tools use for machine accounts). This is a defence-in-depth gate on the
+// value handed to `sudo -u`; the agent's allowlist is the primary control.
+var userNameRE = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}\$?$`)
+
+// ValidUserName reports whether name is a syntactically acceptable run-as user.
+// It never touches the system's user database — a name can be valid here yet not
+// exist yet (sudo reports "unknown user" at run time), which is deliberate so an
+// operator can allow a user before creating it.
+func ValidUserName(name string) bool { return userNameRE.MatchString(name) }
+
+// commandFor builds the *exec.Cmd for a run. With no User it is the historical
+// `sh -c <cmd>`; with a User it becomes `sudo -n -u <user> -- sh -c <cmd>`. The
+// `-n` (non-interactive) flag makes sudo fail fast with a clear stderr message
+// when the sudoers grant is missing rather than blocking on a password prompt
+// that would only ever time out. Returns an error for a malformed user so the
+// caller can surface it instead of shelling out with a bad argument.
+func commandFor(ctx context.Context, user, cmdline string) (*exec.Cmd, error) {
+	if user == "" {
+		return exec.CommandContext(ctx, "sh", "-c", cmdline), nil
+	}
+	if !ValidUserName(user) {
+		return nil, fmt.Errorf("invalid run-as user %q", user)
+	}
+	return exec.CommandContext(ctx, "sudo", "-n", "-u", user, "--", "sh", "-c", cmdline), nil
 }
 
 // Run executes spec and delivers its lifecycle as Events to emit, in order, from
@@ -72,7 +110,11 @@ func Run(ctx context.Context, spec Spec, emit func(Event)) {
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	c := exec.CommandContext(runCtx, "sh", "-c", cmdline)
+	c, err := commandFor(runCtx, spec.User, cmdline)
+	if err != nil {
+		emit(Event{Kind: "error", Data: err.Error()})
+		return
+	}
 	// Own process group so we can signal the whole tree, and a Cancel that kills
 	// the group (not just the shell) when the deadline trips or the client hangs
 	// up. WaitDelay bounds how long Wait blocks after that on stuck pipes.

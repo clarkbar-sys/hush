@@ -24,9 +24,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"syscall"
 
 	"github.com/clarkbar-sys/hush/internal/browse"
+	hexec "github.com/clarkbar-sys/hush/internal/exec"
 	"github.com/clarkbar-sys/hush/internal/version"
 	"github.com/clarkbar-sys/hush/internal/vitals"
 )
@@ -36,6 +39,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "print the hush-agent version and exit")
 	allowExec := flag.Bool("exec", true, "serve /exec, the Task construct's one-shot command runner (on by default; -exec=false disables). Commands run as the unprivileged hush user")
 	allowJobs := flag.Bool("jobs", false, "serve /jobs, the Job construct's cron scheduler (off by default; -jobs enables). Jobs fire unattended as the unprivileged hush user")
+	runAsFlag := flag.String("run-as", "", "comma-separated OS users a Task may run as via `sudo -u` (e.g. media,deploy). Empty = off. Needs a matching sudoers grant; never list root or a sudo-capable user")
 	stateDir := flag.String("state-dir", "", "directory for persisted state such as jobs.json (default: $STATE_DIRECTORY from systemd, else /var/lib/hush)")
 	flag.Parse()
 
@@ -56,6 +60,17 @@ func main() {
 	if v, ok := os.LookupEnv("HUSH_AGENT_JOBS"); ok {
 		jobsEnabled = v == "1" || v == "true" || v == "yes"
 	}
+
+	// The run-as allowlist: users a Task may become via `sudo -u`. The env var
+	// wins over the flag so the systemd unit's env file can set it without
+	// editing ExecStart, mirroring HUSH_AGENT_EXEC/JOBS. Malformed names are
+	// dropped with a warning rather than aborting the agent — one typo in the
+	// list shouldn't keep the box's agent from booting.
+	runAsSpec := *runAsFlag
+	if v, ok := os.LookupEnv("HUSH_AGENT_RUNAS"); ok {
+		runAsSpec = v
+	}
+	runAs := parseRunAs(runAsSpec)
 
 	if *showVersion {
 		fmt.Printf("hush-agent %s\n", version.Current())
@@ -96,12 +111,13 @@ func main() {
 	mux.HandleFunc("/file", handleFile)
 	// /exec is always routed so a box that opted out returns a clear "disabled"
 	// rather than a bare 404 (which would be indistinguishable from an old agent).
+	execHandle := execHandler(runAs)
 	mux.HandleFunc("/exec", func(w http.ResponseWriter, r *http.Request) {
 		if !execEnabled {
 			http.Error(w, "exec is disabled on this agent (started with -exec=false)", http.StatusForbidden)
 			return
 		}
-		handleExec(w, r)
+		execHandle(w, r)
 	})
 	// /jobs is always routed so a box with jobs off returns a clear "disabled"
 	// rather than a bare 404 (indistinguishable from an agent too old to have it).
@@ -121,6 +137,9 @@ func main() {
 
 	if execEnabled {
 		log.Printf("hush-agent: /exec enabled — one-shot commands run as uid %d", os.Geteuid())
+		if len(runAs) > 0 {
+			log.Printf("hush-agent: run-as users allowed via sudo -u: %s", strings.Join(sortedKeys(runAs), ", "))
+		}
 	} else {
 		log.Printf("hush-agent: /exec disabled (-exec=false)")
 	}
@@ -131,6 +150,38 @@ func main() {
 	}
 	log.Printf("hush-agent listening on %s", listenAddr)
 	log.Fatal(http.ListenAndServe(listenAddr, mux))
+}
+
+// parseRunAs turns the comma-separated -run-as / HUSH_AGENT_RUNAS value into the
+// set of users /exec will honour. Entries are trimmed and de-duplicated; a name
+// that isn't a syntactically valid username is dropped with a warning rather
+// than aborting the agent, so one typo can't keep the box's agent from booting.
+// It deliberately does not check whether each user exists on the box — a name
+// may be allowed before it's created (sudo reports "unknown user" at run time).
+func parseRunAs(spec string) map[string]bool {
+	set := make(map[string]bool)
+	for _, raw := range strings.Split(spec, ",") {
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			continue
+		}
+		if !hexec.ValidUserName(name) {
+			log.Printf("hush-agent: ignoring invalid -run-as user %q", name)
+			continue
+		}
+		set[name] = true
+	}
+	return set
+}
+
+// sortedKeys returns a set's keys in a stable order, only for tidy log output.
+func sortedKeys(set map[string]bool) []string {
+	out := make([]string, 0, len(set))
+	for k := range set {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // handleBrowse serves a read-only directory listing for the Store construct.
