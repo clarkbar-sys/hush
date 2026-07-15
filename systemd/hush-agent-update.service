@@ -1,0 +1,36 @@
+[Unit]
+Description=hush-agent — self-update to the latest GitHub release
+Documentation=https://github.com/clarkbar-sys/hush
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Runs as root (no User=) because the long-lived hush-agent runs as the
+# unprivileged "hush" user and so cannot rewrite its own root-owned binary in
+# /usr/local/bin or restart its unit. This oneshot is the only privileged
+# piece: it checks GitHub, verifies the release asset's SHA-256, swaps the
+# binary in place, and restarts hush-agent.service. It is triggered by
+# hush-agent-update.timer, never left running.
+Type=oneshot
+ExecStart=/usr/local/bin/hush-agent -self-update
+
+# Sandbox what a root oneshot needs: reach GitHub, write the binary directory,
+# and talk to systemd for the restart. Everything else is locked down.
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+# ProtectSystem=strict would make /usr read-only; the swap writes
+# /usr/local/bin, so use "full" (which still protects /etc, /boot) and grant
+# just that path back.
+ProtectSystem=full
+ReadWritePaths=/usr/local/bin
+
+[Install]
+# Not enabled directly; the timer pulls it in. Present so `systemctl start
+# hush-agent-update.service` works for an on-demand update too.
+WantedBy=multi-user.target
