@@ -9,12 +9,13 @@ import (
 	"testing"
 )
 
-// sseEvents drives handleExec against a body and returns the decoded events.
+// sseEvents drives the exec handler against a body and returns the decoded
+// events. It uses no run-as allowlist, so plain commands run as the test user.
 func sseEvents(t *testing.T, body string) []map[string]any {
 	t.Helper()
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/exec", strings.NewReader(body))
-	handleExec(rec, req)
+	execHandler(nil)(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d (%s), want 200", rec.Code, rec.Body.String())
 	}
@@ -62,7 +63,7 @@ func TestHandleExecStreamsRun(t *testing.T) {
 
 func TestHandleExecRejectsGet(t *testing.T) {
 	rec := httptest.NewRecorder()
-	handleExec(rec, httptest.NewRequest(http.MethodGet, "/exec", nil))
+	execHandler(nil)(rec, httptest.NewRequest(http.MethodGet, "/exec", nil))
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Errorf("status = %d, want 405", rec.Code)
 	}
@@ -70,8 +71,44 @@ func TestHandleExecRejectsGet(t *testing.T) {
 
 func TestHandleExecRequiresCmd(t *testing.T) {
 	rec := httptest.NewRecorder()
-	handleExec(rec, httptest.NewRequest(http.MethodPost, "/exec", strings.NewReader(`{"cmd":"  "}`)))
+	execHandler(nil)(rec, httptest.NewRequest(http.MethodPost, "/exec", strings.NewReader(`{"cmd":"  "}`)))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+// A run-as user that isn't on the agent's allowlist is refused with 403 before
+// anything is executed — the allowlist is the ceiling on what a caller can
+// become, so this gate is the security-critical one.
+func TestHandleExecRejectsUnlistedRunAsUser(t *testing.T) {
+	runAs := map[string]bool{"media": true}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/exec", strings.NewReader(`{"cmd":"id","user":"root"}`))
+	execHandler(runAs)(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d (%s), want 403", rec.Code, rec.Body.String())
+	}
+}
+
+// With the feature off (empty allowlist), any run-as request is refused — a
+// caller can't reach sudo on an agent that never opted in.
+func TestHandleExecRejectsRunAsWhenDisabled(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/exec", strings.NewReader(`{"cmd":"id","user":"media"}`))
+	execHandler(nil)(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d (%s), want 403", rec.Code, rec.Body.String())
+	}
+}
+
+// A blank/omitted user is the historical path: it runs directly, never touching
+// sudo, even when a run-as allowlist is configured.
+func TestHandleExecBlankUserRunsDirectly(t *testing.T) {
+	runAs := map[string]bool{"media": true}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/exec", strings.NewReader(`{"cmd":"echo hi","user":"  "}`))
+	execHandler(runAs)(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d (%s), want 200", rec.Code, rec.Body.String())
 	}
 }
