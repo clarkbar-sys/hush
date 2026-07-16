@@ -206,6 +206,18 @@ install_updater() {
   echo "enabled hush-control-update.timer (auto-update checks)" >&2
 }
 
+# install_agent_updater is the hush-agent counterpart of install_updater: a
+# root oneshot that swaps the agent binary for the latest verified release,
+# plus a timer that runs it. The agent itself runs unprivileged and can't do
+# this.
+install_agent_updater() {
+  fetch_unit hush-agent-update.service
+  fetch_unit hush-agent-update.timer
+  systemctl daemon-reload
+  systemctl enable --now hush-agent-update.timer
+  echo "enabled hush-agent-update.timer (auto-update checks)" >&2
+}
+
 install_agent() {
   fetch_binary hush-agent
   fetch_unit hush-agent.service
@@ -222,6 +234,7 @@ install_agent() {
     "# disables the one-shot /exec runner (on by default)." \
     "# HUSH_AGENT_JOBS=1"
   enable_service hush-agent.service
+  install_agent_updater
 }
 
 install_control() {
