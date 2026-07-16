@@ -59,7 +59,7 @@ type Machine struct {
 	Services             []vitals.Service `json:"services"`
 	Jobs                 []any            `json:"jobs"`
 	Tasks                []any            `json:"tasks"`
-	RunAs                []string         `json:"runAs,omitempty"` // users a Task may run as here (agent -run-as); drives the console picker
+	RunAs                []string         `json:"runAs,omitempty"`        // users a Task may run as here (agent -run-as); drives the console picker
 	RunAsGranted         *[]string        `json:"runAsGranted,omitempty"` // subset of RunAs the agent verified it can sudo to now; nil = not verified (older agent / exec off)
 	Online               bool             `json:"online"`
 	Alert                string           `json:"alert,omitempty"`
