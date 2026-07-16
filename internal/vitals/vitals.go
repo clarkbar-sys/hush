@@ -48,6 +48,14 @@ type Snapshot struct {
 	// or absent means the box offers no run-as users (the feature is off). This is
 	// capability metadata the agent fills in, not something vitals.Collect reads.
 	RunAs []string `json:"runAs,omitempty"`
+	// RunAsGranted, when non-nil, is the subset of RunAs the agent verified it
+	// can actually `sudo -n -u` right now — the sudoers grant is in place and the
+	// user resolves. A name in RunAs but absent here is advertised yet not
+	// currently runnable, so the console can flag it before a Task fails at run
+	// time. Nil (the field is omitted) means no verification was done — an older
+	// agent, or exec off — and the console makes no claim either way. Like RunAs,
+	// the agent fills this in; vitals.Collect never touches it.
+	RunAsGranted *[]string `json:"runAsGranted,omitempty"`
 }
 
 // --- CPU: sampled in the background so /vitals stays instant -----------------

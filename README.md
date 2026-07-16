@@ -178,6 +178,15 @@ a sudo-capable user:** the agent is reachable by anyone on the tailnet, so that
 list is the ceiling on what a caller can become. Users needn't exist yet — allow
 one now, `useradd` it later.
 
+Because the advertised list (`HUSH_AGENT_RUNAS`) and the sudoers grant are set
+separately, they can drift. The agent verifies each advertised user against the
+*real* grant (a passwordless `sudo -n -l` probe, cached and re-checked
+periodically) and reports the runnable subset in `/vitals`. The console's **Run
+as** picker flags any user it can't actually `sudo -u` yet — "no sudoers
+grant" — so a missing or drifted grant shows up as a ⚠ up front instead of a
+Task failing at run time. A user listed but not yet granted (e.g. you set the
+env but haven't pasted the **Run-as users** command) is exactly this case.
+
 ## Run as a service
 
 `install.sh` (above) already does this — every install is a systemd service

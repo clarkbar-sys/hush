@@ -187,6 +187,17 @@ sudoers itself (that would let anyone reaching the agent escalate) — *generate
 the root command to install the matching `hush-runas` grant rather than applying
 it, for the operator to run over SSH.
 
+The advertised list and the sudoers grant are two separate settings, so they can
+drift. The agent closes that gap by *verifying* each advertised user against the
+real grant — a passwordless `sudo -n -l -u <user>` probe (the same `-n` a Task
+uses, so it predicts the exact failure), cached briefly so `/vitals` never shells
+out per poll — and reports the runnable subset as `runAsGranted`. The console
+cross-references it and flags any advertised user without a live grant, so a
+missing or stale sudoers rule surfaces in the picker before a Task hits it.
+Verification is display-only: `/exec` still gates on the agent's own vetted
+allowlist, never on whatever sudoers happens to permit, so the "never `root`"
+ceiling stays load-bearing.
+
 ## Jobs — scheduling a command
 
 The **Job** construct ("a cron / timer — fires on a schedule") is the Task

@@ -59,7 +59,8 @@ type Machine struct {
 	Services             []vitals.Service `json:"services"`
 	Jobs                 []any            `json:"jobs"`
 	Tasks                []any            `json:"tasks"`
-	RunAs                []string         `json:"runAs,omitempty"` // users a Task may run as here (agent -run-as); drives the console picker
+	RunAs                []string         `json:"runAs,omitempty"`        // users a Task may run as here (agent -run-as); drives the console picker
+	RunAsGranted         *[]string        `json:"runAsGranted,omitempty"` // subset of RunAs the agent verified it can sudo to now; nil = not verified (older agent / exec off)
 	Online               bool             `json:"online"`
 	Alert                string           `json:"alert,omitempty"`
 }
@@ -882,6 +883,7 @@ func fetchOne(client *http.Client, a Agent, latest string) Machine {
 	m.CPU, m.Mem, m.Disk = s.CPU, s.Mem, s.Disk
 	m.GPU, m.VRAM, m.GPUName, m.VRAMText = s.GPU, s.VRAM, s.GPUName, s.VRAMText
 	m.RunAs = s.RunAs
+	m.RunAsGranted = s.RunAsGranted
 	if len(s.Services) > 0 {
 		m.Services = s.Services
 	}
