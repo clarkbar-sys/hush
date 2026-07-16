@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.18.0](https://github.com/clarkbar-sys/hush/compare/v1.17.0...v1.18.0) (2026-07-16)
+
+
+### Features
+
+* **agent:** auto-update hush-agent via a root oneshot + timer ([#93](https://github.com/clarkbar-sys/hush/issues/93)) ([c381c37](https://github.com/clarkbar-sys/hush/commit/c381c3722285b992a59cd158db6f83a229b2dd6d))
+* **runas:** verify advertised run-as users against the real sudoers grant ([#94](https://github.com/clarkbar-sys/hush/issues/94)) ([1ba8083](https://github.com/clarkbar-sys/hush/commit/1ba8083a1763f3f2f3444d0458a5214b8095cc7e))
+
 ## [1.17.0](https://github.com/clarkbar-sys/hush/compare/v1.16.0...v1.17.0) (2026-07-15)
 
 
