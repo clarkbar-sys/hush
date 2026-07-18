@@ -16,6 +16,7 @@ import (
 
 	"github.com/clarkbar-sys/hush/internal/restic"
 	"github.com/clarkbar-sys/hush/internal/store"
+	"github.com/robfig/cron/v3"
 )
 
 // Backup is the design's "a Job that hauls a Machine into a Store, dedup'd": a
@@ -37,6 +38,7 @@ type Backup struct {
 	Paths         []string `json:"paths"`
 	Excludes      []string `json:"excludes,omitempty"`
 	OneFileSystem bool     `json:"oneFileSystem,omitempty"` // --one-file-system: whole-machine mode
+	Schedule      string   `json:"schedule,omitempty"`      // 5-field cron / @macro; empty = manual-only
 	CreatedAt     string   `json:"createdAt"`               // RFC3339 UTC
 }
 
@@ -63,6 +65,8 @@ type backupView struct {
 	Paths         []string     `json:"paths"`
 	Excludes      []string     `json:"excludes,omitempty"`
 	OneFileSystem bool         `json:"oneFileSystem,omitempty"`
+	Schedule      string       `json:"schedule,omitempty"`
+	NextRun       string       `json:"nextRun,omitempty"` // RFC3339 UTC of the next scheduled fire, if scheduled
 	CreatedAt     string       `json:"createdAt"`
 	Status        backupStatus `json:"status"`
 }
@@ -87,23 +91,77 @@ func newBackupStore(path string) *backupStore {
 	return store.New(path, "backups", func(b Backup) string { return b.ID })
 }
 
-// backupManager owns the persisted backup definitions and their runtime status.
-// It has no scheduler of its own yet — a run is triggered by the console and
-// streams over that connection, the way a Task run does; unattended scheduling
-// is a later slice (a Job can already fire `restic` today). running guards a
-// definition against two overlapping runs, which would race on the repo lock.
+// backupManager owns the persisted backup definitions, their runtime status, and
+// a cron engine that fires the scheduled ones unattended — the same robfig/cron
+// the Job scheduler uses, so a nightly backup and a nightly Job are the same
+// clockwork. A backup with an empty Schedule is manual-only; it just never gets a
+// cron entry. running guards a definition against two overlapping runs (a
+// scheduled fire while a manual run is in flight, say), which would race on the
+// repo lock. A run streams to the console when triggered there, and to nowhere
+// when the clock fires it — the outcome lands in status either way.
 type backupManager struct {
 	mu      sync.Mutex
 	store   *backupStore
 	status  map[string]*backupStatus
 	running map[string]bool
+	cron    *cron.Cron
+	entries map[string]cron.EntryID // backup id -> cron entry, for removal and next-run
 }
 
+// newBackupManager loads the persisted backups and registers every scheduled one
+// with cron. A backup whose schedule no longer parses is skipped with a warning
+// rather than aborting the agent — a broken backups.json must not keep the box
+// from booting its agent. Call Start to begin firing and Stop on shutdown.
 func newBackupManager(path string) *backupManager {
-	return &backupManager{
+	m := &backupManager{
 		store:   newBackupStore(path),
 		status:  make(map[string]*backupStatus),
 		running: make(map[string]bool),
+		cron:    cron.New(),
+		entries: make(map[string]cron.EntryID),
+	}
+	for _, b := range m.store.Snapshot() {
+		m.status[b.ID] = &backupStatus{}
+		if b.Schedule == "" {
+			continue
+		}
+		if err := m.register(b); err != nil {
+			log.Printf("hush-agent: skipping schedule for backup %s (%q): %v", b.ID, b.Name, err)
+		}
+	}
+	return m
+}
+
+func (m *backupManager) Start() { m.cron.Start() }
+
+// Stop halts the cron engine, waiting for any in-flight scheduled fire to return.
+func (m *backupManager) Stop() { m.cron.Stop() }
+
+// register wires one backup's schedule into cron so it fires unattended. The
+// caller holds m.mu (or, at construction, has exclusive access).
+func (m *backupManager) register(b Backup) error {
+	id, err := m.cron.AddFunc(b.Schedule, func() { m.runScheduled(b.ID) })
+	if err != nil {
+		return err
+	}
+	m.entries[b.ID] = id
+	return nil
+}
+
+// unregister removes a backup's cron entry, if it has one. The caller holds m.mu.
+func (m *backupManager) unregister(id string) {
+	if eid, ok := m.entries[id]; ok {
+		m.cron.Remove(eid)
+		delete(m.entries, id)
+	}
+}
+
+// runScheduled fires a backup from the clock, with no client to stream to. A run
+// already in flight (a manual run, or a previous fire that overran its interval)
+// is skipped rather than queued, so a long backup can't stack copies of itself.
+func (m *backupManager) runScheduled(id string) {
+	if err := m.Run(context.Background(), id, func(restic.Event) {}); err != nil {
+		log.Printf("hush-agent: scheduled backup %s skipped: %v", id, err)
 	}
 }
 
@@ -132,7 +190,16 @@ func (m *backupManager) view(b Backup) backupView {
 	if p, ok := m.status[b.ID]; ok {
 		st = *p
 	}
+	eid, hasEntry := m.entries[b.ID]
 	m.mu.Unlock()
+	// Query cron outside m.mu: on a running engine Entry round-trips to the run
+	// loop, and a fired job takes m.mu, so holding it here could serialise the two.
+	next := ""
+	if hasEntry {
+		if e := m.cron.Entry(eid); e.Valid() && !e.Next.IsZero() {
+			next = e.Next.UTC().Format(time.RFC3339)
+		}
+	}
 	return backupView{
 		ID:            b.ID,
 		Name:          b.Name,
@@ -140,6 +207,8 @@ func (m *backupManager) view(b Backup) backupView {
 		Paths:         b.Paths,
 		Excludes:      b.Excludes,
 		OneFileSystem: b.OneFileSystem,
+		Schedule:      b.Schedule,
+		NextRun:       next,
 		CreatedAt:     b.CreatedAt,
 		Status:        st,
 	}
@@ -176,6 +245,16 @@ func (m *backupManager) Add(ctx context.Context, b Backup) (backupView, error) {
 	}
 	m.mu.Lock()
 	m.status[saved.ID] = &backupStatus{}
+	if saved.Schedule != "" {
+		if err := m.register(saved); err != nil {
+			// The schedule was validated at create, so this is unexpected; still,
+			// don't leave a persisted backup that will never fire — roll it back.
+			delete(m.status, saved.ID)
+			m.mu.Unlock()
+			_, _ = m.store.Delete(saved.ID)
+			return backupView{}, fmt.Errorf("schedule %q: %w", saved.Schedule, err)
+		}
+	}
 	m.mu.Unlock()
 	return m.view(saved), nil
 }
@@ -194,6 +273,7 @@ func (m *backupManager) Delete(id string) (bool, error) {
 	m.mu.Lock()
 	delete(m.status, id)
 	delete(m.running, id)
+	m.unregister(id)
 	m.mu.Unlock()
 	return true, nil
 }
@@ -288,9 +368,10 @@ var errBackupNotFound = errors.New("no such backup")
 // Backup with its id and timestamp filled in. Paths must be absolute — a backup
 // names roots on the box, not relative fragments — and the repo and password are
 // required, since a restic repo is meaningless without either.
-func validateBackup(name, repo, password string, paths, excludes []string, oneFS bool) (Backup, error) {
+func validateBackup(name, repo, password string, paths, excludes []string, oneFS bool, schedule string) (Backup, error) {
 	name = strings.TrimSpace(name)
 	repo = strings.TrimSpace(repo)
+	schedule = strings.TrimSpace(schedule)
 	if name == "" {
 		return Backup{}, errors.New("name is required")
 	}
@@ -334,6 +415,14 @@ func validateBackup(name, repo, password string, paths, excludes []string, oneFS
 		}
 		cleanEx = append(cleanEx, e)
 	}
+	// A schedule is optional (empty = manual-only); when present it must parse as
+	// the same 5-field cron spec the Job scheduler accepts, so an invalid one is
+	// rejected here rather than silently never firing.
+	if schedule != "" {
+		if _, err := cron.ParseStandard(schedule); err != nil {
+			return Backup{}, fmt.Errorf(`invalid schedule (want a 5-field cron spec like "0 3 * * *", or @daily): %w`, err)
+		}
+	}
 	return Backup{
 		ID:            newBackupID(),
 		Name:          name,
@@ -342,6 +431,7 @@ func validateBackup(name, repo, password string, paths, excludes []string, oneFS
 		Paths:         cleanPaths,
 		Excludes:      cleanEx,
 		OneFileSystem: oneFS,
+		Schedule:      schedule,
 		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
 	}, nil
 }
@@ -370,12 +460,13 @@ func (m *backupManager) handleBackups(w http.ResponseWriter, r *http.Request) {
 			Paths         []string `json:"paths"`
 			Excludes      []string `json:"excludes"`
 			OneFileSystem bool     `json:"oneFileSystem"`
+			Schedule      string   `json:"schedule"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "bad request body", http.StatusBadRequest)
 			return
 		}
-		def, err := validateBackup(req.Name, req.Repo, req.Password, req.Paths, req.Excludes, req.OneFileSystem)
+		def, err := validateBackup(req.Name, req.Repo, req.Password, req.Paths, req.Excludes, req.OneFileSystem, req.Schedule)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

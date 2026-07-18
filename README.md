@@ -194,10 +194,13 @@ The **Backup** construct sends a machine's paths into a
 from **＋ Build → Backup** or the **Backups** section of any Machine view. Point
 it at a restic backend (a [rest-server](https://github.com/restic/rest-server)
 URL on the NAS is the blessed target, reachable over the tailnet and
-append-only; `sftp:` and local paths work too), name the paths, and optionally
-tick **whole machine** (`--one-file-system`). Creating a backup initialises the
-repo and verifies the password against it, so a bad address or key fails then and
-not at 3am; a run streams restic's output to the same live terminal a Task uses.
+append-only; `sftp:` and local paths work too), name the paths (or **pick them
+from the disk-usage treemap**), and optionally tick **whole machine**
+(`--one-file-system`). Give it a **cron schedule** and the agent fires it
+unattended — nightly, on the box — the same clockwork Jobs use; leave the
+schedule blank to run it only by hand. Creating a backup initialises the repo and
+verifies the password against it, so a bad address or key fails then and not at
+3am; a run streams restic's output to the same live terminal a Task uses.
 
 It's **off by default** — a backup reads whatever paths you point it at — so a
 box serves it only when `hush-agent` is started with `-backup` (or
