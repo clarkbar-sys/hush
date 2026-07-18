@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.0](https://github.com/clarkbar-sys/hush/compare/v1.21.0...v1.22.0) (2026-07-18)
+
+
+### Features
+
+* live htop-style CPU/network panel per machine ([#113](https://github.com/clarkbar-sys/hush/issues/113)) ([3d86731](https://github.com/clarkbar-sys/hush/commit/3d8673170e58dd2a6182fd771e6d581cf20a4950))
+
 ## [1.21.0](https://github.com/clarkbar-sys/hush/compare/v1.20.1...v1.21.0) (2026-07-18)
 
 
