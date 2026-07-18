@@ -97,22 +97,32 @@ Language: **Go** across the backend. **Scheme** is reserved for the Workflow DSL
 
 ## Roadmap
 
-Each phase layers on the same map.
+Each phase layers on the same map. Delivery hasn't landed strictly in order —
+Tasks, Jobs, Workflows, and the Backup construct (the write-side slices of
+Phases 1–4) shipped ahead of dedicated Service actions, which are the one
+piece still outstanding.
 
 - **Phase 0 — Proof of life (read-only).** Fleet map + live vitals + drill into
   a machine to *see* its services. No construct button changes anything; the
   one exception is fleet membership itself — adding a machine through the
-  console. ← we are here
+  console. **Shipped.**
 - **Phase 1 — Actions.** Start / stop / restart Services; live journal tail.
+  **Not yet shipped.** Ad-hoc commands — including a manual `systemctl
+  restart ...` — are available today via the Task construct; dedicated
+  Service controls and a live journal tail are still to come. ← we are here
 - **Phase 2 — Creation.** Build new Services and Jobs from the palette.
+  **Jobs: shipped** (cron-scheduled commands); Service creation is still to
+  come.
 - **Phase 3 — Workflows.** The visual blueprint builder (Scheme DSL). A first
   slice lands early: saved multi-step blueprints that sequence the existing
   `/exec` in plain Go (see below), so Workflows are usable before the Lisp.
+  **Shipped** (the plain-Go slice); the Scheme DSL builder is still to come.
 - **Phase 4 — Backups & Store.** The NAS view; intelligent dedup'd backups.
   Two slices land early: read-only **file browsing** on every machine (see
   below), so the NAS is walkable; and the **Backup** construct — on-demand
-  restic backups, dedup'd and encrypted (see "Backups — restic" below) — with
-  unattended scheduling and cross-site replication still to come.
+  restic backups, dedup'd and encrypted (see "Backups — restic" below).
+  **Shipped**, including unattended scheduling and snapshot restore;
+  cross-site replication is still to come.
 
 ## Store — browsing files
 
