@@ -136,6 +136,64 @@ func proxyBackupRun(w http.ResponseWriter, r *http.Request, client *http.Client,
 	flushCopy(w, resp.Body)
 }
 
+// proxyBackupRestore forwards a restore to the agent's /backups/{id}/restore and
+// streams the Server-Sent Events back, like proxyBackupRun. A restore writes data
+// onto the box, so — like a run — it's audited with who asked, where, and which
+// backup (the target rides the body, logged here for the trail).
+func proxyBackupRestore(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent, id string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	if err != nil {
+		http.Error(w, "bad request body", http.StatusBadRequest)
+		return
+	}
+	caller := callerFrom(r.Context())
+	if caller == "" {
+		caller = "lan"
+	}
+	log.Printf("backup restore on %s by %s: %s %s", a.Name, caller, id, backupRestorePreview(body))
+
+	u := strings.TrimRight(a.Addr, "/") + "/backups/" + id + "/restore"
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, u, bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, "bad upstream request", http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "agent unreachable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	if ct := resp.Header.Get("Content-Type"); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(resp.StatusCode)
+	flushCopy(w, resp.Body)
+}
+
+// backupRestorePreview pulls the snapshot and target out of a restore body for
+// the audit log (no secrets ride this body, but keep it tidy).
+func backupRestorePreview(body []byte) string {
+	var req struct {
+		Snapshot string `json:"snapshot"`
+		Target   string `json:"target"`
+	}
+	_ = json.Unmarshal(body, &req)
+	snap := strings.TrimSpace(req.Snapshot)
+	if snap == "" {
+		snap = "latest"
+	}
+	return snap + " → " + strings.TrimSpace(req.Target)
+}
+
 // backupCreatePreview pulls just the name and repository out of a create body
 // for the audit log — deliberately never the password, which rides the same body.
 func backupCreatePreview(body []byte) string {
