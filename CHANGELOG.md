@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.20.0](https://github.com/clarkbar-sys/hush/compare/v1.19.0...v1.20.0) (2026-07-18)
+
+
+### Features
+
+* show per-machine network rx/tx as trend lines under load ([#103](https://github.com/clarkbar-sys/hush/issues/103)) ([8ff910c](https://github.com/clarkbar-sys/hush/commit/8ff910ce01aadee47550c2fadb857911111129b2))
+
+
+### Bug Fixes
+
+* restart already-running service when re-installing ([#101](https://github.com/clarkbar-sys/hush/issues/101)) ([9bb1859](https://github.com/clarkbar-sys/hush/commit/9bb185944f26c304031e7ca649f5bf96dea0b260))
+
 ## [1.19.0](https://github.com/clarkbar-sys/hush/compare/v1.18.0...v1.19.0) (2026-07-18)
 
 
