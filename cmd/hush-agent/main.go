@@ -138,6 +138,7 @@ func main() {
 		}
 	})
 	mux.HandleFunc("/browse", handleBrowse)
+	mux.HandleFunc("/du", handleDu)
 	mux.HandleFunc("/file", handleFile)
 	// /exec is always routed so a box that opted out returns a clear "disabled"
 	// rather than a bare 404 (which would be indistinguishable from an old agent).
@@ -237,6 +238,40 @@ func handleBrowse(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(listing); err != nil {
 		log.Printf("encode browse: %v", err)
+	}
+}
+
+// duDeadline bounds a single /du walk. It's generous — sizing a directory
+// tree means statting every file under it, which on a NAS-sized volume can
+// take real time — but finite, so a request against something enormous still
+// gets a (Truncated) answer back rather than hanging until the client gives up.
+const duDeadline = 25 * time.Second
+
+// handleDu serves recursive directory sizes for one level of the Store
+// construct's treemap view, one level at a time like /browse. Same unjailed,
+// OS-permission-bounded model and error mapping as handleBrowse; the walk
+// itself is bounded by duDeadline rather than the request's own context, so a
+// slow client disconnecting mid-walk doesn't change the answer.
+func handleDu(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), duDeadline)
+	defer cancel()
+	listing, err := browse.Du(ctx, r.URL.Query().Get("path"))
+	if err != nil {
+		status := http.StatusInternalServerError
+		switch {
+		case os.IsPermission(err):
+			status = http.StatusForbidden
+		case os.IsNotExist(err):
+			status = http.StatusNotFound
+		case errors.Is(err, os.ErrInvalid), errors.Is(err, syscall.ENOTDIR):
+			status = http.StatusBadRequest
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(listing); err != nil {
+		log.Printf("encode du: %v", err)
 	}
 }
 

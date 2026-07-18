@@ -7,6 +7,8 @@
 package browse
 
 import (
+	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -96,4 +98,119 @@ func parentOf(clean string) string {
 		return ""
 	}
 	return filepath.Dir(clean)
+}
+
+// maxDuFiles bounds how many files a single Du call will stat, summed across
+// every immediate child directory it recurses into. Without a cap, sizing
+// something enormous — a whole root filesystem, a NAS's media pool — could
+// run for as long as the disk takes to enumerate; hitting the cap (or ctx's
+// deadline) reports Truncated instead of blocking the caller indefinitely.
+const maxDuFiles = 300_000
+
+// DuEntry is one immediate child of the directory being sized, carrying its
+// full recursive size: a file's own size, or the sum of everything under a
+// directory. Unlike Entry.Size (meaningless for dirs), this is always real —
+// it's what a treemap needs to size each child's box.
+type DuEntry struct {
+	Name  string `json:"name"`
+	IsDir bool   `json:"isDir"`
+	Size  int64  `json:"size"`
+}
+
+// DuListing is the result of sizing one directory's immediate children — one
+// level of a treemap. The caller drills deeper by calling Du again on
+// whichever child looks big, mirroring how List navigates one directory at a
+// time rather than returning the whole subtree up front.
+type DuListing struct {
+	Path      string    `json:"path"`
+	Parent    string    `json:"parent"`
+	Entries   []DuEntry `json:"entries"`   // sorted by size, largest first
+	Truncated bool      `json:"truncated"` // hit maxDuFiles or ctx's deadline before finishing every child
+}
+
+// Du sizes every immediate child of path, recursing into subdirectories to
+// total their contents. Symlinks are reported at their own (tiny) lstat size
+// and never followed — walking through one risks a cycle (a link back up the
+// tree) or double-counting a subtree two links share. ctx bounds the whole
+// call, so a directory too large to fully walk within the deadline reports
+// Truncated rather than hanging the request.
+func Du(ctx context.Context, path string) (DuListing, error) {
+	if path == "" {
+		path = "/"
+	}
+	clean := filepath.Clean(path)
+	if !filepath.IsAbs(clean) {
+		return DuListing{}, &os.PathError{Op: "browse", Path: path, Err: os.ErrInvalid}
+	}
+
+	dirents, err := os.ReadDir(clean)
+	if err != nil {
+		return DuListing{}, err
+	}
+
+	l := DuListing{Path: clean, Parent: parentOf(clean)}
+	visited := 0
+	for _, de := range dirents {
+		if ctx.Err() != nil {
+			l.Truncated = true
+			break
+		}
+		info, ierr := de.Info()
+		if ierr != nil {
+			continue // vanished between readdir and stat — drop it rather than fail the whole listing
+		}
+		full := filepath.Join(clean, de.Name())
+		switch {
+		case info.Mode()&os.ModeSymlink != 0:
+			l.Entries = append(l.Entries, DuEntry{Name: de.Name(), Size: info.Size()})
+		case de.IsDir():
+			size, complete := dirSize(ctx, full, &visited)
+			if !complete {
+				l.Truncated = true
+			}
+			l.Entries = append(l.Entries, DuEntry{Name: de.Name(), IsDir: true, Size: size})
+		default:
+			visited++
+			l.Entries = append(l.Entries, DuEntry{Name: de.Name(), Size: info.Size()})
+		}
+		if visited >= maxDuFiles {
+			l.Truncated = true
+			break
+		}
+	}
+
+	sort.Slice(l.Entries, func(i, j int) bool { return l.Entries[i].Size > l.Entries[j].Size })
+	return l, nil
+}
+
+// dirSize walks root recursively and returns its total size in bytes. visited
+// is a counter shared across the whole Du call, so the maxDuFiles budget is
+// spent across sibling directories rather than reset per-directory; complete
+// is false if the walk stopped early on that counter or ctx's deadline.
+func dirSize(ctx context.Context, root string, visited *int) (size int64, complete bool) {
+	complete = true
+	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // permission-denied subtree etc — skip it, keep summing the rest
+		}
+		if ctx.Err() != nil {
+			complete = false
+			return filepath.SkipAll
+		}
+		if d.Type()&os.ModeSymlink != 0 || d.IsDir() {
+			return nil // don't follow symlinks or count dirs themselves, just the files under them
+		}
+		info, ierr := d.Info()
+		if ierr != nil {
+			return nil
+		}
+		size += info.Size()
+		*visited++
+		if *visited >= maxDuFiles {
+			complete = false
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return size, complete
 }
