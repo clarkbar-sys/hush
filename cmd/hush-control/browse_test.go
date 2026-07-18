@@ -79,6 +79,65 @@ func TestProxyBrowseUnknownMachine(t *testing.T) {
 	}
 }
 
+func TestProxyDuRelaysListing(t *testing.T) {
+	agent := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/du" {
+			t.Errorf("agent got path %q, want /du", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("path"); got != "/mnt/tank" {
+			t.Errorf("agent got path query %q, want /mnt/tank", got)
+		}
+		json.NewEncoder(w).Encode(browse.DuListing{
+			Path:    "/mnt/tank",
+			Entries: []browse.DuEntry{{Name: "media", IsDir: true, Size: 1024}},
+		})
+	})
+	mux, _ := browseFleet(t, agent)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/machines/nas/du?path=/mnt/tank", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got browse.DuListing
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Path != "/mnt/tank" || len(got.Entries) != 1 || got.Entries[0].Size != 1024 {
+		t.Fatalf("unexpected listing: %+v", got)
+	}
+}
+
+func TestProxyDuPreservesStatus(t *testing.T) {
+	agent := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "permission denied", http.StatusForbidden)
+	})
+	mux, _ := browseFleet(t, agent)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/machines/nas/du?path=/root", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403 (agent's status must pass through)", rec.Code)
+	}
+}
+
+func TestProxyDuUnknownMachine(t *testing.T) {
+	agent := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	mux, _ := browseFleet(t, agent)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/machines/ghost/du?path=/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 for unknown machine", rec.Code)
+	}
+}
+
 func TestProxyFileForwardsRangeAndRelays(t *testing.T) {
 	agent := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/file" {

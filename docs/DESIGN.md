@@ -129,6 +129,17 @@ hush. The agent's systemd unit is hardened but intentionally omits
 `ProtectHome`/`PrivateTmp`, which would blank out readable paths and make the
 sandbox — rather than the user — the real fence.
 
+**Disk usage — a windirstat-style treemap.** The Store view's "Disk usage"
+button sizes a directory's immediate children recursively via the agent's
+`/du?path=` endpoint (proxied at `/api/machines/{host}/du`, same shape as
+`/browse`) and renders them as a squarified treemap — box area proportional to
+size — so the biggest thing on disk is the biggest thing on screen. Only one
+level renders at a time; clicking a directory's box drills into it and fetches
+that subtree's own children, the same lazy navigation `/browse` uses. Sizing is
+bounded — a 25-second walk deadline and a cap on files stated — so pointing it
+at something enormous (a whole root filesystem, a NAS's media pool) returns a
+partial, `truncated` answer instead of hanging the request.
+
 ## Tasks — running a command
 
 The **Task** construct ("a one-shot run of a program — ephemeral") is the write
