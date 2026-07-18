@@ -211,6 +211,42 @@ passes through hush-control or the phone, and the API never returns it. Needs th
 `restic` binary on the box. See
 [`docs/DESIGN.md`](./docs/DESIGN.md#backups--restic-the-first-slice).
 
+Restore from the **Snapshots** view (the `⋯` on a backup): pick a snapshot, hit
+`⤓`, and restic writes its files into a target folder — defaulting to a scratch
+dir (`/var/tmp/hush-restore/<id>`) so you can inspect a restore before pointing
+it at a live path.
+
+#### Setting up backups end to end
+
+A backup needs three things in place; once they are, the console does the rest.
+
+1. **`restic` on every box you back up** — your distro's package (`apt install
+   restic`, `pacman -S restic`, …) or restic's static binary. The agent reports
+   "restic is not installed" at create time if it's missing.
+2. **A repository to back up *to*.** The durable, self-hosted choice is a
+   [rest-server](https://github.com/restic/rest-server) on the box that holds the
+   disks (the NAS). Run it in **append-only** mode so a compromised source can add
+   snapshots but never delete old ones, behind a password:
+
+   ```bash
+   # on the NAS — one repo host for the whole fleet, reached over the tailnet
+   rest-server --path /srv/restic --listen :8000 --append-only \
+     --htpasswd-file /srv/restic/.htpasswd
+   ```
+
+   Then a backup's **Repository** is `rest:http://<nas-tailnet-ip>:8000/<name>`
+   (each machine can use its own `<name>` sub-repo, or share one — restic dedups
+   across them). `sftp:` to the NAS or a local/mounted path work too, without the
+   append-only guarantee.
+3. **`-backup` on the agents.** Set `HUSH_AGENT_BACKUP=1` in the box's
+   `/etc/hush/*.env` and `systemctl restart hush-agent` (backups are off by
+   default). To fire them unattended, give the backup a cron schedule when you
+   create it.
+
+Then, from the console: **Build → Backup**, pick the machine, the repo, the paths
+(or the treemap), a schedule — and verify it with a **Run**, then a **Restore**
+of the snapshot it wrote into a scratch dir.
+
 ## Run as a service
 
 `install.sh` (above) already does this — every install is a systemd service

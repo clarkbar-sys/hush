@@ -175,13 +175,44 @@ func Snapshots(ctx context.Context, repo Repo, tags ...string) ([]Snapshot, erro
 // the same contract package exec.Run offers. It returns once restic exits, the
 // timeout trips, or ctx is cancelled. A zero timeout applies DefaultBackupTimeout.
 func Backup(ctx context.Context, repo Repo, spec Spec, timeout time.Duration, emit func(Event)) {
+	stream(ctx, repo, timeout, emit, buildBackupArgs(spec)...)
+}
+
+// buildRestoreArgs assembles `restic restore <snapshot> --target <dir> [--include
+// <path>…]`. snapshot is a snapshot id (or "latest"); target is where the files
+// land; includes narrow the restore to specific paths within the snapshot.
+func buildRestoreArgs(snapshot, target string, includes []string) []string {
+	args := []string{"restore", snapshot, "--target", target}
+	for _, inc := range includes {
+		if strings.TrimSpace(inc) == "" {
+			continue
+		}
+		args = append(args, "--include", inc)
+	}
+	return args
+}
+
+// Restore runs `restic restore`, streaming its lifecycle to emit the same way
+// Backup does. It reads from the repository and writes into target; it never
+// touches the snapshots, so a restore can't harm the backup history.
+func Restore(ctx context.Context, repo Repo, snapshot, target string, includes []string, timeout time.Duration, emit func(Event)) {
+	stream(ctx, repo, timeout, emit, buildRestoreArgs(snapshot, target, includes)...)
+}
+
+// stream runs `restic <args>` with repo's environment, delivering its lifecycle
+// as Events to emit in order from the calling goroutine (emit is never called
+// concurrently) — the shared engine behind Backup and Restore. It returns once
+// restic exits, the timeout trips, or ctx is cancelled; a zero timeout applies
+// DefaultBackupTimeout. Output is capped at maxOutput, past which Truncated is
+// set on the exit event.
+func stream(ctx context.Context, repo Repo, timeout time.Duration, emit func(Event), args ...string) {
 	if timeout <= 0 {
 		timeout = DefaultBackupTimeout
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	c := exec.CommandContext(runCtx, Binary, buildBackupArgs(spec)...)
+	c := exec.CommandContext(runCtx, Binary, args...)
 	c.Env = repo.env()
 	// Own process group so a timeout or a client hang-up kills the whole restic
 	// tree, not just the parent — the same containment package exec uses.

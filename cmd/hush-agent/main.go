@@ -198,11 +198,13 @@ func main() {
 		mux.HandleFunc("/backups/{id}", backups.handleBackup)
 		mux.HandleFunc("/backups/{id}/run", backups.handleBackupRun)
 		mux.HandleFunc("/backups/{id}/snapshots", backups.handleBackupSnapshots)
+		mux.HandleFunc("/backups/{id}/restore", backups.handleBackupRestore)
 	} else {
 		mux.HandleFunc("/backups", backupDisabled)
 		mux.HandleFunc("/backups/{id}", backupDisabled)
 		mux.HandleFunc("/backups/{id}/run", backupDisabled)
 		mux.HandleFunc("/backups/{id}/snapshots", backupDisabled)
+		mux.HandleFunc("/backups/{id}/restore", backupDisabled)
 	}
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))

@@ -136,6 +136,47 @@ func TestProxyBackupRunStreams(t *testing.T) {
 	}
 }
 
+func TestProxyBackupRestoreStreams(t *testing.T) {
+	var gotBody string
+	agent := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/backups/abc123/restore" {
+			t.Errorf("agent got %s %q, want POST /backups/abc123/restore", r.Method, r.URL.Path)
+		}
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		io.WriteString(w, "data: {\"kind\":\"start\",\"pid\":9}\n\n")
+		io.WriteString(w, "data: {\"kind\":\"exit\",\"ms\":5}\n\n")
+	})
+	mux, _ := backupsFleet(t, agent)
+
+	body := `{"snapshot":"aaaa1111","target":"/var/tmp/hush-restore"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/machines/nas/backups/abc123/restore", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if !strings.Contains(gotBody, "aaaa1111") || !strings.Contains(gotBody, "/var/tmp/hush-restore") {
+		t.Fatalf("agent did not receive the restore body verbatim: %q", gotBody)
+	}
+	if !strings.Contains(rec.Body.String(), `"kind":"start"`) || !strings.Contains(rec.Body.String(), `"kind":"exit"`) {
+		t.Fatalf("restore did not stream the SSE frames: %q", rec.Body.String())
+	}
+}
+
+func TestBackupRestorePreview(t *testing.T) {
+	got := backupRestorePreview([]byte(`{"snapshot":"aaaa1111","target":"/var/tmp/r"}`))
+	if !strings.Contains(got, "aaaa1111") || !strings.Contains(got, "/var/tmp/r") {
+		t.Fatalf("preview should name the snapshot and target: %q", got)
+	}
+	if def := backupRestorePreview([]byte(`{"target":"/x"}`)); !strings.Contains(def, "latest") {
+		t.Fatalf("empty snapshot should read as latest: %q", def)
+	}
+}
+
 func TestProxyBackupSnapshotsForwards(t *testing.T) {
 	agent := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/backups/abc123/snapshots" {

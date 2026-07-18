@@ -259,6 +259,14 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) (http.Ha
 		}
 		proxyBackupSnapshots(w, r, backupClient, a, r.PathValue("id"))
 	})
+	mux.HandleFunc("/api/machines/{host}/backups/{id}/restore", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyBackupRestore(w, r, streamClient, a, r.PathValue("id"))
+	})
 	// Workflows: saved multi-step blueprints. They persist to workflows.json
 	// beside the fleet config and run by fanning out to the same /exec each Task
 	// uses. A run streams for as long as its steps do, so it rides the no-timeout
