@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.21.0](https://github.com/clarkbar-sys/hush/compare/v1.20.1...v1.21.0) (2026-07-18)
+
+
+### Features
+
+* generate backup setup commands from detected box state ([#112](https://github.com/clarkbar-sys/hush/issues/112)) ([fac5dd7](https://github.com/clarkbar-sys/hush/commit/fac5dd7fdfd1497ceebc2dc2ce464a995332e48b))
+* pick backup paths from the disk-usage treemap ([#108](https://github.com/clarkbar-sys/hush/issues/108)) ([bbda572](https://github.com/clarkbar-sys/hush/commit/bbda572e017be986696b32e96e08867506176f77))
+* restic-backed Backup construct (on-demand backups) ([#106](https://github.com/clarkbar-sys/hush/issues/106)) ([e0406f8](https://github.com/clarkbar-sys/hush/commit/e0406f854f93b22dc9c308d202aa9b08bfa457a7))
+* restore a snapshot, closing the backup lifecycle ([#111](https://github.com/clarkbar-sys/hush/issues/111)) ([5afd93a](https://github.com/clarkbar-sys/hush/commit/5afd93a82e8610e9cc50cb14ab6feebba2619a91))
+* schedule backups to run unattended ([#109](https://github.com/clarkbar-sys/hush/issues/109)) ([447aa23](https://github.com/clarkbar-sys/hush/commit/447aa23f9bee2e64c9e1af736355ae13c2f8f5d1))
+
+
+### Bug Fixes
+
+* make hush-control mode selection exclusive in the installer ([#110](https://github.com/clarkbar-sys/hush/issues/110)) ([f55c3c1](https://github.com/clarkbar-sys/hush/commit/f55c3c19381b2782e4409eafb42e48e69e1b5298))
+
 ## [1.20.1](https://github.com/clarkbar-sys/hush/compare/v1.20.0...v1.20.1) (2026-07-18)
 
 
