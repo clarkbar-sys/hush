@@ -505,7 +505,10 @@
   .sheet { width:100%; max-width: 480px; background: var(--panel);
     border-top-left-radius: 18px; border-top-right-radius: 18px;
     border:1px solid var(--border); border-bottom:none; padding: 8px 16px 24px;
-    box-shadow: 0 -10px 40px rgba(0,0,0,.3); animation: rise .22s ease; }
+    box-shadow: 0 -10px 40px rgba(0,0,0,.3); animation: rise .22s ease;
+    /* A tall sheet (the Backup or Workflow builder on a short screen) scrolls
+       inside itself instead of pushing its actions off the bottom. */
+    max-height: 92vh; overflow-y: auto; }
   @media (min-width:900px){ .scrim{ align-items:center;} .sheet{ border-radius:18px; max-width:560px;} }
   .grab { width:38px; height:4px; border-radius:99px; background: var(--border); margin: 6px auto 12px; }
   .sheet h3 { margin: 0 0 2px; font-size: 16px; }
@@ -1560,15 +1563,23 @@
       const ok = st.lastCode === 0 && !st.lastError;
       cls = ok ? "ok" : "failed";
       label = (ok ? "ok" : "fail") + (st.lastRun ? " · " + relTimeISO(st.lastRun) : "");
-    } else { cls = "sched"; label = "never run"; }
+    } else if(b.schedule){
+      // Scheduled but not yet fired — lead with when it next runs, the way a Job
+      // row does, so an untouched nightly backup reads as pending, not broken.
+      cls = "sched"; label = b.nextRun ? "next " + relTimeISO(b.nextRun) : "scheduled";
+    } else { cls = "sched"; label = "manual"; }
     const key = esc(b.id || b.name || "");
+    // When scheduled, the schedule is the salient "when", so it takes the row's
+    // right-hand slot; the repo moves into the tooltip.
+    const rt = b.schedule ? "◷ " + esc(b.schedule) : esc(b.repo||"");
     const run = mid ? `<button class="jrm" data-brun="${key}" data-bmid="${esc(mid)}" aria-label="Run backup now" title="Run backup now" style="color:var(--accent)">▸</button>` : "";
     const del = mid ? `<button class="jrm" data-brm="${key}" data-bmid="${esc(mid)}" data-bname="${name}" aria-label="Delete backup" title="Delete backup">✕</button>` : "";
     const snaps = mid ? `<button class="jrm" data-bsnap="${key}" data-bmid="${esc(mid)}" data-bname="${name}" aria-label="View snapshots" title="View snapshots">⋯</button>` : "";
-    return `<div class="row" style="cursor:default" title="${esc(paths)}${b.oneFileSystem?" · whole machine":""}">
+    const tip = `${esc(paths)}${b.oneFileSystem?" · whole machine":""}${b.schedule?" · "+esc(b.repo||""):""}`;
+    return `<div class="row" style="cursor:default" title="${tip}">
       <span class="gly">⭯</span>
       <span class="nm">${name}</span>
-      <span class="rt">${esc(b.repo||"")}</span>
+      <span class="rt">${rt}</span>
       <span class="state ${cls}"><span class="sd"></span>${label}</span>
       ${snaps}${run}${del}
     </div>`;
@@ -2530,7 +2541,7 @@
         gpu:18, vram:47, gpuName:"RTX 3090", vramText:"11.3 / 24 GB",
         services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"caddy",state:"running",mem:"42 MB"},{name:"postgres",state:"running",mem:"512 MB"},{name:"tailscaled",state:"running",mem:"24 MB"}],
         jobs:[{name:"nightly-backup",next:"in 3h 12m",sched:"0 3 * * *"},{name:"cert-renew",next:"in 6d",sched:"@weekly"}],
-        backups:[{id:"citadel-root",name:"citadel-root",repo:"rest:http://nas:8000/citadel",paths:["/"],oneFileSystem:true,status:{runs:41,lastCode:0,lastRun:"2026-07-18T03:00:00Z",lastSnapshot:"9f2ab3c1"}}],
+        backups:[{id:"citadel-root",name:"citadel-root",repo:"rest:http://nas:8000/citadel",paths:["/"],oneFileSystem:true,schedule:"0 3 * * *",status:{runs:41,lastCode:0,lastRun:"2026-07-18T03:00:00Z",lastSnapshot:"9f2ab3c1"}}],
         tasks:[{name:"git pull · deploy/api",when:"12m ago",ok:true}] }),
       mk({ id:"nas", agentVersion:"v1.3.0", os:"TrueNAS · ZFS", ip:"100.71.4.2", role:"store", status:"good", cpu:11, mem:34, disk:81, up:"92d", load:"0.4", gpu:null,
         services:[{name:"hush-agent",state:"running",mem:"17 MB"},{name:"smbd",state:"running",mem:"88 MB"},{name:"zfs-scrub",state:"running",mem:"6 MB"}],
@@ -2716,7 +2727,7 @@
      answers 403, surfaced as "backups disabled". */
   const backupScrim = $("#backupScrim");
   const backupBody = $("#backupSheetBody");
-  let backupDraft = { id:null, name:"", repo:"", password:"", paths:"", excludes:"", oneFileSystem:false };
+  let backupDraft = { id:null, name:"", repo:"", password:"", paths:"", excludes:"", oneFileSystem:false, schedule:"" };
 
   // loadBackups pulls one box's backups into the BACKUPS cache and re-renders if
   // we're still looking at it. A 403 means the agent has backups disabled;
@@ -2744,7 +2755,7 @@
   function openBackupSheet(preId){
     const online = M.filter(m=>m.online);
     if(preId && BACKUPS_OFF.has(preId)){ toast("backups are disabled on that box — start its agent with -backup"); return; }
-    backupDraft = { id: preId || (online[0] && online[0].id) || null, name:"", repo:"", password:"", paths:"", excludes:"", oneFileSystem:false };
+    backupDraft = { id: preId || (online[0] && online[0].id) || null, name:"", repo:"", password:"", paths:"", excludes:"", oneFileSystem:false, schedule:"" };
     renderBackupSheet();
     backupScrim.classList.add("open");
   }
@@ -2799,6 +2810,11 @@
         <input type="checkbox" id="bOFS" style="width:auto"${backupDraft.oneFileSystem?" checked":""}>
         <span>Whole machine (<b>--one-file-system</b>, don't cross mount points)</span>
       </label>
+      <div class="field">
+        <label>Schedule <span style="opacity:.6">(optional)</span></label>
+        <input type="text" id="bSched" placeholder="e.g. 0 3 * * *  (or @daily) — leave blank for manual" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(backupDraft.schedule)}">
+        <div class="hint">5-field cron, or a macro like <b>@daily</b> — fires unattended on the box</div>
+      </div>
       <div class="field-note">
         <b>Heads up —</b> creating this initialises the repo and verifies the password against it, so a bad address or key fails now, not at 3am.
       </div>
@@ -2813,6 +2829,7 @@
     $("#bPaths").addEventListener("input", e=>{ backupDraft.paths = e.target.value; });
     $("#bEx").addEventListener("input", e=>{ backupDraft.excludes = e.target.value; });
     $("#bOFS").addEventListener("change", e=>{ backupDraft.oneFileSystem = e.target.checked; });
+    $("#bSched").addEventListener("input", e=>{ backupDraft.schedule = e.target.value; });
     $("#bPick").addEventListener("click", ()=>{
       if(!backupDraft.id){ toast("pick a machine first"); return; }
       // Reuse the disk-usage treemap as a path picker: the current paths seed the
@@ -2838,20 +2855,21 @@
     const password = backupDraft.password||"";
     const paths = lines(backupDraft.paths);
     const excludes = lines(backupDraft.excludes);
+    const schedule = (backupDraft.schedule||"").trim();
     if(!id) return;
     if(!name){ $("#bName").focus(); toast("give the backup a name"); return; }
     if(!repo){ $("#bRepo").focus(); toast("add a repository"); return; }
     if(!password){ $("#bPass").focus(); toast("add the repository password"); return; }
     if(!paths.length){ $("#bPaths").focus(); toast("add at least one path"); return; }
     if(MODE === "demo"){
-      const m = byId(id); if(m){ (m.backups = m.backups || []).push({ id:"bk-"+Math.random().toString(36).slice(2,8), name, repo, paths, oneFileSystem:backupDraft.oneFileSystem, status:{} }); }
+      const m = byId(id); if(m){ (m.backups = m.backups || []).push({ id:"bk-"+Math.random().toString(36).slice(2,8), name, repo, paths, oneFileSystem:backupDraft.oneFileSystem, schedule, status:{} }); }
       closeBackupSheet(); render(); toast("configured (demo)"); return;
     }
     const btn = $("#bSave"); btn.disabled = true; btn.textContent = "Creating…";
     try {
       const r = await fetch(`api/machines/${encodeURIComponent(id)}/backups`, {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ name, repo, password, paths, excludes, oneFileSystem:backupDraft.oneFileSystem }) });
+        body: JSON.stringify({ name, repo, password, paths, excludes, oneFileSystem:backupDraft.oneFileSystem, schedule }) });
       if(r.status === 403){ BACKUPS_OFF.add(id); throw new Error("backups are disabled on that box — start its agent with -backup"); }
       if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
       await loadBackups(id);

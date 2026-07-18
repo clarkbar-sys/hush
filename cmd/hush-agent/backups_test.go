@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/clarkbar-sys/hush/internal/restic"
 )
@@ -42,8 +43,8 @@ func newTestManager(t *testing.T) *backupManager {
 	return newBackupManager(filepath.Join(t.TempDir(), "backups.json"))
 }
 
-func validReq() (string, string, string, []string, []string, bool) {
-	return "debian-root", "rest:http://nas:8000/homelab", "s3cret", []string{"/", "/etc"}, []string{"*.tmp"}, true
+func validReq() (string, string, string, []string, []string, bool, string) {
+	return "debian-root", "rest:http://nas:8000/homelab", "s3cret", []string{"/", "/etc"}, []string{"*.tmp"}, true, ""
 }
 
 func TestValidateBackupOK(t *testing.T) {
@@ -77,7 +78,7 @@ func TestValidateBackupRejects(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := validateBackup(c.bname, c.repo, c.pw, c.paths, nil, false)
+			_, err := validateBackup(c.bname, c.repo, c.pw, c.paths, nil, false, "")
 			if err == nil || !strings.Contains(err.Error(), c.want) {
 				t.Fatalf("want error containing %q, got %v", c.want, err)
 			}
@@ -181,5 +182,90 @@ func TestBackupDeleteForgetsDefinition(t *testing.T) {
 	again, _ := m.Delete(def.ID)
 	if again {
 		t.Fatal("expected a second delete to report nothing removed")
+	}
+}
+
+func TestValidateBackupRejectsBadSchedule(t *testing.T) {
+	_, err := validateBackup("n", "rest:http://nas/", "pw", []string{"/"}, nil, false, "not a cron spec")
+	if err == nil || !strings.Contains(err.Error(), "invalid schedule") {
+		t.Fatalf("want an invalid-schedule error, got %v", err)
+	}
+}
+
+func TestValidateBackupAcceptsSchedule(t *testing.T) {
+	b, err := validateBackup("nightly", "rest:http://nas/", "pw", []string{"/"}, nil, false, "0 3 * * *")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Schedule != "0 3 * * *" {
+		t.Fatalf("schedule not preserved: %q", b.Schedule)
+	}
+}
+
+func TestBackupScheduleRegistersAndFires(t *testing.T) {
+	stubResticAgent(t, true)
+	m := newTestManager(t)
+	m.Start()
+	defer m.Stop()
+
+	// @every 1s so the test observes a real unattended fire without waiting a
+	// minute — the same parser a "0 3 * * *" would use.
+	def, err := validateBackup("nightly", "rest:http://nas:8000/homelab", "pw", []string{"/etc"}, nil, false, "@every 1s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Add(context.Background(), def); err != nil {
+		t.Fatal(err)
+	}
+
+	m.mu.Lock()
+	_, registered := m.entries[def.ID]
+	m.mu.Unlock()
+	if !registered {
+		t.Fatal("expected a scheduled backup to get a cron entry")
+	}
+	v := m.List()[0]
+	if v.Schedule != "@every 1s" {
+		t.Fatalf("view schedule = %q", v.Schedule)
+	}
+	if v.NextRun == "" {
+		t.Fatal("expected a running scheduled backup to report a next-run time")
+	}
+
+	// Wait for the clock to fire it at least once, unattended (no client).
+	deadline := time.Now().Add(4 * time.Second)
+	for time.Now().Before(deadline) {
+		if m.List()[0].Status.Runs > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	st := m.List()[0].Status
+	if st.Runs == 0 {
+		t.Fatal("expected the scheduled backup to have fired unattended")
+	}
+	if st.LastCode != 0 {
+		t.Fatalf("scheduled fire failed: %+v", st)
+	}
+}
+
+func TestBackupDeleteUnregistersSchedule(t *testing.T) {
+	stubResticAgent(t, false)
+	m := newTestManager(t)
+	def, err := validateBackup("nightly", "rest:http://nas/", "pw", []string{"/etc"}, nil, false, "0 3 * * *")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Add(context.Background(), def); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Delete(def.ID); err != nil {
+		t.Fatal(err)
+	}
+	m.mu.Lock()
+	_, still := m.entries[def.ID]
+	m.mu.Unlock()
+	if still {
+		t.Fatal("expected delete to remove the cron entry")
 	}
 }

@@ -124,11 +124,13 @@ func main() {
 	}
 
 	// The Backup manager holds the restic definitions (and their repo keys) in
-	// backups.json beside jobs.json. It runs no scheduler of its own yet — a run
-	// is driven from the console — so it's just a store plus the restic wrapper.
+	// backups.json beside jobs.json, and its own cron engine fires the scheduled
+	// ones unattended — the same clockwork the Job scheduler uses.
 	var backups *backupManager
 	if backupEnabled {
 		backups = newBackupManager(backupStatePath(stateDirPath))
+		backups.Start()
+		defer backups.Stop()
 	}
 
 	// advertisedRunAs is the run-as allowlist as reported in /vitals, so the

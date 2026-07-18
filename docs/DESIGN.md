@@ -318,14 +318,23 @@ snapshot it wrote. Deleting a backup forgets its definition only; the
 repository's snapshots are left for `restic` to prune directly, so a mistaken
 delete loses the schedule, never the data.
 
+**Runs on demand or on a schedule.** A backup can be run by hand from the
+console, or given an optional 5-field cron schedule (`@daily` macros too) so the
+agent fires it unattended — the same robfig/cron engine the Job scheduler uses,
+so a nightly backup and a nightly Job are the same clockwork. A scheduled fire
+has no client to stream to; the outcome lands in the backup's status (and its
+next-run time is reported to the console) either way. A fire is skipped, not
+queued, while a run for the same backup is already in flight, so a long backup
+can't stack copies of itself. The schedule lives in `backups.json` and is
+re-registered on agent restart. An empty schedule is manual-only.
+
 **Backend.** The blessed target is a [rest-server](https://github.com/restic/rest-server)
 on the Store box (e.g. the NAS), reached over the tailnet — it supports
 append-only repos, so a compromised source can add snapshots but not wipe old
-ones. `sftp:` and local paths work too. This first slice runs a backup on
-demand; **unattended scheduling** (a nightly run) and **cross-site replication**
-of the repo — the durability layer that makes distributing across a two-site
-tailnet fleet a real 3-2-1 story — are the next slices. A whole-machine backup
-uses `--one-file-system` with restic's standard excludes; it is a restorable
+ones. `sftp:` and local paths work too. **Cross-site replication** of the repo —
+the durability layer that makes distributing across a two-site tailnet fleet a
+real 3-2-1 story — is the next slice. A whole-machine backup uses
+`--one-file-system` with restic's standard excludes; it is a restorable
 file-level backup of the live root, not a block image.
 
 ## Running it (dev)
