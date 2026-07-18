@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.1](https://github.com/clarkbar-sys/hush/compare/v1.22.0...v1.22.1) (2026-07-18)
+
+
+### Bug Fixes
+
+* **web:** chain backup setup commands with && to avoid silent partial runs ([#116](https://github.com/clarkbar-sys/hush/issues/116)) ([98a6b36](https://github.com/clarkbar-sys/hush/commit/98a6b36ab2e1308be334be0045d24b5a7baec953))
+
 ## [1.22.0](https://github.com/clarkbar-sys/hush/compare/v1.21.0...v1.22.0) (2026-07-18)
 
 
