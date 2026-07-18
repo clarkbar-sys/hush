@@ -220,6 +220,45 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) (http.Ha
 		}
 		proxyJob(w, r, client, a, r.PathValue("id"))
 	})
+	// Backups: restic definitions live on the agent (the box holds its own repo
+	// key), so these are pass-through proxies like Jobs. List/create/delete and a
+	// snapshots listing ride a client with a longer timeout than the 2s fleet
+	// poll, since a create runs `restic init` and a snapshots probe across the
+	// tailnet to the rest-server; a run streams for as long as the backup takes,
+	// so it rides the no-timeout streamClient like /exec.
+	backupClient := &http.Client{Timeout: 60 * time.Second}
+	mux.HandleFunc("/api/machines/{host}/backups", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyBackups(w, r, backupClient, a)
+	})
+	mux.HandleFunc("/api/machines/{host}/backups/{id}", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyBackup(w, r, backupClient, a, r.PathValue("id"))
+	})
+	mux.HandleFunc("/api/machines/{host}/backups/{id}/run", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyBackupRun(w, r, streamClient, a, r.PathValue("id"))
+	})
+	mux.HandleFunc("/api/machines/{host}/backups/{id}/snapshots", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyBackupSnapshots(w, r, backupClient, a, r.PathValue("id"))
+	})
 	// Workflows: saved multi-step blueprints. They persist to workflows.json
 	// beside the fleet config and run by fanning out to the same /exec each Task
 	// uses. A run streams for as long as its steps do, so it rides the no-timeout

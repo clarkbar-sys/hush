@@ -1,0 +1,185 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/clarkbar-sys/hush/internal/restic"
+)
+
+// stubResticAgent points restic.Binary at a fake that answers every subcommand
+// the manager uses, so Add/Run/Snapshots run without restic installed. snapshot
+// controls whether `snapshots` returns one entry (to exercise LastSnapshot) or
+// an empty list.
+func stubResticAgent(t *testing.T, withSnapshot bool) {
+	t.Helper()
+	snaps := "[]"
+	if withSnapshot {
+		snaps = `[{"id":"aaaa1111bbbb","short_id":"aaaa1111","time":"2026-07-18T03:00:00Z","hostname":"debian","paths":["/"],"tags":["hush","x"]}]`
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "restic")
+	script := "#!/bin/sh\ncase \"$1\" in\n" +
+		"version) echo 'restic 0.16.0'; exit 0;;\n" +
+		"init) exit 0;;\n" +
+		"snapshots) echo '" + snaps + "'; exit 0;;\n" +
+		"backup) echo 'files new 1'; exit 0;;\n" +
+		"*) echo \"unknown $1\" >&2; exit 2;;\nesac\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := restic.Binary
+	restic.Binary = path
+	t.Cleanup(func() { restic.Binary = old })
+}
+
+func newTestManager(t *testing.T) *backupManager {
+	t.Helper()
+	return newBackupManager(filepath.Join(t.TempDir(), "backups.json"))
+}
+
+func validReq() (string, string, string, []string, []string, bool) {
+	return "debian-root", "rest:http://nas:8000/homelab", "s3cret", []string{"/", "/etc"}, []string{"*.tmp"}, true
+}
+
+func TestValidateBackupOK(t *testing.T) {
+	b, err := validateBackup(validReq())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.ID == "" || b.CreatedAt == "" {
+		t.Fatalf("expected id and createdAt filled in: %+v", b)
+	}
+	if len(b.Paths) != 2 || b.Paths[0] != "/" {
+		t.Fatalf("unexpected paths: %v", b.Paths)
+	}
+	if !b.OneFileSystem {
+		t.Fatal("expected oneFileSystem preserved")
+	}
+}
+
+func TestValidateBackupRejects(t *testing.T) {
+	cases := []struct {
+		name            string
+		bname, repo, pw string
+		paths           []string
+		want            string
+	}{
+		{"no name", "", "rest:http://nas/", "pw", []string{"/"}, "name"},
+		{"no repo", "n", "", "pw", []string{"/"}, "repository is required"},
+		{"no password", "n", "rest:http://nas/", "", []string{"/"}, "password"},
+		{"no paths", "n", "rest:http://nas/", "pw", []string{"  "}, "at least one path"},
+		{"relative path", "n", "rest:http://nas/", "pw", []string{"etc"}, "must be absolute"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := validateBackup(c.bname, c.repo, c.pw, c.paths, nil, false)
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("want error containing %q, got %v", c.want, err)
+			}
+		})
+	}
+}
+
+func TestBackupViewOmitsPassword(t *testing.T) {
+	m := newTestManager(t)
+	def, err := validateBackup(validReq())
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := m.view(def)
+	b, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "s3cret") || strings.Contains(strings.ToLower(string(b)), "password") {
+		t.Fatalf("view leaked the password: %s", b)
+	}
+	if !strings.Contains(string(b), "debian-root") {
+		t.Fatalf("view should carry the name: %s", b)
+	}
+}
+
+func TestBackupAddPersistsAndListsWithoutPassword(t *testing.T) {
+	stubResticAgent(t, false)
+	m := newTestManager(t)
+	def, _ := validateBackup(validReq())
+	if _, err := m.Add(context.Background(), def); err != nil {
+		t.Fatal(err)
+	}
+	list := m.List()
+	if len(list) != 1 || list[0].Name != "debian-root" {
+		t.Fatalf("unexpected list: %+v", list)
+	}
+	// The stored definition, on the other hand, must keep the password so restic
+	// can use it — it just never leaves the box through the API.
+	if got := m.store.Snapshot()[0].Password; got != "s3cret" {
+		t.Fatalf("stored definition should retain the password, got %q", got)
+	}
+}
+
+func TestBackupAddFailsWithoutRestic(t *testing.T) {
+	old := restic.Binary
+	restic.Binary = "/nonexistent/restic-xyz"
+	t.Cleanup(func() { restic.Binary = old })
+	m := newTestManager(t)
+	def, _ := validateBackup(validReq())
+	_, err := m.Add(context.Background(), def)
+	if err == nil || !strings.Contains(err.Error(), "restic is not installed") {
+		t.Fatalf("want a restic-not-installed error, got %v", err)
+	}
+}
+
+func TestBackupRunRecordsStatus(t *testing.T) {
+	stubResticAgent(t, true)
+	m := newTestManager(t)
+	def, _ := validateBackup(validReq())
+	if _, err := m.Add(context.Background(), def); err != nil {
+		t.Fatal(err)
+	}
+	var sawStart, sawExit bool
+	if err := m.Run(context.Background(), def.ID, func(ev restic.Event) {
+		switch ev.Kind {
+		case "start":
+			sawStart = true
+		case "exit":
+			sawExit = true
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !sawStart || !sawExit {
+		t.Fatalf("expected the run to stream start and exit (start=%v exit=%v)", sawStart, sawExit)
+	}
+	st := m.List()[0].Status
+	if st.Runs != 1 || st.LastCode != 0 {
+		t.Fatalf("unexpected status: %+v", st)
+	}
+	if st.LastSnapshot != "aaaa1111" {
+		t.Fatalf("expected LastSnapshot from the post-run listing, got %q", st.LastSnapshot)
+	}
+}
+
+func TestBackupDeleteForgetsDefinition(t *testing.T) {
+	stubResticAgent(t, false)
+	m := newTestManager(t)
+	def, _ := validateBackup(validReq())
+	if _, err := m.Add(context.Background(), def); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := m.Delete(def.ID)
+	if err != nil || !removed {
+		t.Fatalf("delete failed: removed=%v err=%v", removed, err)
+	}
+	if len(m.List()) != 0 {
+		t.Fatal("expected the definition to be gone")
+	}
+	again, _ := m.Delete(def.ID)
+	if again {
+		t.Fatal("expected a second delete to report nothing removed")
+	}
+}

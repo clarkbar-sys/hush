@@ -1,0 +1,153 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"log"
+	"net/http"
+	"strings"
+)
+
+// Backups, like Jobs, live on the agent — the box that holds the data holds the
+// repository key, which never passes through hush-control. So these are
+// pass-through proxies, not a control-side store: the console reaches
+// GET/POST /backups, DELETE /backups/{id}, POST /backups/{id}/run (streamed),
+// and GET /backups/{id}/snapshots the same way it reaches everything else,
+// through hush-control, since the phone can't address agents directly in tsnet
+// mode. An agent started without -backup answers 403, relayed verbatim.
+
+// proxyBackups forwards the collection request (GET list / POST create) to one
+// agent's /backups and relays the response verbatim. A create carries the repo
+// password in its body, so — unlike a Task or Job create — the audit log records
+// only the backup's name and repository, never the body.
+func proxyBackups(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent) {
+	switch r.Method {
+	case http.MethodGet, http.MethodPost:
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var body []byte
+	if r.Method == http.MethodPost {
+		b, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+		if err != nil {
+			http.Error(w, "bad request body", http.StatusBadRequest)
+			return
+		}
+		body = b
+		caller := callerFrom(r.Context())
+		if caller == "" {
+			caller = "lan"
+		}
+		log.Printf("backup create on %s by %s: %s", a.Name, caller, backupCreatePreview(body))
+	}
+
+	u := strings.TrimRight(a.Addr, "/") + "/backups"
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, u, bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, "bad upstream request", http.StatusInternalServerError)
+		return
+	}
+	if r.Method == http.MethodPost {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	relayAgentJSON(w, req, client, a.Name)
+}
+
+// proxyBackup forwards a single-backup request (DELETE /backups/{id}) to the
+// agent and relays its response verbatim. Deleting a backup forgets its
+// definition (the repo's snapshots are left intact), so it's audited like a
+// create.
+func proxyBackup(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent, id string) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	caller := callerFrom(r.Context())
+	if caller == "" {
+		caller = "lan"
+	}
+	log.Printf("backup delete on %s by %s: %s", a.Name, caller, id)
+
+	u := strings.TrimRight(a.Addr, "/") + "/backups/" + id
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodDelete, u, nil)
+	if err != nil {
+		http.Error(w, "bad upstream request", http.StatusInternalServerError)
+		return
+	}
+	relayAgentJSON(w, req, client, a.Name)
+}
+
+// proxyBackupSnapshots forwards a snapshots listing to the agent's
+// /backups/{id}/snapshots and relays the JSON verbatim. It rides a client with a
+// longer timeout than the fleet poll, since listing a repository reaches across
+// the tailnet to the rest-server.
+func proxyBackupSnapshots(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent, id string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	u := strings.TrimRight(a.Addr, "/") + "/backups/" + id + "/snapshots"
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, u, nil)
+	if err != nil {
+		http.Error(w, "bad upstream request", http.StatusInternalServerError)
+		return
+	}
+	relayAgentJSON(w, req, client, a.Name)
+}
+
+// proxyBackupRun forwards a run to the agent's /backups/{id}/run and streams the
+// Server-Sent Events back to the phone, flushing each frame — the same streaming
+// relay proxyExec does. A run can take a very long time (an initial full backup),
+// so it rides the no-timeout streamClient, and every run is audited with who ran
+// it, where, and which backup.
+func proxyBackupRun(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent, id string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	caller := callerFrom(r.Context())
+	if caller == "" {
+		caller = "lan"
+	}
+	log.Printf("backup run on %s by %s: %s", a.Name, caller, id)
+
+	u := strings.TrimRight(a.Addr, "/") + "/backups/" + id + "/run"
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, u, nil)
+	if err != nil {
+		http.Error(w, "bad upstream request", http.StatusInternalServerError)
+		return
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "agent unreachable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	if ct := resp.Header.Get("Content-Type"); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(resp.StatusCode)
+	flushCopy(w, resp.Body)
+}
+
+// backupCreatePreview pulls just the name and repository out of a create body
+// for the audit log — deliberately never the password, which rides the same body.
+func backupCreatePreview(body []byte) string {
+	var req struct {
+		Name string `json:"name"`
+		Repo string `json:"repo"`
+	}
+	_ = json.Unmarshal(body, &req)
+	name := strings.TrimSpace(req.Name)
+	repo := strings.TrimSpace(req.Repo)
+	if len(repo) > 120 {
+		repo = repo[:120] + "…"
+	}
+	return name + " → " + repo
+}
