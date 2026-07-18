@@ -291,6 +291,17 @@
   .ducell .ds { font-family:var(--mono); font-size:10px; color:rgba(240,235,255,.78);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .dulegend { font-family:var(--mono); font-size:11px; color:var(--faint); }
+  /* Treemap selection mode — pick paths for a Backup by tapping boxes. */
+  .ducell.selectable { cursor:pointer; }
+  .ducell.sel { outline:2px solid var(--accent); outline-offset:-3px; filter:brightness(1.14); }
+  .duselbadge { position:absolute; top:3px; right:4px; font-size:11px; font-weight:700;
+    color:var(--bg); background:var(--accent); border-radius:50%; width:15px; height:15px;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.5); }
+  .ducell .dopen { position:absolute; top:2px; left:4px; font-size:11px; line-height:1;
+    color:#f2f0ff; opacity:.7; padding:2px 3px; border-radius:4px; background:rgba(4,2,14,.4); }
+  .ducell .dopen:hover { opacity:1; background:rgba(4,2,14,.7); }
+  .dufoot { display:flex; align-items:center; gap:10px; padding:2px; }
+  .dufoot .duselcount { font-family:var(--mono); font-size:12px; color:var(--ink); flex:1; }
   .row {
     display:flex; align-items:center; gap:11px; cursor:pointer;
     background: var(--panel); border:1px solid var(--border); border-radius: 10px;
@@ -1181,23 +1192,60 @@
     return rects;
   }
 
-  function openDu(id, startPath){
+  // openDu opens the disk-usage treemap. With opts.select it becomes a path
+  // picker for a Backup: tapping a box toggles it into the selection (a dir
+  // still drills in via its ⤢ corner), and a footer "Add" hands the chosen
+  // absolute paths back through opts.onDone. Without it, it's the read-only
+  // treemap as before — a dir click just drills.
+  function openDu(id, startPath, opts){
+    opts = opts || {};
+    const selecting = !!opts.select;
+    const selected = new Map();            // absolute path -> size (0 when unknown, e.g. a pre-filled path)
+    (opts.initial || []).forEach(p => selected.set(p, 0));
     const ov = document.createElement("div");
     ov.className = "vov";
     ov.innerHTML = `<div class="vsheet">
         <div class="vbar">
-          <div class="vname">Disk usage · ${esc(id)}</div>
+          <div class="vname">${selecting ? "Pick paths" : "Disk usage"} · ${esc(id)}</div>
           <button class="vbtn vclose" aria-label="Close">✕</button>
         </div>
         <div class="dubody">
           <div class="browsebar" id="duBar"></div>
+          ${selecting ? `<div class="dulegend" style="margin:-2px 0 0">tap a box to include it · tap ⤢ to open a folder</div>` : ""}
           <div class="dumap" id="duMap"><div class="empty">sizing…</div></div>
           <div class="dulegend" id="duLegend"></div>
+          ${selecting ? `<div class="dufoot" id="duFoot">
+            <span class="duselcount" id="duSelCount"></span>
+            <button class="btn ghost" id="duCancel">Cancel</button>
+            <button class="btn primary" id="duAdd">Add paths</button>
+          </div>` : ""}
         </div>
       </div>`;
     document.body.appendChild(ov);
     const alive = () => document.body.contains(ov);
     const close = () => { ov.remove(); document.removeEventListener("keydown", onkey); window.removeEventListener("resize", relayout); };
+    // entryPath builds an entry's absolute path from its listing, the same join
+    // the drill-in uses ("/" + name off the current dir, minding the root).
+    const entryPath = (l, e) => (l.path === "/" ? "" : l.path) + "/" + e.name;
+    function updateFoot(){
+      if(!selecting) return;
+      const cnt = ov.querySelector("#duSelCount");
+      const add = ov.querySelector("#duAdd");
+      if(!cnt) return;
+      let known = 0; selected.forEach(v => { known += v || 0; });
+      cnt.textContent = selected.size
+        ? `${selected.size} selected${known ? " · " + fmtBytes(known) : ""}`
+        : "nothing selected yet";
+      if(add) add.disabled = selected.size === 0;
+    }
+    if(selecting){
+      ov.querySelector("#duCancel").addEventListener("click", close);
+      ov.querySelector("#duAdd").addEventListener("click", ()=>{
+        if(opts.onDone) opts.onDone(Array.from(selected.keys()));
+        close();
+      });
+      updateFoot();
+    }
     const onkey = e => { if(e.key==="Escape") close(); };
     document.addEventListener("keydown", onkey);
     ov.querySelector(".vclose").addEventListener("click", close);
@@ -1215,15 +1263,33 @@
       map.innerHTML = "";
       l.entries.forEach((e,i)=>{
         const r = rects[i];
+        const path = entryPath(l, e);
+        const isSel = selecting && selected.has(path);
         const cell = document.createElement("div");
-        cell.className = "ducell" + (e.isDir ? " dir" : "");
+        cell.className = "ducell" + (e.isDir ? " dir" : "") + (selecting ? " selectable" : "") + (isSel ? " sel" : "");
         cell.style.cssText = `left:${r.x}px;top:${r.y}px;width:${Math.max(r.w-1,0)}px;height:${Math.max(r.h-1,0)}px;background:${duColor(i, e.isDir)}`;
         cell.title = `${e.name} — ${fmtBytes(e.size)}`;
-        if(r.w>34 && r.h>16){
+        const showText = r.w>34 && r.h>16;
+        if(showText){
           cell.innerHTML = `<span class="dn">${esc(e.name)}</span>` + (r.h>30 ? `<span class="ds">${fmtBytes(e.size)}</span>` : "");
         }
-        if(e.isDir){
-          cell.addEventListener("click", ()=>{ const base = l.path==="/" ? "" : l.path; load(base + "/" + e.name); });
+        if(selecting){
+          if(isSel){ const badge = document.createElement("span"); badge.className = "duselbadge"; badge.textContent = "✓"; cell.appendChild(badge); }
+          // A dir keeps a way to drill in: a corner ⤢ that opens it, so the tap
+          // itself is free to mean "include this".
+          if(e.isDir && r.w>26 && r.h>20){
+            const open = document.createElement("span");
+            open.className = "dopen"; open.textContent = "⤢"; open.title = "Open folder";
+            open.addEventListener("click", ev=>{ ev.stopPropagation(); load(path); });
+            cell.appendChild(open);
+          }
+          cell.addEventListener("click", ()=>{
+            if(selected.has(path)) selected.delete(path);
+            else selected.set(path, e.size || 0);
+            drawMap(l); updateFoot();
+          });
+        } else if(e.isDir){
+          cell.addEventListener("click", ()=> load(path));
         }
         map.appendChild(cell);
       });
@@ -2719,7 +2785,10 @@
       <div class="field">
         <label>Paths</label>
         <textarea id="bPaths" rows="3" placeholder="/&#10;/etc&#10;/home/josh" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(backupDraft.paths)}</textarea>
-        <div class="hint">one absolute path per line</div>
+        <div class="hint" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+          <span>one absolute path per line</span>
+          <button type="button" class="btn ghost" id="bPick" style="padding:3px 9px">▦ Pick from disk usage</button>
+        </div>
       </div>
       <div class="field">
         <label>Excludes <span style="opacity:.6">(optional)</span></label>
@@ -2744,6 +2813,15 @@
     $("#bPaths").addEventListener("input", e=>{ backupDraft.paths = e.target.value; });
     $("#bEx").addEventListener("input", e=>{ backupDraft.excludes = e.target.value; });
     $("#bOFS").addEventListener("change", e=>{ backupDraft.oneFileSystem = e.target.checked; });
+    $("#bPick").addEventListener("click", ()=>{
+      if(!backupDraft.id){ toast("pick a machine first"); return; }
+      // Reuse the disk-usage treemap as a path picker: the current paths seed the
+      // selection, and Add writes the chosen absolute paths back into the field.
+      openDu(backupDraft.id, "/", { select:true, initial: lines(backupDraft.paths), onDone: paths => {
+        backupDraft.paths = paths.join("\n");
+        const ta = $("#bPaths"); if(ta) ta.value = backupDraft.paths;
+      }});
+    });
     $("#bCancel").addEventListener("click", closeBackupSheet);
     $("#bSave").addEventListener("click", createBackup);
     $("#bName").focus();

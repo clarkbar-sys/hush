@@ -299,6 +299,15 @@ explicit argument slice (no `sh -c`), so a path that looks like a flag or holds
 shell metacharacters is passed through literally — the stricter handling a typed
 backup wants, versus the Task runner's deliberately-unjailed `sh -c`.
 
+**Picking what to save — the treemap doubles as a picker.** The Store's
+windirstat-style disk-usage treemap (`/du`, below) does double duty: from the
+backup sheet, "Pick from disk usage" opens it in a **select mode** where tapping
+a box includes that path (a folder still drills in via its ⤢ corner) and a
+running "N selected · size" totals the choice, so "opt in what I want to save" is
+a matter of tapping the big boxes rather than typing paths. The selection writes
+absolute paths back into the sheet; the whole-machine toggle (`--one-file-system`
+over `/`) is the other end of the spectrum for a box you want in full.
+
 **Create proves the repo works.** Adding a backup initialises the repository
 (tolerating one that already exists, so a second machine can point at the same
 repo) and lists its snapshots to verify the password — a bad backend URL or
