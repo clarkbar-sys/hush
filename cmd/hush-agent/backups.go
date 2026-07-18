@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -362,7 +363,25 @@ func (m *backupManager) Snapshots(ctx context.Context, id string) ([]restic.Snap
 	return restic.Snapshots(ctx, def.repo(), def.ID)
 }
 
+// Restore streams a `restic restore` of one snapshot into target, optionally
+// narrowed to includes. It reads from the repository and writes into target
+// only — the snapshots are never touched — so a restore can't harm the backup
+// history. target must be absolute (validated by the handler).
+func (m *backupManager) Restore(ctx context.Context, id, snapshot, target string, includes []string, emit func(restic.Event)) error {
+	def, ok := m.store.Find(id)
+	if !ok {
+		return errBackupNotFound
+	}
+	restic.Restore(ctx, def.repo(), snapshot, target, includes, restic.DefaultBackupTimeout, emit)
+	return nil
+}
+
 var errBackupNotFound = errors.New("no such backup")
+
+// snapshotIDRE gates the snapshot id a restore names: restic ids are hex, and
+// "latest" is the one non-hex value it accepts. Anything else is rejected before
+// it reaches restic's argv.
+var snapshotIDRE = regexp.MustCompile(`^([0-9a-fA-F]{6,64}|latest)$`)
 
 // validateBackup checks a create request and, on success, returns a stored
 // Backup with its id and timestamp filled in. Paths must be absolute — a backup
@@ -543,6 +562,78 @@ func (m *backupManager) handleBackupRun(w http.ResponseWriter, r *http.Request) 
 	if err := m.Run(r.Context(), id, emit); err != nil {
 		// The stream is already 200 OK, so surface the refusal as an error frame
 		// the run terminal renders rather than a status code it can't see.
+		emit(restic.Event{Kind: "error", Data: err.Error()})
+		emit(restic.Event{Kind: "exit", Code: -1})
+	}
+}
+
+// handleBackupRestore streams a `restic restore` of one snapshot into a target
+// directory, as the same SSE the run terminal renders. The snapshot id is
+// validated (hex or "latest") and the target must be absolute — both are checked
+// before the 200/stream begins so a bad request gets a real status code. The
+// restore only writes into target; it never touches the snapshots.
+func (m *backupManager) handleBackupRestore(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id := r.PathValue("id")
+	if _, ok := m.store.Find(id); !ok {
+		http.Error(w, "no such backup", http.StatusNotFound)
+		return
+	}
+	var req struct {
+		Snapshot string   `json:"snapshot"`
+		Target   string   `json:"target"`
+		Includes []string `json:"includes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request body", http.StatusBadRequest)
+		return
+	}
+	snapshot := strings.TrimSpace(req.Snapshot)
+	if snapshot == "" {
+		snapshot = "latest"
+	}
+	if !snapshotIDRE.MatchString(snapshot) {
+		http.Error(w, "snapshot must be a restic snapshot id or \"latest\"", http.StatusBadRequest)
+		return
+	}
+	target := strings.TrimSpace(req.Target)
+	if !filepath.IsAbs(target) {
+		http.Error(w, "target must be an absolute path", http.StatusBadRequest)
+		return
+	}
+	target = filepath.Clean(target)
+	includes := make([]string, 0, len(req.Includes))
+	for _, inc := range req.Includes {
+		if inc = strings.TrimSpace(inc); inc != "" {
+			includes = append(includes, inc)
+		}
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", "text/event-stream")
+	h.Set("Cache-Control", "no-cache")
+	h.Set("Connection", "keep-alive")
+	h.Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+
+	emit := func(ev restic.Event) {
+		b, err := json.Marshal(ev)
+		if err != nil {
+			return
+		}
+		fmt.Fprintf(w, "data: %s\n\n", b)
+		flusher.Flush()
+	}
+	if err := m.Restore(r.Context(), id, snapshot, target, includes, emit); err != nil {
 		emit(restic.Event{Kind: "error", Data: err.Error()})
 		emit(restic.Event{Kind: "exit", Code: -1})
 	}

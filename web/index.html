@@ -1811,8 +1811,10 @@
       }
     };
 
-    const payload = { cmd, timeoutSec: 300 };
-    if(opts.user) payload.user = opts.user;
+    // opts.payload overrides the default request body — a restore posts
+    // {snapshot, target} instead of a command, streaming through the same view.
+    const payload = opts.payload || { cmd, timeoutSec: 300 };
+    if(opts.user && !opts.payload) payload.user = opts.user;
     const runner = MODE === "demo" ? simulateExec(cmd, onEvent, ac.signal)
       : streamExec(opts.runUrl || `api/machines/${encodeURIComponent(id)}/exec`, payload, onEvent, ac.signal);
     runner.catch(err => {
@@ -2919,19 +2921,59 @@
       if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
       snaps = await r.json();
     } catch(err){ toast((err&&err.message) ? err.message : "couldn't load snapshots"); return; }
-    const rows = (Array.isArray(snaps)?snaps:[]).slice().reverse().map(s=>`
-      <div class="row" style="cursor:default">
+    const rows = (Array.isArray(snaps)?snaps:[]).slice().reverse().map(s=>{
+      const sid = esc(s.short_id||s.id||"");
+      return `<div class="row" style="cursor:default">
         <span class="gly">⭯</span>
-        <span class="nm mono">${esc(s.short_id||s.id||"")}</span>
+        <span class="nm mono">${sid}</span>
         <span class="rt">${esc((s.paths||[]).join(", "))}</span>
         <span class="state ok"><span class="sd"></span>${esc(relTimeISO(s.time)||s.time||"")}</span>
-      </div>`).join("");
+        <button class="jrm" data-brestore="${sid}" title="Restore this snapshot" aria-label="Restore this snapshot" style="color:var(--accent)">⤓</button>
+      </div>`;}).join("");
     backupBody.innerHTML = `
       <h3>Snapshots · ${esc(name||bid)}</h3>
-      <p class="sd">what restic holds for this backup, newest first</p>
+      <p class="sd">what restic holds for this backup, newest first · ⤓ restores one</p>
       <div class="list">${rows || `<div class="empty">no snapshots yet — run the backup to make the first one</div>`}</div>
       <div class="sheet-actions"><button class="btn primary" id="bSnapClose" style="flex:1">Close</button></div>`;
     $("#bSnapClose").addEventListener("click", closeBackupSheet);
+    backupBody.querySelectorAll("[data-brestore]").forEach(el=>{
+      el.addEventListener("click", ()=> openRestore(mid, bid, name, el.dataset.brestore));
+    });
+    backupScrim.classList.add("open");
+  }
+
+  // openRestore renders a small form to restore one snapshot. It restores INTO a
+  // target directory (defaulting to a scratch path, never the original location)
+  // so "see what's in this snapshot" can't clobber the live files by accident —
+  // the operator opts into an in-place restore by typing that path themselves.
+  function openRestore(mid, bid, name, snap){
+    const target = `/var/tmp/hush-restore/${snap}`;
+    backupBody.innerHTML = `
+      <h3>Restore · ${esc(snap)}</h3>
+      <p class="sd">from ${esc(name||bid)} — restic writes the snapshot's files into a target folder</p>
+      <div class="field">
+        <label>Restore into</label>
+        <input type="text" id="rTarget" value="${esc(target)}" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <div class="hint">an absolute path on <b>${esc(mid)}</b> — defaults to a scratch dir so it won't overwrite the originals</div>
+      </div>
+      <div class="field-note">
+        <b>Careful —</b> restoring into a live path (e.g. <b>/</b>) overwrites whatever's there. The default scratch dir is safe to inspect first.
+      </div>
+      <div class="sheet-actions">
+        <button class="btn ghost" id="rCancel">Back</button>
+        <button class="btn primary" id="rGo">⤓ Restore</button>
+      </div>`;
+    $("#rCancel").addEventListener("click", ()=> openSnapshots(mid, bid, name));
+    $("#rGo").addEventListener("click", ()=>{
+      const t = ($("#rTarget").value||"").trim();
+      if(!t.startsWith("/")){ $("#rTarget").focus(); toast("target must be an absolute path"); return; }
+      closeBackupSheet();
+      openRunView(mid, `restic restore ${snap} → ${t}`, {
+        runUrl: `api/machines/${encodeURIComponent(mid)}/backups/${encodeURIComponent(bid)}/restore`,
+        payload: { snapshot: snap, target: t },
+        canSave: false,
+      });
+    });
     backupScrim.classList.add("open");
   }
 

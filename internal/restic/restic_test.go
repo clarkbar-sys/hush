@@ -154,6 +154,32 @@ exit 0`)
 	}
 }
 
+func TestBuildRestoreArgs(t *testing.T) {
+	got := buildRestoreArgs("aaaa1111", "/var/tmp/restore", []string{"/etc", "", "/home/josh"})
+	want := []string{"restore", "aaaa1111", "--target", "/var/tmp/restore", "--include", "/etc", "--include", "/home/josh"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("args mismatch:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestRestoreStreamsLifecycle(t *testing.T) {
+	// The stub asserts the snapshot id and target reach restic on argv, and that
+	// the repo/password still arrive via the environment.
+	stubRestic(t, `
+if [ "$1" != "restore" ]; then echo "bad subcommand: $1" >&2; exit 2; fi
+if [ "$2" != "aaaa1111" ]; then echo "bad snapshot: $2" >&2; exit 2; fi
+if [ "$RESTIC_REPOSITORY" != "rest:http://nas/" ]; then echo "bad repo" >&2; exit 2; fi
+echo "restoring to /var/tmp/restore"
+exit 0`)
+	var kinds []string
+	Restore(context.Background(), Repo{Backend: "rest:http://nas/", Password: "pw"},
+		"aaaa1111", "/var/tmp/restore", nil, time.Minute,
+		func(ev Event) { kinds = append(kinds, ev.Kind) })
+	if len(kinds) < 2 || kinds[0] != "start" || kinds[len(kinds)-1] != "exit" {
+		t.Fatalf("expected start…exit lifecycle, got %v", kinds)
+	}
+}
+
 func TestBackupReportsExitCode(t *testing.T) {
 	stubRestic(t, `echo "Fatal: repository not found" >&2; exit 1`)
 	var exit Event

@@ -318,6 +318,17 @@ snapshot it wrote. Deleting a backup forgets its definition only; the
 repository's snapshots are left for `restic` to prune directly, so a mistaken
 delete loses the schedule, never the data.
 
+**Restore closes the loop.** From the Snapshots view, a snapshot restores into a
+target directory (`POST /backups/{id}/restore` with `{snapshot, target}`),
+streaming through the same run terminal a run does. The console defaults the
+target to a scratch dir rather than the original location, so inspecting a
+restore can't clobber the live files by accident — an in-place restore is
+something the operator types the path for. The snapshot id is validated (hex or
+`latest`) and the target must be absolute, both before the stream begins; a
+restore only ever *writes* into the target, never touching the snapshots, so it
+can't harm the backup history. That makes the lifecycle whole: configure → run
+(or schedule) → snapshots → restore.
+
 **Runs on demand or on a schedule.** A backup can be run by hand from the
 console, or given an optional 5-field cron schedule (`@daily` macros too) so the
 agent fires it unattended — the same robfig/cron engine the Job scheduler uses,

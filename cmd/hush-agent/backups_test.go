@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,7 @@ func stubResticAgent(t *testing.T, withSnapshot bool) {
 		"init) exit 0;;\n" +
 		"snapshots) echo '" + snaps + "'; exit 0;;\n" +
 		"backup) echo 'files new 1'; exit 0;;\n" +
+		"restore) echo 'restoring'; exit 0;;\n" +
 		"*) echo \"unknown $1\" >&2; exit 2;;\nesac\n"
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -182,6 +184,52 @@ func TestBackupDeleteForgetsDefinition(t *testing.T) {
 	again, _ := m.Delete(def.ID)
 	if again {
 		t.Fatal("expected a second delete to report nothing removed")
+	}
+}
+
+func TestBackupRestoreStreams(t *testing.T) {
+	stubResticAgent(t, false)
+	m := newTestManager(t)
+	def, _ := validateBackup(validReq())
+	if _, err := m.Add(context.Background(), def); err != nil {
+		t.Fatal(err)
+	}
+	var sawStart, sawExit bool
+	err := m.Restore(context.Background(), def.ID, "aaaa1111", "/var/tmp/hush-restore", nil, func(ev restic.Event) {
+		switch ev.Kind {
+		case "start":
+			sawStart = true
+		case "exit":
+			sawExit = true
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sawStart || !sawExit {
+		t.Fatalf("expected the restore to stream start and exit (start=%v exit=%v)", sawStart, sawExit)
+	}
+}
+
+func TestBackupRestoreUnknownID(t *testing.T) {
+	stubResticAgent(t, false)
+	m := newTestManager(t)
+	err := m.Restore(context.Background(), "nope", "latest", "/var/tmp/x", nil, func(restic.Event) {})
+	if !errors.Is(err, errBackupNotFound) {
+		t.Fatalf("want errBackupNotFound, got %v", err)
+	}
+}
+
+func TestSnapshotIDValidation(t *testing.T) {
+	for _, ok := range []string{"latest", "aaaa1111", "0123456789abcdef", "AABBCCDDEE"} {
+		if !snapshotIDRE.MatchString(ok) {
+			t.Errorf("%q should be accepted", ok)
+		}
+	}
+	for _, bad := range []string{"", "../etc", "latest; rm -rf /", "xyz", "aa"} {
+		if snapshotIDRE.MatchString(bad) {
+			t.Errorf("%q should be rejected", bad)
+		}
 	}
 }
 
