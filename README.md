@@ -15,7 +15,16 @@ eight constructs (Machine, Service, Job, Task, Workflow, Store, Backup, Link).
 
 See [`docs/DESIGN.md`](./docs/DESIGN.md) for the design and
 [issue #6](https://github.com/clarkbar-sys/hush/issues/6) for the full
-initiative. **Status: Phase 0 — read-only proof of life.**
+initiative.
+
+**Status:** well past Phase 0's read-only proof of life. Tasks, Jobs, and
+Workflows are live, and the restic-backed **Backup** construct closes the
+loop end to end — on-demand or unattended-scheduled backups, paths picked
+from the disk-usage treemap, and snapshot restore — alongside a live
+htop-style CPU/network panel per machine. Still pending: dedicated Service
+start/stop/restart controls and a live journal tail. See
+[`docs/DESIGN.md#roadmap`](./docs/DESIGN.md#roadmap) for the phase-by-phase
+picture.
 
 ## Install
 
