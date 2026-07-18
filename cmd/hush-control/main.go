@@ -116,7 +116,8 @@ func main() {
 	discoverer := newDiscoverer(disco, probe, store.Snapshot)
 	go discoverer.run(context.Background())
 
-	mux := buildMux(store, discoverer, *webDir)
+	mux, fc := buildMux(store, discoverer, *webDir)
+	go fc.run(context.Background())
 
 	if *useTsnet {
 		serveTsnet(mux, disco, *listen, *hostname, *stateDir, allow)
@@ -130,8 +131,11 @@ func main() {
 // buildMux wires the console routes: live fleet JSON, fleet membership, and
 // the static UI. It is transport-agnostic, so the same handler serves both
 // LAN and tsnet modes. The UI is served from the embedded assets unless
-// webDir is set (dev override).
-func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Handler {
+// webDir is set (dev override). It also returns the fleetCache it built, so
+// the caller can start its background polling loop (main() does; tests that
+// don't care about fleet polling can discard it — /api/fleet still works,
+// falling back to a live scan on the cold cache).
+func buildMux(store *agentStore, discoverer *discoverer, webDir string) (http.Handler, *fleetCache) {
 	// Go's mime table doesn't know .webmanifest; without this the PWA manifest
 	// is served as text/plain and browsers grumble. Register the correct type
 	// so http.FileServer(FS) picks it up.
@@ -139,9 +143,15 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 
 	client := &http.Client{Timeout: 2 * time.Second}
 	vc := &versionChecker{client: &http.Client{Timeout: 5 * time.Second}}
+	fc := newFleetCache(client, store.Snapshot, func(ctx context.Context) string {
+		return vc.status(ctx, false).Latest
+	})
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/fleet", func(w http.ResponseWriter, r *http.Request) {
-		fleet := collectFleet(client, store.Snapshot(), vc.status(r.Context(), false).Latest)
+		fleet, ok := fc.snapshot()
+		if !ok {
+			fleet = fc.scan(r.Context())
+		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(fleet); err != nil {
 			log.Printf("encode fleet: %v", err)
@@ -554,7 +564,7 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 	} else {
 		mux.Handle("/", http.FileServerFS(web.FS))
 	}
-	return mux
+	return mux, fc
 }
 
 // testAgentResult is the response of a reachability probe against a
