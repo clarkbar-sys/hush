@@ -33,6 +33,7 @@ import (
 
 	"github.com/clarkbar-sys/hush/internal/browse"
 	hexec "github.com/clarkbar-sys/hush/internal/exec"
+	"github.com/clarkbar-sys/hush/internal/restic"
 	"github.com/clarkbar-sys/hush/internal/updater"
 	"github.com/clarkbar-sys/hush/internal/version"
 	"github.com/clarkbar-sys/hush/internal/vitals"
@@ -44,8 +45,9 @@ func main() {
 	selfUpdate := flag.Bool("self-update", false, "check for a newer release and replace this binary in place, then exit (run as root by hush-agent-update.service)")
 	allowExec := flag.Bool("exec", true, "serve /exec, the Task construct's one-shot command runner (on by default; -exec=false disables). Commands run as the unprivileged hush user")
 	allowJobs := flag.Bool("jobs", false, "serve /jobs, the Job construct's cron scheduler (off by default; -jobs enables). Jobs fire unattended as the unprivileged hush user")
+	allowBackup := flag.Bool("backup", false, "serve /backups, the Backup construct's restic backups (off by default; -backup enables). Reads the paths you name and needs the restic binary")
 	runAsFlag := flag.String("run-as", "", "comma-separated OS users a Task may run as via `sudo -u` (e.g. media,deploy). Empty = off. Needs a matching sudoers grant; never list root or a sudo-capable user")
-	stateDir := flag.String("state-dir", "", "directory for persisted state such as jobs.json (default: $STATE_DIRECTORY from systemd, else /var/lib/hush)")
+	stateDir := flag.String("state-dir", "", "directory for persisted state such as jobs.json and backups.json (default: $STATE_DIRECTORY from systemd, else /var/lib/hush)")
 	flag.Parse()
 
 	// Exec is on by default; a box can opt out with -exec=false or, so the
@@ -64,6 +66,15 @@ func main() {
 	jobsEnabled := *allowJobs
 	if v, ok := os.LookupEnv("HUSH_AGENT_JOBS"); ok {
 		jobsEnabled = v == "1" || v == "true" || v == "yes"
+	}
+
+	// Backups are OFF by default too — the feature reads whatever paths you point
+	// it at and stores a repository key on the box, so enabling it is a deliberate
+	// choice. The same env-over-flag toggle (HUSH_AGENT_BACKUP=1) lets the unit's
+	// env file flip it without editing ExecStart.
+	backupEnabled := *allowBackup
+	if v, ok := os.LookupEnv("HUSH_AGENT_BACKUP"); ok {
+		backupEnabled = v == "1" || v == "true" || v == "yes"
 	}
 
 	// The run-as allowlist: users a Task may become via `sudo -u`. The env var
@@ -92,20 +103,32 @@ func main() {
 
 	vitals.StartSampler()
 
-	// The Job scheduler is only built when jobs are enabled, so a default agent
-	// touches no disk and runs no scheduled commands. resolveStateDir prefers
-	// systemd's $STATE_DIRECTORY (set by StateDirectory=hush) and falls back to
-	// /var/lib/hush; the store tolerates a missing file, so a first run with no
-	// jobs.json simply starts empty.
+	// The Job scheduler and Backup manager persist to the agent's state dir, so it
+	// is resolved (and created 0700) only when one of them is enabled — a default
+	// agent touches no disk. resolveStateDir prefers systemd's $STATE_DIRECTORY
+	// (set by StateDirectory=hush) and falls back to /var/lib/hush; the stores
+	// tolerate a missing file, so a first run simply starts empty.
+	var stateDirPath string
+	if jobsEnabled || backupEnabled {
+		stateDirPath = resolveStateDir(*stateDir)
+		if err := os.MkdirAll(stateDirPath, 0o700); err != nil {
+			log.Printf("hush-agent: state dir %s not writable: %v — creation will fail until it is", stateDirPath, err)
+		}
+	}
+
 	var sched *scheduler
 	if jobsEnabled {
-		dir := resolveStateDir(*stateDir)
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			log.Printf("hush-agent: state dir %s not writable: %v — job creation will fail until it is", dir, err)
-		}
-		sched = newScheduler(filepath.Join(dir, "jobs.json"))
+		sched = newScheduler(filepath.Join(stateDirPath, "jobs.json"))
 		sched.Start()
 		defer sched.Stop()
+	}
+
+	// The Backup manager holds the restic definitions (and their repo keys) in
+	// backups.json beside jobs.json. It runs no scheduler of its own yet — a run
+	// is driven from the console — so it's just a store plus the restic wrapper.
+	var backups *backupManager
+	if backupEnabled {
+		backups = newBackupManager(backupStatePath(stateDirPath))
 	}
 
 	// advertisedRunAs is the run-as allowlist as reported in /vitals, so the
@@ -162,6 +185,23 @@ func main() {
 		mux.HandleFunc("/jobs", jobsDisabled)
 		mux.HandleFunc("/jobs/{id}", jobsDisabled)
 	}
+	// /backups is always routed so a box with backups off returns a clear
+	// "disabled" (403) rather than a bare 404, indistinguishable from an agent too
+	// old to have it — the same shape /jobs uses.
+	backupDisabled := func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "backups are disabled on this agent (start with -backup to enable)", http.StatusForbidden)
+	}
+	if backupEnabled {
+		mux.HandleFunc("/backups", backups.handleBackups)
+		mux.HandleFunc("/backups/{id}", backups.handleBackup)
+		mux.HandleFunc("/backups/{id}/run", backups.handleBackupRun)
+		mux.HandleFunc("/backups/{id}/snapshots", backups.handleBackupSnapshots)
+	} else {
+		mux.HandleFunc("/backups", backupDisabled)
+		mux.HandleFunc("/backups/{id}", backupDisabled)
+		mux.HandleFunc("/backups/{id}/run", backupDisabled)
+		mux.HandleFunc("/backups/{id}/snapshots", backupDisabled)
+	}
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -178,6 +218,15 @@ func main() {
 		log.Printf("hush-agent: /jobs enabled — scheduled commands run as uid %d", os.Geteuid())
 	} else {
 		log.Printf("hush-agent: /jobs disabled (start with -jobs to enable)")
+	}
+	if backupEnabled {
+		if ver, ok := restic.Available(context.Background()); ok {
+			log.Printf("hush-agent: /backups enabled — %s", ver)
+		} else {
+			log.Printf("hush-agent: /backups enabled but restic was not found on $PATH — installs of a backup will fail until it is")
+		}
+	} else {
+		log.Printf("hush-agent: /backups disabled (start with -backup to enable)")
 	}
 	log.Printf("hush-agent listening on %s", listenAddr)
 	log.Fatal(http.ListenAndServe(listenAddr, mux))

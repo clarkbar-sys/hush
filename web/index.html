@@ -650,6 +650,13 @@
   </div>
 </div>
 
+<div class="scrim" id="backupScrim">
+  <div class="sheet" role="dialog" aria-label="Configure a backup">
+    <div class="grab"></div>
+    <div id="backupSheetBody"></div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -687,6 +694,9 @@
   const JOBS = {};                 // machine id -> live jobs (jobView[]), cached across fleet polls
   const JOBS_OFF = new Set();      // machine ids whose agent has jobs disabled (started without -jobs)
   const jobsLoading = new Set();   // machine ids with an in-flight loadJobs, so a re-render can't double-fetch
+  const BACKUPS = {};              // machine id -> live backups (backupView[]), cached across fleet polls
+  const BACKUPS_OFF = new Set();   // machine ids whose agent has backups disabled (started without -backup)
+  const backupsLoading = new Set();// machine ids with an in-flight loadBackups, so a re-render can't double-fetch
   const JUST_ARRIVED = new Set();  // ids to pop-highlight for one render after their first check-in
   function esc(s){ return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -991,6 +1001,14 @@
                   <span class="gly">◷</span><span class="nm">Schedule a job…</span>
                   <span class="rt">${m.online?"cron":"offline"}</span></button>`}
             ${jobs.map(j=>jobRow(j, m.id)).join("")}</div>`; })()}
+        ${(()=>{ const backups = m.backups||[]; const off = BACKUPS_OFF.has(m.id);
+          return `<div class="sec-title">Backups${backups.length?` <span class="n">${backups.length}</span>`:""}</div>
+          <div class="list">
+            ${off ? `<div class="empty">backups are disabled on this box — start its agent with <b>-backup</b></div>`
+              : `<button class="row runrow" id="backup-new"${m.online?"":` disabled style="opacity:.5;cursor:default"`}>
+                  <span class="gly">⭯</span><span class="nm">Configure a backup…</span>
+                  <span class="rt">${m.online?"restic":"offline"}</span></button>`}
+            ${backups.map(b=>backupRow(b, m.id)).join("")}</div>`; })()}
         ${(()=>{ const items = (RUNS[m.id]||[]).concat(m.tasks||[]);
           return `<div class="sec-title">Tasks${items.length?` <span class="n">${items.length}</span>`:""}</div>
           <div class="list">
@@ -1014,10 +1032,20 @@
     app.querySelectorAll("[data-jrm]").forEach(b=>{
       b.addEventListener("click", ()=> deleteJob(b.dataset.jmid, b.dataset.jrm, b.dataset.jname));
     });
-    // Jobs live on the agent, so pull them lazily on entry rather than dragging
-    // every box's cron list through the 2s fleet poll. Demo jobs come baked into
-    // the fixture, so only live mode fetches.
-    if(MODE!=="demo" && m.online) loadJobs(m.id);
+    { const bn = $("#backup-new"); if(bn) bn.addEventListener("click", ()=>{ if(m.online) openBackupSheet(m.id); }); }
+    app.querySelectorAll("[data-brun]").forEach(b=>{
+      b.addEventListener("click", ()=> runBackup(b.dataset.bmid, b.dataset.brun));
+    });
+    app.querySelectorAll("[data-brm]").forEach(b=>{
+      b.addEventListener("click", ()=> deleteBackup(b.dataset.bmid, b.dataset.brm, b.dataset.bname));
+    });
+    app.querySelectorAll("[data-bsnap]").forEach(b=>{
+      b.addEventListener("click", ()=> openSnapshots(b.dataset.bmid, b.dataset.bsnap, b.dataset.bname));
+    });
+    // Jobs and backups live on the agent, so pull them lazily on entry rather
+    // than dragging every box's list through the 2s fleet poll. Demo fixtures
+    // bake them in, so only live mode fetches.
+    if(MODE!=="demo" && m.online){ loadJobs(m.id); loadBackups(m.id); }
     const bo = $("#browse-open");
     if(bo) bo.addEventListener("click", ()=>{ if(!m.online) return; state.browsePath="/"; fillBrowse(m.id); });
     if(state.browsePath!=null) fillBrowse(m.id);
@@ -1453,6 +1481,32 @@
   // relTimeISO adapts relTime (which wants an epoch-ms) to the agent's RFC3339
   // lastRun stamps, degrading to "" on anything unparseable.
   function relTimeISO(iso){ const t = Date.parse(iso); return isNaN(t) ? "" : relTime(t); }
+  // backupRow renders one restic backup: name, its repo, and the outcome of the
+  // last run (status leads — "did last night's backup pass" is the thing worth
+  // seeing at a glance). Run and Delete hang off data-attributes wired on entry.
+  function backupRow(b, mid){
+    const name = esc(b.name || "");
+    const paths = (b.paths || []).join(", ");
+    const st = b.status || {};
+    let cls, label;
+    if(st.running){ cls = "running"; label = "running"; }
+    else if(st.runs){
+      const ok = st.lastCode === 0 && !st.lastError;
+      cls = ok ? "ok" : "failed";
+      label = (ok ? "ok" : "fail") + (st.lastRun ? " · " + relTimeISO(st.lastRun) : "");
+    } else { cls = "sched"; label = "never run"; }
+    const key = esc(b.id || b.name || "");
+    const run = mid ? `<button class="jrm" data-brun="${key}" data-bmid="${esc(mid)}" aria-label="Run backup now" title="Run backup now" style="color:var(--accent)">▸</button>` : "";
+    const del = mid ? `<button class="jrm" data-brm="${key}" data-bmid="${esc(mid)}" data-bname="${name}" aria-label="Delete backup" title="Delete backup">✕</button>` : "";
+    const snaps = mid ? `<button class="jrm" data-bsnap="${key}" data-bmid="${esc(mid)}" data-bname="${name}" aria-label="View snapshots" title="View snapshots">⋯</button>` : "";
+    return `<div class="row" style="cursor:default" title="${esc(paths)}${b.oneFileSystem?" · whole machine":""}">
+      <span class="gly">⭯</span>
+      <span class="nm">${name}</span>
+      <span class="rt">${esc(b.repo||"")}</span>
+      <span class="state ${cls}"><span class="sd"></span>${label}</span>
+      ${snaps}${run}${del}
+    </div>`;
+  }
   // taskRow renders one run — either a live session run recorded by RUNS
   // ({cmd, ts, ok, label}) or a demo-fleet entry ({name, when, ok}).
   function taskRow(t){
@@ -1647,7 +1701,7 @@
       RUNS[id] = RUNS[id].slice(0, 8);
       if(state.view === "machine" && state.mid === id) render();
     };
-    const close = () => { ac.abort(); ov.remove(); document.removeEventListener("keydown", onkey); };
+    const close = () => { ac.abort(); ov.remove(); document.removeEventListener("keydown", onkey); if(opts.onClose) opts.onClose(); };
     const onkey = e => { if(e.key === "Escape") close(); };
     document.addEventListener("keydown", onkey);
     ov.querySelector(".vclose").addEventListener("click", close);
@@ -2287,6 +2341,7 @@
     m.services = m.services || [];
     m.jobs = m.jobs || [];
     m.tasks = m.tasks || [];
+    m.backups = m.backups || [];
     m.netRx = m.netRx || 0;
     m.netTx = m.netTx || 0;
     if(m.online===undefined) m.online = true;
@@ -2300,6 +2355,7 @@
       // showing what we've already loaded for this box so the count and the
       // Machine-view list don't blink out on every poll.
       if(JOBS[m.id]) m.jobs = JOBS[m.id];
+      if(BACKUPS[m.id]) m.backups = BACKUPS[m.id];
       const h = cpuHist[m.id] || Array(HIST).fill(m.cpu);
       h.push(m.cpu); while(h.length>HIST) h.shift();
       cpuHist[m.id] = h;
@@ -2395,7 +2451,7 @@
   }
   function demoFleet(){
     const mk = o => {
-      o.online=true; o.jobs=o.jobs||[]; o.tasks=o.tasks||[];
+      o.online=true; o.jobs=o.jobs||[]; o.tasks=o.tasks||[]; o.backups=o.backups||[];
       o.loadHist=walk(HIST,o.cpu,12);
       o.netRx = Math.round(15000 + Math.random()*220000);
       o.netTx = Math.round(4000 + Math.random()*60000);
@@ -2408,6 +2464,7 @@
         gpu:18, vram:47, gpuName:"RTX 3090", vramText:"11.3 / 24 GB",
         services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"caddy",state:"running",mem:"42 MB"},{name:"postgres",state:"running",mem:"512 MB"},{name:"tailscaled",state:"running",mem:"24 MB"}],
         jobs:[{name:"nightly-backup",next:"in 3h 12m",sched:"0 3 * * *"},{name:"cert-renew",next:"in 6d",sched:"@weekly"}],
+        backups:[{id:"citadel-root",name:"citadel-root",repo:"rest:http://nas:8000/citadel",paths:["/"],oneFileSystem:true,status:{runs:41,lastCode:0,lastRun:"2026-07-18T03:00:00Z",lastSnapshot:"9f2ab3c1"}}],
         tasks:[{name:"git pull · deploy/api",when:"12m ago",ok:true}] }),
       mk({ id:"nas", agentVersion:"v1.3.0", os:"TrueNAS · ZFS", ip:"100.71.4.2", role:"store", status:"good", cpu:11, mem:34, disk:81, up:"92d", load:"0.4", gpu:null,
         services:[{name:"hush-agent",state:"running",mem:"17 MB"},{name:"smbd",state:"running",mem:"88 MB"},{name:"zfs-scrub",state:"running",mem:"6 MB"}],
@@ -2582,6 +2639,206 @@
     await loadJobs(mid); render();
   }
 
+  /* ---------- Backups: the restic construct, defined on the agent ----------
+     A Backup is "a Job that hauls a Machine into a Store, dedup'd": a saved set
+     of paths this box sends into a restic repository, encrypted and dedup'd. The
+     definition (and its repo key) live on the agent — the box that holds the
+     data holds the key — so, like Jobs, the console is a thin client over
+     hush-control's pass-through proxy: GET/POST /api/machines/{id}/backups,
+     DELETE .../{bid}, POST .../{bid}/run (streamed to the run terminal), and
+     GET .../{bid}/snapshots. A box whose agent was started without -backup
+     answers 403, surfaced as "backups disabled". */
+  const backupScrim = $("#backupScrim");
+  const backupBody = $("#backupSheetBody");
+  let backupDraft = { id:null, name:"", repo:"", password:"", paths:"", excludes:"", oneFileSystem:false };
+
+  // loadBackups pulls one box's backups into the BACKUPS cache and re-renders if
+  // we're still looking at it. A 403 means the agent has backups disabled;
+  // anything else unreachable leaves the cache untouched so a blip doesn't wipe it.
+  async function loadBackups(id){
+    if(MODE === "demo" || backupsLoading.has(id)) return;
+    backupsLoading.add(id);
+    try {
+      const r = await fetch(`api/machines/${encodeURIComponent(id)}/backups`, {cache:"no-store"});
+      if(r.status === 403){ BACKUPS_OFF.add(id); BACKUPS[id] = []; }
+      else if(r.ok){
+        BACKUPS_OFF.delete(id);
+        const list = await r.json();
+        BACKUPS[id] = Array.isArray(list) ? list : [];
+      } else return;
+      const m = byId(id); if(m) m.backups = BACKUPS[id];
+      if(state.view === "machine" && state.mid === id) render();
+    } catch(e){ /* transient — keep whatever we had */ }
+    finally { backupsLoading.delete(id); }
+  }
+
+  function closeBackupSheet(){ backupScrim.classList.remove("open"); }
+  backupScrim.addEventListener("click", e=>{ if(e.target===backupScrim) closeBackupSheet(); });
+
+  function openBackupSheet(preId){
+    const online = M.filter(m=>m.online);
+    if(preId && BACKUPS_OFF.has(preId)){ toast("backups are disabled on that box — start its agent with -backup"); return; }
+    backupDraft = { id: preId || (online[0] && online[0].id) || null, name:"", repo:"", password:"", paths:"", excludes:"", oneFileSystem:false };
+    renderBackupSheet();
+    backupScrim.classList.add("open");
+  }
+
+  function renderBackupSheet(){
+    const online = M.filter(m=>m.online);
+    if(!online.length){
+      backupBody.innerHTML = `<h3>Configure a backup</h3>
+        <p class="sd">restic snapshots of the paths you name, into a Store</p>
+        <div class="field-note">No machines are online to back up.</div>
+        <div class="sheet-actions"><button class="btn primary" id="bClose" style="flex:1">Close</button></div>`;
+      $("#bClose").addEventListener("click", closeBackupSheet);
+      return;
+    }
+    if(!online.some(m=>m.id===backupDraft.id)) backupDraft.id = online[0].id;
+    const opts = online.map(m=>`<option value="${esc(m.id)}"${m.id===backupDraft.id?" selected":""}>${esc(m.id)}${m.os?` · ${esc(m.os)}`:""}</option>`).join("");
+    backupBody.innerHTML = `
+      <h3>Configure a backup</h3>
+      <p class="sd">restic snapshots — dedup'd and encrypted — of the paths you name</p>
+      <div class="field">
+        <label>Machine</label>
+        <select id="bMachine">${opts}</select>
+      </div>
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="bName" placeholder="e.g. debian-root" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(backupDraft.name)}">
+      </div>
+      <div class="field">
+        <label>Repository</label>
+        <input type="text" id="bRepo" placeholder="e.g. rest:http://nas:8000/homelab" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(backupDraft.repo)}">
+        <div class="hint">a restic backend — a <b>rest-server</b> URL, an <b>sftp:</b> target, or a local path</div>
+      </div>
+      <div class="field">
+        <label>Repository password</label>
+        <input type="password" id="bPass" placeholder="the repo's encryption key" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(backupDraft.password)}">
+        <div class="hint">stored on <b>${esc(backupDraft.id)}</b> only — it never passes through the console</div>
+      </div>
+      <div class="field">
+        <label>Paths</label>
+        <textarea id="bPaths" rows="3" placeholder="/&#10;/etc&#10;/home/josh" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(backupDraft.paths)}</textarea>
+        <div class="hint">one absolute path per line</div>
+      </div>
+      <div class="field">
+        <label>Excludes <span style="opacity:.6">(optional)</span></label>
+        <textarea id="bEx" rows="2" placeholder="*.tmp&#10;/home/josh/.cache" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(backupDraft.excludes)}</textarea>
+        <div class="hint">one restic <b>--exclude</b> pattern per line</div>
+      </div>
+      <label class="field" style="flex-direction:row;align-items:center;gap:.5rem;cursor:pointer">
+        <input type="checkbox" id="bOFS" style="width:auto"${backupDraft.oneFileSystem?" checked":""}>
+        <span>Whole machine (<b>--one-file-system</b>, don't cross mount points)</span>
+      </label>
+      <div class="field-note">
+        <b>Heads up —</b> creating this initialises the repo and verifies the password against it, so a bad address or key fails now, not at 3am.
+      </div>
+      <div class="sheet-actions">
+        <button class="btn ghost" id="bCancel">Cancel</button>
+        <button class="btn primary" id="bSave">⭯ Create</button>
+      </div>`;
+    $("#bMachine").addEventListener("change", e=>{ backupDraft.id = e.target.value; renderBackupSheet(); });
+    $("#bName").addEventListener("input", e=>{ backupDraft.name = e.target.value; });
+    $("#bRepo").addEventListener("input", e=>{ backupDraft.repo = e.target.value; });
+    $("#bPass").addEventListener("input", e=>{ backupDraft.password = e.target.value; });
+    $("#bPaths").addEventListener("input", e=>{ backupDraft.paths = e.target.value; });
+    $("#bEx").addEventListener("input", e=>{ backupDraft.excludes = e.target.value; });
+    $("#bOFS").addEventListener("change", e=>{ backupDraft.oneFileSystem = e.target.checked; });
+    $("#bCancel").addEventListener("click", closeBackupSheet);
+    $("#bSave").addEventListener("click", createBackup);
+    $("#bName").focus();
+  }
+
+  // lines splits a textarea into trimmed, non-empty lines — the shape the paths
+  // and excludes fields feed the API.
+  function lines(s){ return (s||"").split("\n").map(x=>x.trim()).filter(Boolean); }
+
+  async function createBackup(){
+    const id = backupDraft.id;
+    const name = (backupDraft.name||"").trim();
+    const repo = (backupDraft.repo||"").trim();
+    const password = backupDraft.password||"";
+    const paths = lines(backupDraft.paths);
+    const excludes = lines(backupDraft.excludes);
+    if(!id) return;
+    if(!name){ $("#bName").focus(); toast("give the backup a name"); return; }
+    if(!repo){ $("#bRepo").focus(); toast("add a repository"); return; }
+    if(!password){ $("#bPass").focus(); toast("add the repository password"); return; }
+    if(!paths.length){ $("#bPaths").focus(); toast("add at least one path"); return; }
+    if(MODE === "demo"){
+      const m = byId(id); if(m){ (m.backups = m.backups || []).push({ id:"bk-"+Math.random().toString(36).slice(2,8), name, repo, paths, oneFileSystem:backupDraft.oneFileSystem, status:{} }); }
+      closeBackupSheet(); render(); toast("configured (demo)"); return;
+    }
+    const btn = $("#bSave"); btn.disabled = true; btn.textContent = "Creating…";
+    try {
+      const r = await fetch(`api/machines/${encodeURIComponent(id)}/backups`, {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ name, repo, password, paths, excludes, oneFileSystem:backupDraft.oneFileSystem }) });
+      if(r.status === 403){ BACKUPS_OFF.add(id); throw new Error("backups are disabled on that box — start its agent with -backup"); }
+      if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
+      await loadBackups(id);
+      closeBackupSheet(); render();
+      toast("backup configured");
+    } catch(err){
+      btn.disabled = false; btn.textContent = "⭯ Create";
+      toast((err&&err.message) ? err.message : "couldn't configure");
+    }
+  }
+
+  async function deleteBackup(mid, bid, name){
+    if(!confirm(`Delete backup "${name||bid}"? Its definition is forgotten — the repo's snapshots are left untouched.`)) return;
+    if(MODE === "demo"){
+      const m = byId(mid); if(m && m.backups){ const i = m.backups.findIndex(b=>(b.id||b.name)===bid); if(i>=0) m.backups.splice(i,1); }
+      render(); return;
+    }
+    try {
+      const r = await fetch(`api/machines/${encodeURIComponent(mid)}/backups/${encodeURIComponent(bid)}`, { method:"DELETE" });
+      if(!r.ok && r.status!==204) throw new Error("error "+r.status);
+    } catch(e){ toast("couldn't delete"); }
+    await loadBackups(mid); render();
+  }
+
+  // runBackup streams a run into the shared run terminal (the same overlay a Task
+  // uses), then refreshes the box's backups so the row's last-run status updates.
+  function runBackup(mid, bid){
+    const b = (BACKUPS[mid]||[]).find(x=>(x.id||x.name)===bid) || (byId(mid)?.backups||[]).find(x=>(x.id||x.name)===bid);
+    const label = `restic backup · ${b ? (b.name||bid) : bid}`;
+    if(MODE === "demo"){ openRunView(mid, label, { canSave:false }); return; }
+    openRunView(mid, label, {
+      runUrl: `api/machines/${encodeURIComponent(mid)}/backups/${encodeURIComponent(bid)}/run`,
+      canSave: false,
+      onClose: ()=> loadBackups(mid),
+    });
+    // The run view doesn't call back on close in every path, so also refresh
+    // shortly after kickoff to catch the "running" → "ok" transition.
+    setTimeout(()=> loadBackups(mid), 1500);
+  }
+
+  async function openSnapshots(mid, bid, name){
+    if(MODE === "demo"){ toast("snapshots are live-mode only"); return; }
+    toast("loading snapshots…");
+    let snaps;
+    try {
+      const r = await fetch(`api/machines/${encodeURIComponent(mid)}/backups/${encodeURIComponent(bid)}/snapshots`, {cache:"no-store"});
+      if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
+      snaps = await r.json();
+    } catch(err){ toast((err&&err.message) ? err.message : "couldn't load snapshots"); return; }
+    const rows = (Array.isArray(snaps)?snaps:[]).slice().reverse().map(s=>`
+      <div class="row" style="cursor:default">
+        <span class="gly">⭯</span>
+        <span class="nm mono">${esc(s.short_id||s.id||"")}</span>
+        <span class="rt">${esc((s.paths||[]).join(", "))}</span>
+        <span class="state ok"><span class="sd"></span>${esc(relTimeISO(s.time)||s.time||"")}</span>
+      </div>`).join("");
+    backupBody.innerHTML = `
+      <h3>Snapshots · ${esc(name||bid)}</h3>
+      <p class="sd">what restic holds for this backup, newest first</p>
+      <div class="list">${rows || `<div class="empty">no snapshots yet — run the backup to make the first one</div>`}</div>
+      <div class="sheet-actions"><button class="btn primary" id="bSnapClose" style="flex:1">Close</button></div>`;
+    $("#bSnapClose").addEventListener("click", closeBackupSheet);
+    backupScrim.classList.add("open");
+  }
+
   /* ---------- build sheet ---------- */
   const scrim = $("#scrim");
   $("#palette").innerHTML = CONSTRUCTS.map(c=>{
@@ -2605,6 +2862,7 @@
       if(el.dataset.c === "Job"){ openJobSheet(null); return; }
       if(el.dataset.c === "Task"){ openTaskSheet(null); return; }
       if(el.dataset.c === "Workflow"){ openWorkflowSheet(); return; }
+      if(el.dataset.c === "Backup"){ openBackupSheet(null); return; }
       toast(`＋ ${el.dataset.c} builder — coming in a later phase`);
     });
   });

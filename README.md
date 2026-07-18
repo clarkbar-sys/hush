@@ -187,6 +187,27 @@ grant" — so a missing or drifted grant shows up as a ⚠ up front instead of a
 Task failing at run time. A user listed but not yet granted (e.g. you set the
 env but haven't pasted the **Run-as users** command) is exactly this case.
 
+### Back up a machine (Backups)
+
+The **Backup** construct sends a machine's paths into a
+[restic](https://restic.net) repository — dedup'd, encrypted, snapshotted —
+from **＋ Build → Backup** or the **Backups** section of any Machine view. Point
+it at a restic backend (a [rest-server](https://github.com/restic/rest-server)
+URL on the NAS is the blessed target, reachable over the tailnet and
+append-only; `sftp:` and local paths work too), name the paths, and optionally
+tick **whole machine** (`--one-file-system`). Creating a backup initialises the
+repo and verifies the password against it, so a bad address or key fails then and
+not at 3am; a run streams restic's output to the same live terminal a Task uses.
+
+It's **off by default** — a backup reads whatever paths you point it at — so a
+box serves it only when `hush-agent` is started with `-backup` (or
+`HUSH_AGENT_BACKUP=1` in its env file); until then `/backups` returns `403`,
+surfaced as "backups disabled". The repository password is stored on the agent's
+own `0700` state dir and handed to restic through the environment — it never
+passes through hush-control or the phone, and the API never returns it. Needs the
+`restic` binary on the box. See
+[`docs/DESIGN.md`](./docs/DESIGN.md#backups--restic-the-first-slice).
+
 ## Run as a service
 
 `install.sh` (above) already does this — every install is a systemd service

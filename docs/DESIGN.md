@@ -104,8 +104,10 @@ Each phase layers on the same map.
   slice lands early: saved multi-step blueprints that sequence the existing
   `/exec` in plain Go (see below), so Workflows are usable before the Lisp.
 - **Phase 4 — Backups & Store.** The NAS view; intelligent dedup'd backups.
-  A first slice lands early: read-only **file browsing** on every machine
-  (see below), so the NAS is walkable before dedup'd backups exist.
+  Two slices land early: read-only **file browsing** on every machine (see
+  below), so the NAS is walkable; and the **Backup** construct — on-demand
+  restic backups, dedup'd and encrypted (see "Backups — restic" below) — with
+  unattended scheduling and cross-site replication still to come.
 
 ## Store — browsing files
 
@@ -267,6 +269,55 @@ audited by `hush-control` with the caller's Tailscale identity.
 **No Scheme yet.** The design reserves Scheme for a visual blueprint DSL; this
 first slice is plain Go over the existing exec plumbing, so Workflows are usable
 now and the Lisp can land later without changing the runtime beneath them.
+
+## Backups — restic, the first slice
+
+The **Backup** construct ("a Job that hauls a Machine into a Store, dedup'd") is
+a saved set of paths a box sends into a [restic](https://restic.net) repository,
+encrypted and dedup'd. restic gives hush the three things a bare NAS-local copy
+can't — content-defined **dedup**, **snapshot** history, and client-side
+**encryption** — and this package is a thin, streaming shell over the restic
+binary, not a reimplementation of any of it. A Backup lives on the **agent**,
+like a Job: the box that holds the data holds the repository key, so the console
+drives backups through hush-control's pass-through proxy
+(`/api/machines/{host}/backups`, `…/{id}/run`, `…/{id}/snapshots`) rather than a
+control-side store. A box serves `/backups` only when its agent is started with
+`-backup` (or `HUSH_AGENT_BACKUP=1`) — off by default, since a backup reads
+whatever paths you point it at; until then the endpoint returns `403`, surfaced
+as "backups disabled" like Jobs.
+
+**The key stays on the box.** A restic repo is a backend location plus an
+encryption password. hush keeps that password in the agent's `0700` state dir
+(`backups.json`, beside `jobs.json`) and hands it to restic through the
+environment — `RESTIC_REPOSITORY` / `RESTIC_PASSWORD`, never argv, so it never
+lands in the process table or an audit log. It is the one field the API never
+returns (`GET /backups` omits it by construction) and never accepts back through
+hush-control's audit log (a create logs only the backup's name and repo). The
+control plane and the phone drive backups without the key ever passing through
+them, so neither can become the thing that leaks it. restic is invoked with an
+explicit argument slice (no `sh -c`), so a path that looks like a flag or holds
+shell metacharacters is passed through literally — the stricter handling a typed
+backup wants, versus the Task runner's deliberately-unjailed `sh -c`.
+
+**Create proves the repo works.** Adding a backup initialises the repository
+(tolerating one that already exists, so a second machine can point at the same
+repo) and lists its snapshots to verify the password — a bad backend URL or
+wrong key fails at create time, not silently at 3am. A run streams restic's
+output to the console's shared run terminal as the same Server-Sent Events a Task
+uses (`start` → `out` → `exit`), and records the last run's outcome and the
+snapshot it wrote. Deleting a backup forgets its definition only; the
+repository's snapshots are left for `restic` to prune directly, so a mistaken
+delete loses the schedule, never the data.
+
+**Backend.** The blessed target is a [rest-server](https://github.com/restic/rest-server)
+on the Store box (e.g. the NAS), reached over the tailnet — it supports
+append-only repos, so a compromised source can add snapshots but not wipe old
+ones. `sftp:` and local paths work too. This first slice runs a backup on
+demand; **unattended scheduling** (a nightly run) and **cross-site replication**
+of the repo — the durability layer that makes distributing across a two-site
+tailnet fleet a real 3-2-1 story — are the next slices. A whole-machine backup
+uses `--one-file-system` with restic's standard excludes; it is a restorable
+file-level backup of the live root, not a block image.
 
 ## Running it (dev)
 
