@@ -187,6 +187,7 @@
 
   .sparkwrap { margin-top: 2px; }
   .spark { width:100%; height: 26px; display:block; }
+  .spark.netmini { height: 13px; margin-top: 3px; opacity: .85; }
 
   .node .foot { display:flex; align-items:center; justify-content:space-between; gap:6px;
     flex-wrap: wrap; border-top: 1px solid var(--border-soft); padding-top: 9px; }
@@ -742,7 +743,7 @@
   // netSpark draws rx/tx as two overlaid lines sharing one y-axis, scaled to
   // the loudest sample of either series (floored so an idle link isn't drawn
   // as a flat line pinned to the top).
-  function netSpark(rx, tx, w, h){
+  function netSpark(rx, tx, w, h, cls){
     const peak = Math.max(1024, ...rx, ...tx);
     const line = (data, col) => {
       const n = data.length;
@@ -754,7 +755,7 @@
       return `<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.6"
         stroke-linejoin="round" stroke-linecap="round"/><circle cx="${last[0]}" cy="${last[1]}" r="2.4" fill="${col}"/>`;
     };
-    return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    return `<svg class="${cls||"spark"}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
       ${line(tx, "var(--ring2)")}${line(rx, "var(--accent)")}</svg>`;
   }
 
@@ -893,6 +894,8 @@
     const gpuRing = m.gpu!=null ? `
           <div class="ring">${dualRing(m.gpu,m.vram,44)}<span class="v">${m.gpu}%</span><span class="k">gpu</span></div>` : "";
     const hist = m.loadHist && m.loadHist.length>1 ? m.loadHist : [m.cpu||0, m.cpu||0];
+    const rxHist = m.netRxHist && m.netRxHist.length>1 ? m.netRxHist : [m.netRx||0, m.netRx||0];
+    const txHist = m.netTxHist && m.netTxHist.length>1 ? m.netTxHist : [m.netTx||0, m.netTx||0];
     return `
       <button class="node s-${m.status} ${m.online?"":"offline"}${JUST_ARRIVED.has(m.id)?" new":""}" data-id="${m.id}">
         <div class="hd">
@@ -907,7 +910,10 @@
           <div class="ring">${ring(m.disk,44)}<span class="v">${m.disk}%</span><span class="k">disk</span></div>
           ${gpuRing}
         </div>
-        <div class="sparkwrap">${sparkline(hist, 200, 26)}</div>
+        <div class="sparkwrap">
+          ${sparkline(hist, 200, 26)}
+          ${netSpark(rxHist, txHist, 200, 13, "spark netmini")}
+        </div>
         <div class="foot">
           <span class="cons"><b>${m.services.length}</b>&nbsp;svc <b>${m.jobs.length}</b>&nbsp;job</span>
           ${m.agentUpdateAvailable?`<span class="badge upd">⇧&nbsp;<span class="lbl">update</span></span>`:""}
