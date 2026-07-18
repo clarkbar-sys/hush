@@ -3181,30 +3181,37 @@
   // genBackupSetupScript builds the idempotent setup command for one box. It adds
   // only the steps that are actually missing, so a re-run is a near no-op, and
   // ends with a hush-agent restart when anything the agent must re-read changed.
+  //
+  // Each step is emitted as a single &&-chained command rather than several
+  // bare lines. A multi-line paste into a terminal can silently drop its last
+  // line (no trailing newline to submit it), which used to mean a step like
+  // the tee onto agent.env never ran while the restart right after it did —
+  // "success" with nothing actually changed. Chaining collapses that failure
+  // mode to "the whole step visibly didn't run", and the trailing restart is
+  // always && -appended onto the last real command instead of sitting alone.
   function genBackupSetupScript(m, wantVault){
     const cap = m.backup || {};
     const ip = m.ip || "<this-box-tailnet-ip>";
     const L = [`# hush backups — set up ${m.id}`];
     let needRestart = false;
+    let lastCmdIdx = -1;
+    const pushCmd = (line) => { L.push(line); if(!line.trimStart().startsWith("#")) lastCmdIdx = L.length - 1; };
     if(!cap.restic){
       L.push("# 1) restic — the tool that does the backing up");
-      L.push(pkgInstallRestic(m.os));
+      pushCmd(pkgInstallRestic(m.os));
       needRestart = true;
     }
     if(!cap.enabled){
       L.push("# " + (cap.restic?"1":"2") + ") enable the Backup capability on this box's agent");
-      L.push("sudo mkdir -p /etc/hush && sudo touch /etc/hush/agent.env");
-      L.push("sudo sed -i '/^HUSH_AGENT_BACKUP=/d' /etc/hush/agent.env");
-      L.push("echo 'HUSH_AGENT_BACKUP=1' | sudo tee -a /etc/hush/agent.env >/dev/null");
+      pushCmd("sudo mkdir -p /etc/hush && sudo touch /etc/hush/agent.env && sudo sed -i '/^HUSH_AGENT_BACKUP=/d' /etc/hush/agent.env && echo 'HUSH_AGENT_BACKUP=1' | sudo tee -a /etc/hush/agent.env >/dev/null");
       needRestart = true;
     }
     if(wantVault){
       L.push("# vault — a rest-server that stores other machines' backups, tailnet-only + append-only");
-      L.push("sudo useradd -r -s /usr/sbin/nologin restic 2>/dev/null; sudo mkdir -p /srv/restic && sudo chown restic /srv/restic");
+      pushCmd("sudo useradd -r -s /usr/sbin/nologin restic 2>/dev/null; sudo mkdir -p /srv/restic && sudo chown restic /srv/restic");
       L.push("# fetch rest-server (bump the version/arch if needed)");
-      L.push("curl -fsSL https://github.com/restic/rest-server/releases/download/v0.13.0/rest-server_0.13.0_linux_amd64.tar.gz -o /tmp/rs.tgz");
-      L.push("sudo tar -xzf /tmp/rs.tgz -C /tmp && sudo install /tmp/rest-server_*/rest-server /usr/local/bin/rest-server");
-      L.push(`sudo tee /etc/systemd/system/rest-server.service >/dev/null <<'UNIT'
+      pushCmd("curl -fsSL https://github.com/restic/rest-server/releases/download/v0.13.0/rest-server_0.13.0_linux_amd64.tar.gz -o /tmp/rs.tgz && sudo tar -xzf /tmp/rs.tgz -C /tmp && sudo install /tmp/rest-server_*/rest-server /usr/local/bin/rest-server");
+      pushCmd(`sudo tee /etc/systemd/system/rest-server.service >/dev/null <<'UNIT'
 [Unit]
 Description=restic REST server (hush vault)
 After=network-online.target
@@ -3216,10 +3223,13 @@ Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 UNIT`);
-      L.push("sudo systemctl daemon-reload && sudo systemctl enable --now rest-server");
+      pushCmd("sudo systemctl daemon-reload && sudo systemctl enable --now rest-server");
       L.push(`# other machines back up here with repository:  rest:http://${ip}:8000/<name>`);
     }
-    if(needRestart) L.push("sudo systemctl restart hush-agent");
+    if(needRestart){
+      if(lastCmdIdx >= 0) L[lastCmdIdx] += " && sudo systemctl restart hush-agent";
+      else L.push("sudo systemctl restart hush-agent");
+    }
     if(L.length === 1) L.push("# already set up — nothing to do 🎉");
     return L.join("\n");
   }
