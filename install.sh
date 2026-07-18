@@ -200,6 +200,20 @@ enable_service() {
   echo "enabled + started $1" >&2
 }
 
+# The two hush-control modes are mutually exclusive — their units carry
+# Conflicts= each other — but each install path only ever enabled its own
+# unit. Switching modes on an existing box therefore left BOTH enabled and
+# both WantedBy=multi-user.target, so at boot systemd has to drop one of the
+# two conflicting jobs and which mode survives is a race. A box installed as
+# tsnet could come back from a reboot serving LAN-only on 127.0.0.1 with no
+# tailnet node at all. Turn the mode we are not installing off.
+disable_control_mode() {
+  if [ "$(systemctl is-enabled "$1" 2>/dev/null)" = "enabled" ]; then
+    systemctl disable --now "$1"
+    echo "disabled $1 (conflicting control mode)" >&2
+  fi
+}
+
 # install_updater sets up the root-owned self-update path for hush-control:
 # a oneshot that swaps the binary for the latest verified release, plus a
 # timer that runs it. hush-control itself is unprivileged and can't do this.
@@ -250,6 +264,7 @@ install_control() {
     "HUSH_CONTROL_LISTEN=127.0.0.1:8080" \
     "HUSH_CONTROL_CONFIG=$CONFIG_DIR/fleet.json"
   fetch_fleet_example
+  disable_control_mode hush-control-tsnet.service
   enable_service hush-control.service
   install_updater
 }
@@ -267,6 +282,7 @@ install_control_tsnet() {
     "HUSH_CONTROL_HOSTNAME=hush" \
     "HUSH_CONTROL_STATE_DIR=/var/lib/hush" \
     "# To restrict callers, add -allow flags with: systemctl edit --full hush-control-tsnet"
+  disable_control_mode hush-control.service
   enable_service hush-control-tsnet.service
   install_updater
 }
