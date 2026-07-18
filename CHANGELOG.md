@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.1](https://github.com/clarkbar-sys/hush/compare/v1.20.0...v1.20.1) (2026-07-18)
+
+
+### Bug Fixes
+
+* stop /api/fleet blocking every poll on one offline agent ([#104](https://github.com/clarkbar-sys/hush/issues/104)) ([4e1ad01](https://github.com/clarkbar-sys/hush/commit/4e1ad01a04094102705e6b6a5ae915cd82c1460c))
+
 ## [1.20.0](https://github.com/clarkbar-sys/hush/compare/v1.19.0...v1.20.0) (2026-07-18)
 
 
