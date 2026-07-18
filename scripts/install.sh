@@ -140,6 +140,11 @@ install_env_file() {
 enable_service() {
   systemctl daemon-reload
   systemctl enable --now "$1"
+  # enable --now only starts a stopped unit; for one that's already running
+  # (a re-run of the installer to pick up a freshly swapped binary) it's a
+  # no-op, so the old process keeps running. Force it to pick up the new
+  # binary.
+  systemctl restart "$1"
   echo "enabled + started $1"
 }
 
