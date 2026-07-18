@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.0](https://github.com/clarkbar-sys/hush/compare/v1.18.0...v1.19.0) (2026-07-18)
+
+
+### Features
+
+* disk-usage treemap for the Store construct ([#99](https://github.com/clarkbar-sys/hush/issues/99)) ([feb97c9](https://github.com/clarkbar-sys/hush/commit/feb97c9983fc18f82acda7264f3cf84a969a5040))
+
 ## [1.18.0](https://github.com/clarkbar-sys/hush/compare/v1.17.0...v1.18.0) (2026-07-16)
 
 
