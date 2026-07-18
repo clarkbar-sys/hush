@@ -187,6 +187,7 @@
 
   .sparkwrap { margin-top: 2px; }
   .spark { width:100%; height: 26px; display:block; }
+  .spark.netmini { height: 13px; margin-top: 3px; opacity: .85; }
 
   .node .foot { display:flex; align-items:center; justify-content:space-between; gap:6px;
     flex-wrap: wrap; border-top: 1px solid var(--border-soft); padding-top: 9px; }
@@ -677,6 +678,8 @@
   let lostSince = 0;               // ms timestamp poll() started failing after being live
   const DOC_TITLE = document.title;
   const cpuHist = {};              // id -> rolling cpu samples (live mode)
+  const netRxHist = {};            // id -> rolling inbound bytes/sec samples (live mode)
+  const netTxHist = {};            // id -> rolling outbound bytes/sec samples (live mode)
   const state = { view:"fleet", mid:null, cname:null, browsePath:null };
   const byId = id => M.find(m=>m.id===id);
   let PENDING = [];                // machines just added via the UI, awaiting first check-in
@@ -736,6 +739,24 @@
       <polyline points="${pts.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="1.6"
         stroke-linejoin="round" stroke-linecap="round"/>
       <circle cx="${last[0]}" cy="${last[1]}" r="2.4" fill="var(--accent)"/></svg>`;
+  }
+  // netSpark draws rx/tx as two overlaid lines sharing one y-axis, scaled to
+  // the loudest sample of either series (floored so an idle link isn't drawn
+  // as a flat line pinned to the top).
+  function netSpark(rx, tx, w, h, cls){
+    const peak = Math.max(1024, ...rx, ...tx);
+    const line = (data, col) => {
+      const n = data.length;
+      const pts = data.map((v,i)=>{
+        const x=(i/(n-1))*w, y=h-3-(v/peak)*(h-6);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      });
+      const last = pts[pts.length-1].split(",");
+      return `<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.6"
+        stroke-linejoin="round" stroke-linecap="round"/><circle cx="${last[0]}" cy="${last[1]}" r="2.4" fill="${col}"/>`;
+    };
+    return `<svg class="${cls||"spark"}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      ${line(tx, "var(--ring2)")}${line(rx, "var(--accent)")}</svg>`;
   }
 
   /* ---------- render ---------- */
@@ -873,6 +894,8 @@
     const gpuRing = m.gpu!=null ? `
           <div class="ring">${dualRing(m.gpu,m.vram,44)}<span class="v">${m.gpu}%</span><span class="k">gpu</span></div>` : "";
     const hist = m.loadHist && m.loadHist.length>1 ? m.loadHist : [m.cpu||0, m.cpu||0];
+    const rxHist = m.netRxHist && m.netRxHist.length>1 ? m.netRxHist : [m.netRx||0, m.netRx||0];
+    const txHist = m.netTxHist && m.netTxHist.length>1 ? m.netTxHist : [m.netTx||0, m.netTx||0];
     return `
       <button class="node s-${m.status} ${m.online?"":"offline"}${JUST_ARRIVED.has(m.id)?" new":""}" data-id="${m.id}">
         <div class="hd">
@@ -887,7 +910,10 @@
           <div class="ring">${ring(m.disk,44)}<span class="v">${m.disk}%</span><span class="k">disk</span></div>
           ${gpuRing}
         </div>
-        <div class="sparkwrap">${sparkline(hist, 200, 26)}</div>
+        <div class="sparkwrap">
+          ${sparkline(hist, 200, 26)}
+          ${netSpark(rxHist, txHist, 200, 13, "spark netmini")}
+        </div>
         <div class="foot">
           <span class="cons"><b>${m.services.length}</b>&nbsp;svc <b>${m.jobs.length}</b>&nbsp;job</span>
           ${m.agentUpdateAvailable?`<span class="badge upd">⇧&nbsp;<span class="lbl">update</span></span>`:""}
@@ -907,6 +933,8 @@
     const sv = sevVar(m.status);
     const alert = m.alert ? `<div class="alertbar ${m.status}">${m.status==="crit"?"●":"▲"} ${m.alert}</div>` : "";
     const hist = m.loadHist && m.loadHist.length>1 ? m.loadHist : [m.cpu||0, m.cpu||0];
+    const rxHist = m.netRxHist && m.netRxHist.length>1 ? m.netRxHist : [m.netRx||0, m.netRx||0];
+    const txHist = m.netTxHist && m.netTxHist.length>1 ? m.netTxHist : [m.netTx||0, m.netTx||0];
     app.innerHTML = `
       <div class="strip">
         <div class="crumbs"><a id="bk">Fleet</a><span class="sep">/</span><span>${m.id}</span></div>
@@ -929,6 +957,10 @@
             <div class="loadbox">
               <div class="lbl"><span>cpu trend</span><b>load ${m.load||"—"}</b></div>
               ${sparkline(hist,260,34)}
+            </div>
+            <div class="loadbox">
+              <div class="lbl"><span>network</span><b><span style="color:var(--accent)">↓ ${fmtBytes(m.netRx||0)}/s</span>&nbsp;&nbsp;<span style="color:var(--ring2)">↑ ${fmtBytes(m.netTx||0)}/s</span></b></div>
+              ${netSpark(rxHist,txHist,260,34)}
             </div>
           </div>
         </div>
@@ -2255,6 +2287,8 @@
     m.services = m.services || [];
     m.jobs = m.jobs || [];
     m.tasks = m.tasks || [];
+    m.netRx = m.netRx || 0;
+    m.netTx = m.netTx || 0;
     if(m.online===undefined) m.online = true;
     return m;
   }
@@ -2270,6 +2304,14 @@
       h.push(m.cpu); while(h.length>HIST) h.shift();
       cpuHist[m.id] = h;
       m.loadHist = h.slice();
+      const rxh = netRxHist[m.id] || Array(HIST).fill(m.netRx);
+      rxh.push(m.netRx); while(rxh.length>HIST) rxh.shift();
+      netRxHist[m.id] = rxh;
+      m.netRxHist = rxh.slice();
+      const txh = netTxHist[m.id] || Array(HIST).fill(m.netTx);
+      txh.push(m.netTx); while(txh.length>HIST) txh.shift();
+      netTxHist[m.id] = txh;
+      m.netTxHist = txh.slice();
       return m;
     });
     // a machine added through "Add machine" graduates out of PENDING once its
@@ -2346,8 +2388,21 @@
     for(let i=0;i<n;i++){ v+=(Math.random()-0.5)*amp; v=Math.max(2,Math.min(98,v)); a.push(v); }
     return a;
   }
+  function walkBytes(n, base, amp){
+    const a=[]; let v=base;
+    for(let i=0;i<n;i++){ v+=(Math.random()-0.5)*amp; v=Math.max(0,v); a.push(v); }
+    return a;
+  }
   function demoFleet(){
-    const mk = o => { o.online=true; o.jobs=o.jobs||[]; o.tasks=o.tasks||[]; o.loadHist=walk(HIST,o.cpu,12); return o; };
+    const mk = o => {
+      o.online=true; o.jobs=o.jobs||[]; o.tasks=o.tasks||[];
+      o.loadHist=walk(HIST,o.cpu,12);
+      o.netRx = Math.round(15000 + Math.random()*220000);
+      o.netTx = Math.round(4000 + Math.random()*60000);
+      o.netRxHist = walkBytes(HIST, o.netRx, o.netRx*0.35);
+      o.netTxHist = walkBytes(HIST, o.netTx, o.netTx*0.35);
+      return o;
+    };
     return [
       mk({ id:"citadel", agentVersion:"v1.3.0", os:"Debian 12", ip:"100.71.8.9", role:"", status:"good", cpu:23, mem:47, disk:38, up:"41d", load:"0.9",
         gpu:18, vram:47, gpuName:"RTX 3090", vramText:"11.3 / 24 GB",
@@ -2379,6 +2434,10 @@
       m.cpu = j(m.cpu); m.mem = Math.max(2,Math.min(98, m.mem + (((Math.random()-0.5)*2)|0)));
       if(m.gpu!=null){ m.gpu = j(m.gpu); m.vram = Math.max(2,Math.min(99, m.vram + (((Math.random()-0.5)*2)|0))); }
       m.loadHist = m.loadHist.slice(1).concat([m.cpu]);
+      m.netRx = Math.max(0, Math.round(m.netRx + (Math.random()-0.5)*Math.max(2000,m.netRx*0.5)));
+      m.netTx = Math.max(0, Math.round(m.netTx + (Math.random()-0.5)*Math.max(1000,m.netTx*0.5)));
+      m.netRxHist = m.netRxHist.slice(1).concat([m.netRx]);
+      m.netTxHist = m.netTxHist.slice(1).concat([m.netTx]);
     });
   }
 

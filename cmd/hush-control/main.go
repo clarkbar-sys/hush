@@ -56,6 +56,8 @@ type Machine struct {
 	VRAMText             string           `json:"vramText,omitempty"`
 	Up                   string           `json:"up"`
 	Load                 string           `json:"load"`
+	NetRx                int              `json:"netRx"` // inbound bytes/sec
+	NetTx                int              `json:"netTx"` // outbound bytes/sec
 	Services             []vitals.Service `json:"services"`
 	Jobs                 []any            `json:"jobs"`
 	Tasks                []any            `json:"tasks"`
@@ -922,6 +924,7 @@ func fetchOne(client *http.Client, a Agent, latest string) Machine {
 	}
 	m.OS, m.Up, m.Load = s.OS, s.Up, s.Load
 	m.CPU, m.Mem, m.Disk = s.CPU, s.Mem, s.Disk
+	m.NetRx, m.NetTx = s.NetRx, s.NetTx
 	m.GPU, m.VRAM, m.GPUName, m.VRAMText = s.GPU, s.VRAM, s.GPUName, s.VRAMText
 	m.RunAs = s.RunAs
 	m.RunAsGranted = s.RunAsGranted
