@@ -156,6 +156,20 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) http.Han
 	// Streaming a file can take far longer than the 2s fleet-poll budget (a
 	// whole video), so it rides its own client with no overall timeout.
 	streamClient := &http.Client{}
+	// A recursive size walk can run for the agent's whole duDeadline (25s), far
+	// past the 2s fleet-poll budget, so /du rides its own client with a timeout
+	// just past that deadline rather than the no-timeout streamClient — a du
+	// call that hangs (agent wedged, network gone) should still fail, just not
+	// as impatiently as a fleet poll would.
+	duClient := &http.Client{Timeout: 30 * time.Second}
+	mux.HandleFunc("/api/machines/{host}/du", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyDu(w, r, duClient, a)
+	})
 	mux.HandleFunc("/api/machines/{host}/file", func(w http.ResponseWriter, r *http.Request) {
 		a, ok := store.find(r.PathValue("host"))
 		if !ok {
@@ -703,6 +717,33 @@ func proxyBrowse(w http.ResponseWriter, r *http.Request, client *http.Client, a 
 	w.WriteHeader(resp.StatusCode)
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		log.Printf("proxy browse %s: %v", a.Name, err)
+	}
+}
+
+// proxyDu forwards a directory-sizing request to one agent's /du and relays
+// its response verbatim, the same shape as proxyBrowse. The one difference is
+// the client it rides: a recursive walk can take real time, so the caller
+// passes a client with a longer timeout than the 2s fleet-poll one.
+func proxyDu(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent) {
+	u := strings.TrimRight(a.Addr, "/") + "/du"
+	if q := r.URL.RawQuery; q != "" {
+		u += "?" + q
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, u, nil)
+	if err != nil {
+		http.Error(w, "bad upstream request", http.StatusInternalServerError)
+		return
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "agent unreachable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		log.Printf("proxy du %s: %v", a.Name, err)
 	}
 }
 

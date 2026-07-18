@@ -1,6 +1,7 @@
 package browse
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -171,4 +172,114 @@ func pad(i int) string {
 		s += string(rune('0' + (i/d)%10))
 	}
 	return s
+}
+
+func TestDuSumsFileSizesRecursively(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "top.txt"), "12345") // 5 bytes
+	mustMkdir(t, filepath.Join(dir, "sub"))
+	mustWrite(t, filepath.Join(dir, "sub", "a.txt"), "1234567890") // 10 bytes
+	mustMkdir(t, filepath.Join(dir, "sub", "nested"))
+	mustWrite(t, filepath.Join(dir, "sub", "nested", "b.txt"), "123") // 3 bytes
+
+	l, err := Du(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("Du: %v", err)
+	}
+	if l.Truncated {
+		t.Error("unexpected Truncated=true")
+	}
+	if len(l.Entries) != 2 {
+		t.Fatalf("got %d entries, want 2: %+v", len(l.Entries), l.Entries)
+	}
+	// Largest first: sub (13 bytes) before top.txt (5 bytes).
+	if l.Entries[0].Name != "sub" || l.Entries[0].Size != 13 || !l.Entries[0].IsDir {
+		t.Errorf("entries[0] = %+v, want sub dir size 13", l.Entries[0])
+	}
+	if l.Entries[1].Name != "top.txt" || l.Entries[1].Size != 5 || l.Entries[1].IsDir {
+		t.Errorf("entries[1] = %+v, want top.txt size 5", l.Entries[1])
+	}
+}
+
+func TestDuSymlinkNotFollowed(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink perms differ on windows")
+	}
+	dir := t.TempDir()
+	mustMkdir(t, filepath.Join(dir, "real"))
+	mustWrite(t, filepath.Join(dir, "real", "big.txt"), "0123456789")
+	linkPath := filepath.Join(dir, "link")
+	if err := os.Symlink(filepath.Join(dir, "real"), linkPath); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+	lstat, err := os.Lstat(linkPath)
+	if err != nil {
+		t.Fatalf("lstat: %v", err)
+	}
+
+	l, err := Du(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("Du: %v", err)
+	}
+	var link *DuEntry
+	for i := range l.Entries {
+		if l.Entries[i].Name == "link" {
+			link = &l.Entries[i]
+		}
+	}
+	if link == nil {
+		t.Fatal("link entry missing")
+	}
+	if link.IsDir {
+		t.Error("symlink reported as dir — should not be followed")
+	}
+	if link.Size != lstat.Size() {
+		t.Errorf("symlink size = %d, want its own lstat size %d (not the target's contents)", link.Size, lstat.Size())
+	}
+}
+
+func TestDuEmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	l, err := Du(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("Du: %v", err)
+	}
+	if len(l.Entries) != 0 {
+		t.Errorf("got %d entries, want 0", len(l.Entries))
+	}
+	if l.Truncated {
+		t.Error("unexpected Truncated=true")
+	}
+}
+
+func TestDuRejectsRelative(t *testing.T) {
+	_, err := Du(context.Background(), "some/relative/path")
+	if !errors.Is(err, os.ErrInvalid) {
+		t.Errorf("err = %v, want ErrInvalid", err)
+	}
+}
+
+func TestDuNotFound(t *testing.T) {
+	_, err := Du(context.Background(), filepath.Join(t.TempDir(), "does-not-exist"))
+	if !os.IsNotExist(err) {
+		t.Errorf("err = %v, want IsNotExist", err)
+	}
+}
+
+func TestDuDeadlineTruncates(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 5; i++ {
+		sub := filepath.Join(dir, "d"+pad(i))
+		mustMkdir(t, sub)
+		mustWrite(t, filepath.Join(sub, "f.txt"), "x")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already expired — the very first ctx.Err() check should trip
+	l, err := Du(ctx, dir)
+	if err != nil {
+		t.Fatalf("Du: %v", err)
+	}
+	if !l.Truncated {
+		t.Error("expected Truncated=true with an already-cancelled context")
+	}
 }
