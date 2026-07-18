@@ -166,6 +166,19 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) (http.Ha
 		}
 		proxyBrowse(w, r, client, a)
 	})
+	// /top samples /proc twice (see the agent's topSampleInterval), so a call
+	// takes a beat longer than a plain read — it rides a client with a little
+	// more headroom than the 2s fleet-poll one so that sampling delay plus a
+	// slow hop doesn't clip an otherwise-healthy response.
+	topClient := &http.Client{Timeout: 4 * time.Second}
+	mux.HandleFunc("/api/machines/{host}/top", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyTop(w, r, topClient, a)
+	})
 	// Streaming a file can take far longer than the 2s fleet-poll budget (a
 	// whole video), so it rides its own client with no overall timeout.
 	streamClient := &http.Client{}
@@ -777,6 +790,32 @@ func proxyBrowse(w http.ResponseWriter, r *http.Request, client *http.Client, a 
 	w.WriteHeader(resp.StatusCode)
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		log.Printf("proxy browse %s: %v", a.Name, err)
+	}
+}
+
+// proxyTop forwards a live process/core request to one agent's /top and relays
+// its response verbatim, the same shape as proxyBrowse. An agent too old to
+// serve /top answers 404, relayed as-is so the console can say "not supported".
+func proxyTop(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent) {
+	u := strings.TrimRight(a.Addr, "/") + "/top"
+	if q := r.URL.RawQuery; q != "" {
+		u += "?" + q
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, u, nil)
+	if err != nil {
+		http.Error(w, "bad upstream request", http.StatusInternalServerError)
+		return
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "agent unreachable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		log.Printf("proxy top %s: %v", a.Name, err)
 	}
 }
 

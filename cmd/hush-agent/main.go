@@ -175,6 +175,17 @@ func main() {
 			log.Printf("encode vitals: %v", err)
 		}
 	})
+	// /top is read-only host telemetry, the live-detail companion to /vitals
+	// (per-core load + the busiest processes). Like /vitals it's ungated — it
+	// exposes the same tier of information as the services list /vitals already
+	// carries — so the console's CPU/network drill-down works on every agent
+	// without a new flag or restart.
+	mux.HandleFunc("/top", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(vitals.CollectTop(topProcLimit)); err != nil {
+			log.Printf("encode top: %v", err)
+		}
+	})
 	mux.HandleFunc("/browse", handleBrowse)
 	mux.HandleFunc("/du", handleDu)
 	mux.HandleFunc("/file", handleFile)
@@ -320,6 +331,10 @@ func handleBrowse(w http.ResponseWriter, r *http.Request) {
 // tree means statting every file under it, which on a NAS-sized volume can
 // take real time — but finite, so a request against something enormous still
 // gets a (Truncated) answer back rather than hanging until the client gives up.
+// topProcLimit caps how many processes /top returns — enough to fill an
+// htop-style table without shipping a box's entire process list every poll.
+const topProcLimit = 30
+
 const duDeadline = 25 * time.Second
 
 // handleDu serves recursive directory sizes for one level of the Store

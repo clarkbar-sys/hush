@@ -277,6 +277,28 @@
   .vpre { font-family:var(--mono); font-size:12px; line-height:1.55; white-space:pre-wrap;
     word-break:break-word; color:var(--text); width:100%; margin:0; }
   .vnote { font-family:var(--mono); font-size:12px; color:var(--faint); padding:26px 16px; }
+  /* ---- live CPU/network (htop-style) panel ---- */
+  .topopen { cursor:pointer; transition:box-shadow .15s ease; }
+  .topopen:hover { box-shadow:inset 0 0 0 1px var(--border); }
+  .topbody { flex:1; min-height:0; padding:14px; overflow:auto; display:flex; flex-direction:column; gap:14px; }
+  .topsum { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:560px){ .topsum { grid-template-columns:1fr; } }
+  .topcores { display:grid; grid-template-columns:repeat(auto-fill,minmax(128px,1fr)); gap:5px 16px; }
+  .cmeter { display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:10px; color:var(--muted); }
+  .cmeter .cl { width:22px; text-align:right; color:var(--faint); }
+  .cmeter .ctrack { flex:1; height:6px; border-radius:4px; background:rgba(255,255,255,.08); overflow:hidden; }
+  .cmeter .cfill { display:block; height:100%; border-radius:4px; transition:width .4s ease, background .4s ease; }
+  .cmeter .cv { width:32px; text-align:right; }
+  .ptable { display:flex; flex-direction:column; font-family:var(--mono); font-size:12px; width:100%; }
+  .prow { display:grid; grid-template-columns:58px 96px 58px 58px 1fr; gap:8px; padding:4px 6px;
+    align-items:center; border-bottom:1px solid var(--border-soft); }
+  .prow .num { text-align:right; }
+  .prow .cmd { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+  .prow .u { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); }
+  .prow.phead { color:var(--faint); text-transform:uppercase; letter-spacing:.06em; font-size:10px;
+    position:sticky; top:0; background:var(--panel); cursor:default; }
+  .prow.phead .sortable { cursor:pointer; }
+  .prow.phead .sortable.on { color:var(--accent); }
   .dubody { flex:1; min-height:0; padding:14px; overflow:auto; display:flex; flex-direction:column; gap:10px; }
   .dumap { position:relative; width:100%; height:min(58vh,520px); border-radius:8px;
     overflow:hidden; background:var(--panel-2); border:1px solid var(--border-soft); }
@@ -974,16 +996,16 @@
           </div>
           ${alert}
           <div class="vitals">
-            <div class="bigring">${dualRing(m.cpu,m.mem,56)}<span class="v">${m.cpu}%</span><span class="k">cpu</span><span class="k2"><i></i>${m.mem}% mem</span></div>
+            <div class="bigring topopen" data-top="cpu" title="open live CPU & processes">${dualRing(m.cpu,m.mem,56)}<span class="v">${m.cpu}%</span><span class="k">cpu</span><span class="k2"><i></i>${m.mem}% mem</span></div>
             <div class="bigring">${ring(m.disk,56)}<span class="v">${m.disk}%</span><span class="k">disk</span></div>
             ${m.gpu!=null?`
             <div class="bigring">${dualRing(m.gpu,m.vram,56)}<span class="v">${m.gpu}%</span><span class="k">gpu</span><span class="k2"><i></i>${m.vram}% vram</span></div>`:""}
-            <div class="loadbox">
-              <div class="lbl"><span>cpu trend</span><b>load ${m.load||"—"}</b></div>
+            <div class="loadbox topopen" data-top="cpu" title="open live CPU & processes">
+              <div class="lbl"><span>cpu trend ⤢</span><b>load ${m.load||"—"}</b></div>
               ${sparkline(hist,260,34)}
             </div>
-            <div class="loadbox">
-              <div class="lbl"><span>network</span><b><span style="color:var(--accent)">↓ ${fmtBytes(m.netRx||0)}/s</span>&nbsp;&nbsp;<span style="color:var(--ring2)">↑ ${fmtBytes(m.netTx||0)}/s</span></b></div>
+            <div class="loadbox topopen" data-top="net" title="open live network & processes">
+              <div class="lbl"><span>network ⤢</span><b><span style="color:var(--accent)">↓ ${fmtBytes(m.netRx||0)}/s</span>&nbsp;&nbsp;<span style="color:var(--ring2)">↑ ${fmtBytes(m.netTx||0)}/s</span></b></div>
               ${netSpark(rxHist,txHist,260,34)}
             </div>
           </div>
@@ -1079,6 +1101,11 @@
     if(state.browsePath!=null) fillBrowse(m.id);
     const du = $("#du-open");
     if(du) du.addEventListener("click", ()=>{ if(m.online) openDu(m.id); });
+    // The CPU ring, cpu-trend spark and network box all open the live
+    // htop-style panel. Demo mode has no agent, so it opens on synthetic data.
+    app.querySelectorAll("[data-top]").forEach(el=>{
+      el.addEventListener("click", ()=>{ if(m.online || MODE==="demo") openTop(m.id, el.dataset.top); });
+    });
   }
 
   /* ---------- Files: the Store construct, unjailed, bounded by the hush user's
@@ -1457,6 +1484,31 @@
     };
   }
 
+  // demoTop synthesises an htop-style reading so the live CPU/network panel is
+  // legible in demo mode, where there's no hush-control or agent behind it.
+  const DEMO_PROC_NAMES = ["hush-agent","tailscaled","systemd","dockerd","postgres","nginx",
+    "node","python3","containerd","sshd","redis-server","cron","journald","chronyd","qemu-system"];
+  function demoTop(id){
+    const m = byId(id) || {cpu:20, mem:40, load:"0.6"};
+    const ncpu = 8;
+    const cores = [];
+    for(let i=0;i<ncpu;i++){ cores.push(Math.max(0, Math.min(100, Math.round(m.cpu + (Math.random()-0.5)*55)))); }
+    const totalRam = 16*1024*1024*1024;
+    const procs = DEMO_PROC_NAMES.map((n,i)=>{
+      const cpu = Math.max(0, (i===0 ? m.cpu*0.4 : 0) + Math.random()*(i<3?55:6));
+      const mem = Math.max(0.1, Math.random()*(i<4?8:1.5));
+      return {
+        pid: 300 + ((i*541)%9000),
+        user: i%4===0 ? "root" : "hush",
+        command: n,
+        cpu: Math.round(cpu*10)/10,
+        mem: Math.round(mem*10)/10,
+        rss: Math.round(mem/100*totalRam),
+      };
+    }).sort((a,b)=>b.cpu-a.cpu);
+    return { host:id, cpu:m.cpu, mem:m.mem, cores, procs, running: 118 + (Math.random()*44|0) };
+  }
+
   // openFile pops a viewer over the console for one file, streamed through
   // control's /file proxy. The kind is chosen by extension: video/audio get a
   // seekable player (the proxy forwards Range requests), images render inline,
@@ -1519,6 +1571,111 @@
     const u=["K","M","G","T","P"]; let i=-1, v=n;
     do { v/=1024; i++; } while(v>=1024 && i<u.length-1);
     return (v>=10?Math.round(v):v.toFixed(1))+" "+u[i]+"B";
+  }
+
+  /* ---------- Live CPU/network panel: an htop-style read of one box that
+     re-polls /top every ~2s. Per-core meters + the busiest processes, plus the
+     same live CPU/network sparklines the machine card carries (fed by the fleet
+     poll's rolling history, so they keep moving under the overlay). Like the
+     file viewer this overlay lives on <body>, so the fleet poll re-rendering
+     #app underneath never tears it down. ---------- */
+  const TOP_POLL_MS = 2000;
+  function meterColor(pct){
+    return pct>=88 ? "var(--crit)" : pct>=65 ? "var(--warn)" : "var(--accent)";
+  }
+  function coreMeters(cores){
+    if(!cores || !cores.length) return `<span class="vnote" style="padding:0">no per-core data</span>`;
+    return cores.map((c,i)=>`<div class="cmeter"><span class="cl">cpu${i}</span>`
+      + `<span class="ctrack"><span class="cfill" style="width:${Math.max(0,Math.min(100,c))}%;background:${meterColor(c)}"></span></span>`
+      + `<span class="cv">${c}%</span></div>`).join("");
+  }
+  function procRows(procs, sortKey){
+    const head = `<div class="prow phead"><span class="num">pid</span><span class="u">user</span>`
+      + `<span class="num sortable${sortKey==="cpu"?" on":""}" data-sort="cpu">cpu%</span>`
+      + `<span class="num sortable${sortKey==="mem"?" on":""}" data-sort="mem">mem%</span>`
+      + `<span class="cmd">command</span></div>`;
+    if(!procs || !procs.length) return head + `<div class="empty">no processes reported</div>`;
+    return head + procs.map(p=>`<div class="prow"><span class="num">${p.pid}</span>`
+      + `<span class="u">${esc(p.user||"")}</span>`
+      + `<span class="num">${(p.cpu||0).toFixed(1)}</span>`
+      + `<span class="num">${(p.mem||0).toFixed(1)}</span>`
+      + `<span class="cmd" title="${esc(p.command||"")}">${esc(p.command||"")}</span></div>`).join("");
+  }
+  function openTop(id, focus){
+    const ov = document.createElement("div");
+    ov.className = "vov";
+    ov.innerHTML = `<div class="vsheet">
+        <div class="vbar">
+          <div class="vname">${esc(id)} · live</div>
+          <div class="vmeta" id="topMeta">reading…</div>
+          <button class="vbtn vclose" aria-label="Close">✕</button>
+        </div>
+        <div class="topbody">
+          <div class="topsum" id="topSum"></div>
+          <div class="topcores" id="topCores"><span class="vnote" style="padding:0">reading cores…</span></div>
+          <div class="ptable" id="topProcs"><div class="empty">reading processes…</div></div>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const alive = () => document.body.contains(ov);
+    let sortKey = focus === "net" ? "mem" : "cpu"; // net view defaults to sorting by memory footprint
+    let last = null, seq = 0, timer = null;
+    const close = () => { if(timer) clearInterval(timer); ov.remove(); document.removeEventListener("keydown", onkey); };
+    const onkey = e => { if(e.key==="Escape") close(); };
+    document.addEventListener("keydown", onkey);
+    ov.querySelector(".vclose").addEventListener("click", close);
+    ov.addEventListener("click", e => { if(e.target===ov) close(); });
+
+    function draw(data){
+      if(!alive()) return;
+      last = data;
+      const m = byId(id) || {};
+      const hist = (m.loadHist && m.loadHist.length>1) ? m.loadHist : [data.cpu||0, data.cpu||0];
+      const rxH = (m.netRxHist && m.netRxHist.length>1) ? m.netRxHist : [m.netRx||0, m.netRx||0];
+      const txH = (m.netTxHist && m.netTxHist.length>1) ? m.netTxHist : [m.netTx||0, m.netTx||0];
+      const meta = ov.querySelector("#topMeta");
+      if(meta) meta.textContent = `${data.running!=null?data.running:(data.procs||[]).length} procs · ${(data.cores||[]).length} cores`;
+      const sum = ov.querySelector("#topSum");
+      if(sum) sum.innerHTML = `
+        <div class="loadbox"><div class="lbl"><span>cpu ${data.cpu!=null?data.cpu+"%":"—"}</span><b>load ${m.load||"—"}</b></div>${sparkline(hist,300,34)}</div>
+        <div class="loadbox"><div class="lbl"><span>network</span><b><span style="color:var(--accent)">↓ ${fmtBytes(m.netRx||0)}/s</span>&nbsp;&nbsp;<span style="color:var(--ring2)">↑ ${fmtBytes(m.netTx||0)}/s</span></b></div>${netSpark(rxH,txH,300,34)}</div>`;
+      const cores = ov.querySelector("#topCores");
+      if(cores) cores.innerHTML = coreMeters(data.cores);
+      const procs = (data.procs||[]).slice().sort((a,b)=> sortKey==="mem" ? (b.mem||0)-(a.mem||0) : (b.cpu||0)-(a.cpu||0));
+      const tbl = ov.querySelector("#topProcs");
+      if(tbl){
+        tbl.innerHTML = procRows(procs, sortKey);
+        tbl.querySelectorAll(".sortable").forEach(h=>{
+          h.addEventListener("click", ()=>{ sortKey = h.dataset.sort; if(last) draw(last); });
+        });
+      }
+    }
+    function showErr(msg){
+      if(!alive()) return;
+      const tbl = ov.querySelector("#topProcs");
+      if(tbl) tbl.innerHTML = `<div class="empty">${esc(msg)}</div>`;
+    }
+    async function tick(){
+      const my = ++seq;
+      if(MODE === "demo"){ draw(demoTop(id)); return; }
+      try {
+        const r = await fetch(`api/machines/${encodeURIComponent(id)}/top`, {cache:"no-store"});
+        if(!alive() || my!==seq) return;
+        if(!r.ok){
+          showErr(r.status===404 ? "this agent is too old to report processes — update hush-agent"
+            : r.status===502 ? "machine unreachable"
+            : `error ${r.status}`);
+          return;
+        }
+        const data = await r.json();
+        if(!alive() || my!==seq) return;
+        draw(data);
+      } catch(e){
+        if(alive() && my===seq) showErr("could not reach the machine");
+      }
+    }
+    tick();
+    timer = setInterval(tick, TOP_POLL_MS);
   }
 
   function svcRow(s){
