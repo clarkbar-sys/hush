@@ -44,7 +44,12 @@ One canvas, three depths. You never navigate away, you get closer. Phone-first.
   health aura + severity stripe, live dual-ring vitals, a load sparkline, a
   status badge. Alerts surface as badges on the map.
 - **Machine** — "enter the building": header (OS, tailnet IP, uptime, GPU),
-  full-size vitals, and constructs grouped into Services / Jobs / Tasks.
+  full-size vitals, and constructs grouped into Services / Jobs / Tasks. Tapping
+  the CPU ring or the network panel opens a live **htop-style** read of the box —
+  per-core meters and the busiest processes — served by the agent's `/top`
+  endpoint (proxied at `/api/machines/{host}/top`) and re-polled every ~2s. Like
+  `/vitals` it's ungated read-only telemetry sampled from `/proc`, so it works on
+  every agent without a flag.
 - **Construct** — one thing, full detail: state, metadata, controls, and (from
   Phase 1) a live-tailing journal.
 
