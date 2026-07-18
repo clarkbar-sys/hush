@@ -58,6 +58,22 @@ type Snapshot struct {
 	// agent, or exec off — and the console makes no claim either way. Like RunAs,
 	// the agent fills this in; vitals.Collect never touches it.
 	RunAsGranted *[]string `json:"runAsGranted,omitempty"`
+	// Backup, when non-nil, reports this box's backup readiness so the console can
+	// generate the exact setup commands (the way the run-as sheet generates the
+	// sudoers grant). Like RunAs, the agent fills it in; vitals.Collect never
+	// touches it. Nil means an older agent that doesn't report it.
+	Backup *BackupCapability `json:"backup,omitempty"`
+}
+
+// BackupCapability is what /vitals advertises about a box's backup readiness, so
+// the console can tell what's missing and generate the paste-over-SSH command to
+// fix it: whether the agent has -backup on, restic's version (empty when it
+// isn't installed), and whether a rest-server binary is present so the box can
+// host a repository (a "vault").
+type BackupCapability struct {
+	Enabled bool   `json:"enabled"`
+	Restic  string `json:"restic,omitempty"` // restic version, empty if not installed
+	Vault   bool   `json:"vault,omitempty"`  // a rest-server binary is present on this box
 }
 
 // --- CPU: sampled in the background so /vitals stays instant -----------------

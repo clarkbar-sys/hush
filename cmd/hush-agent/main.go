@@ -149,6 +149,18 @@ func main() {
 		}
 	}
 
+	// Backup readiness is detected once at startup — restic's version (empty if
+	// absent) and whether a rest-server binary is present to host a vault — and
+	// advertised in /vitals so the console can generate the exact setup command.
+	// Detecting once is enough because the generated command restarts the agent,
+	// which re-detects; per-poll shelling would be wasteful.
+	resticVersion, _ := restic.Available(context.Background())
+	backupCap := &vitals.BackupCapability{
+		Enabled: backupEnabled,
+		Restic:  resticVersion,
+		Vault:   hasRestServer(),
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/vitals", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -158,6 +170,7 @@ func main() {
 			g := runAsCheck.granted()
 			snap.RunAsGranted = &g
 		}
+		snap.Backup = backupCap
 		if err := json.NewEncoder(w).Encode(snap); err != nil {
 			log.Printf("encode vitals: %v", err)
 		}
@@ -224,8 +237,8 @@ func main() {
 		log.Printf("hush-agent: /jobs disabled (start with -jobs to enable)")
 	}
 	if backupEnabled {
-		if ver, ok := restic.Available(context.Background()); ok {
-			log.Printf("hush-agent: /backups enabled — %s", ver)
+		if resticVersion != "" {
+			log.Printf("hush-agent: /backups enabled — %s", resticVersion)
 		} else {
 			log.Printf("hush-agent: /backups enabled but restic was not found on $PATH — installs of a backup will fail until it is")
 		}
@@ -256,6 +269,15 @@ func parseRunAs(spec string) map[string]bool {
 		set[name] = true
 	}
 	return set
+}
+
+// hasRestServer reports whether a rest-server binary is on this box's PATH, so
+// /vitals can advertise that the box could host a backup repository (a "vault").
+// It's a presence hint for the console's setup helper, not a guarantee one is
+// running — the create flow still proves the repo is actually reachable.
+func hasRestServer() bool {
+	_, err := exec.LookPath("rest-server")
+	return err == nil
 }
 
 // sortedKeys returns a set's keys in a stable order, only for tidy log output.

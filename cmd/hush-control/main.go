@@ -39,32 +39,33 @@ type Agent struct {
 
 // Machine is the shape the web UI consumes (one entry of /api/fleet).
 type Machine struct {
-	ID                   string           `json:"id"`
-	AgentVersion         string           `json:"agentVersion,omitempty"`
-	LatestVersion        string           `json:"latestVersion,omitempty"`        // latest published release, when known
-	AgentUpdateAvailable bool             `json:"agentUpdateAvailable,omitempty"` // true when AgentVersion is older than LatestVersion
-	OS                   string           `json:"os"`
-	IP                   string           `json:"ip"`
-	Role                 string           `json:"role"`
-	Status               string           `json:"status"`
-	CPU                  int              `json:"cpu"`
-	Mem                  int              `json:"mem"`
-	Disk                 int              `json:"disk"`
-	GPU                  *int             `json:"gpu"`
-	VRAM                 *int             `json:"vram"`
-	GPUName              string           `json:"gpuName,omitempty"`
-	VRAMText             string           `json:"vramText,omitempty"`
-	Up                   string           `json:"up"`
-	Load                 string           `json:"load"`
-	NetRx                int              `json:"netRx"` // inbound bytes/sec
-	NetTx                int              `json:"netTx"` // outbound bytes/sec
-	Services             []vitals.Service `json:"services"`
-	Jobs                 []any            `json:"jobs"`
-	Tasks                []any            `json:"tasks"`
-	RunAs                []string         `json:"runAs,omitempty"`        // users a Task may run as here (agent -run-as); drives the console picker
-	RunAsGranted         *[]string        `json:"runAsGranted,omitempty"` // subset of RunAs the agent verified it can sudo to now; nil = not verified (older agent / exec off)
-	Online               bool             `json:"online"`
-	Alert                string           `json:"alert,omitempty"`
+	ID                   string                   `json:"id"`
+	AgentVersion         string                   `json:"agentVersion,omitempty"`
+	LatestVersion        string                   `json:"latestVersion,omitempty"`        // latest published release, when known
+	AgentUpdateAvailable bool                     `json:"agentUpdateAvailable,omitempty"` // true when AgentVersion is older than LatestVersion
+	OS                   string                   `json:"os"`
+	IP                   string                   `json:"ip"`
+	Role                 string                   `json:"role"`
+	Status               string                   `json:"status"`
+	CPU                  int                      `json:"cpu"`
+	Mem                  int                      `json:"mem"`
+	Disk                 int                      `json:"disk"`
+	GPU                  *int                     `json:"gpu"`
+	VRAM                 *int                     `json:"vram"`
+	GPUName              string                   `json:"gpuName,omitempty"`
+	VRAMText             string                   `json:"vramText,omitempty"`
+	Up                   string                   `json:"up"`
+	Load                 string                   `json:"load"`
+	NetRx                int                      `json:"netRx"` // inbound bytes/sec
+	NetTx                int                      `json:"netTx"` // outbound bytes/sec
+	Services             []vitals.Service         `json:"services"`
+	Jobs                 []any                    `json:"jobs"`
+	Tasks                []any                    `json:"tasks"`
+	RunAs                []string                 `json:"runAs,omitempty"`        // users a Task may run as here (agent -run-as); drives the console picker
+	RunAsGranted         *[]string                `json:"runAsGranted,omitempty"` // subset of RunAs the agent verified it can sudo to now; nil = not verified (older agent / exec off)
+	Backup               *vitals.BackupCapability `json:"backup,omitempty"`       // backup readiness (restic/-backup/vault) so the console can generate setup commands
+	Online               bool                     `json:"online"`
+	Alert                string                   `json:"alert,omitempty"`
 }
 
 // Report is the downloadable fleet snapshot served by /api/report: the same
@@ -985,6 +986,7 @@ func fetchOne(client *http.Client, a Agent, latest string) Machine {
 	m.GPU, m.VRAM, m.GPUName, m.VRAMText = s.GPU, s.VRAM, s.GPUName, s.VRAMText
 	m.RunAs = s.RunAs
 	m.RunAsGranted = s.RunAsGranted
+	m.Backup = s.Backup
 	if len(s.Services) > 0 {
 		m.Services = s.Services
 	}

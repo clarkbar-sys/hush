@@ -218,6 +218,13 @@ it at a live path.
 
 #### Setting up backups end to end
 
+You don't have to memorise any of this — the Machine view's **Set up backups**
+button detects what a box is missing (`restic`, `-backup`, a vault) and generates
+the exact idempotent command to paste over SSH, picking the right package manager
+for the box's OS, the same way the **Run-as users** sheet generates its sudoers
+grant. The steps below are what that command does, for when you'd rather do it by
+hand.
+
 A backup needs three things in place; once they are, the console does the rest.
 
 1. **`restic` on every box you back up** — your distro's package (`apt install
