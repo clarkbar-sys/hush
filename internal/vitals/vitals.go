@@ -40,6 +40,8 @@ type Snapshot struct {
 	GPUName  string    `json:"gpuName,omitempty"`
 	VRAMText string    `json:"vramText,omitempty"`
 	Load     string    `json:"load"`
+	NetRx    int       `json:"netRx"` // inbound bytes/sec, sampled over the prior ~1s (excludes loopback)
+	NetTx    int       `json:"netTx"` // outbound bytes/sec, sampled over the prior ~1s (excludes loopback)
 	Services []Service `json:"services"`
 	Status   string    `json:"status"` // good | warn | crit
 	// RunAs is the set of OS users a Task may run as on this box via `sudo -u`,
@@ -66,9 +68,11 @@ var (
 	prevIdle, prevTotal uint64
 )
 
-// StartSampler primes and begins the 1s CPU sampling loop. Call once at boot.
+// StartSampler primes and begins the 1s CPU and network sampling loop. Call
+// once at boot.
 func StartSampler() {
 	prevIdle, prevTotal = readCPUTimes()
+	prevRxBytes, prevTxBytes = readNetBytes()
 	go func() {
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
@@ -83,6 +87,12 @@ func StartSampler() {
 			cpuPct = clamp(pct)
 			cpuMu.Unlock()
 			prevIdle, prevTotal = idle, total
+
+			rxBytes, txBytes := readNetBytes()
+			netMu.Lock()
+			netRxBps, netTxBps = counterRate(prevRxBytes, rxBytes), counterRate(prevTxBytes, txBytes)
+			netMu.Unlock()
+			prevRxBytes, prevTxBytes = rxBytes, txBytes
 		}
 	}()
 }
@@ -113,6 +123,63 @@ func readCPUTimes() (idle, total uint64) {
 		}
 	}
 	return
+}
+
+// --- Network: sampled alongside CPU so /vitals stays instant ----------------
+
+var (
+	netMu                    sync.Mutex
+	netRxBps, netTxBps       int
+	prevRxBytes, prevTxBytes uint64
+)
+
+func netUsage() (rx, tx int) {
+	netMu.Lock()
+	defer netMu.Unlock()
+	return netRxBps, netTxBps
+}
+
+// counterRate turns two readings of a monotonic byte counter one sampler
+// tick apart into a bytes/sec rate. A counter that goes backwards (interface
+// reset, or the machine's own counters wrapping) reports 0 rather than an
+// underflowed huge number.
+func counterRate(prev, cur uint64) int {
+	if cur <= prev {
+		return 0
+	}
+	return int(cur - prev)
+}
+
+// readNetBytes sums rx/tx bytes across every interface in /proc/net/dev
+// except loopback, so the figure reflects real network traffic.
+func readNetBytes() (rx, tx uint64) {
+	f, err := os.Open("/proc/net/dev")
+	if err != nil {
+		return 0, 0
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := sc.Text()
+		i := strings.Index(line, ":")
+		if i < 0 {
+			continue // the two header lines have no ':'
+		}
+		if strings.TrimSpace(line[:i]) == "lo" {
+			continue
+		}
+		fields := strings.Fields(line[i+1:])
+		if len(fields) < 9 {
+			continue
+		}
+		if v, err := strconv.ParseUint(fields[0], 10, 64); err == nil {
+			rx += v
+		}
+		if v, err := strconv.ParseUint(fields[8], 10, 64); err == nil {
+			tx += v
+		}
+	}
+	return rx, tx
 }
 
 // --- Memory / disk / load / uptime / os -------------------------------------
@@ -291,6 +358,7 @@ func Collect() Snapshot {
 	gpu, vram, name, vramText := gpuStats()
 	svcs := services()
 	cpu, mem, disk := cpuUsage(), memUsage(), diskUsage()
+	rx, tx := netUsage()
 	return Snapshot{
 		Host:     host,
 		Version:  version.Current(),
@@ -304,6 +372,8 @@ func Collect() Snapshot {
 		GPUName:  name,
 		VRAMText: vramText,
 		Load:     loadAvg(),
+		NetRx:    rx,
+		NetTx:    tx,
 		Services: svcs,
 		Status:   deriveStatus(cpu, mem, disk, vram, svcs),
 	}

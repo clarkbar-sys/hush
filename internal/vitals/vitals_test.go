@@ -20,6 +20,25 @@ func TestRound(t *testing.T) {
 	}
 }
 
+func TestCounterRate(t *testing.T) {
+	cases := []struct {
+		name      string
+		prev, cur uint64
+		want      int
+	}{
+		{"steady growth", 1000, 1500, 500},
+		{"no traffic", 1000, 1000, 0},
+		{"counter reset (interface flap)", 5000, 200, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := counterRate(tc.prev, tc.cur); got != tc.want {
+				t.Errorf("counterRate(%d, %d) = %d, want %d", tc.prev, tc.cur, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestDeriveStatus(t *testing.T) {
 	vram := func(v int) *int { return &v }
 	tests := []struct {
