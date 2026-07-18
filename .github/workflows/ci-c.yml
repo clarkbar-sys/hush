@@ -151,7 +151,7 @@ jobs:
         run: gcovr --xml -o coverage.xml --exclude tests || true
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-c
           path: coverage.xml
