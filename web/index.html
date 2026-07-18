@@ -1015,13 +1015,26 @@
                   <span class="gly">◷</span><span class="nm">Schedule a job…</span>
                   <span class="rt">${m.online?"cron":"offline"}</span></button>`}
             ${jobs.map(j=>jobRow(j, m.id)).join("")}</div>`; })()}
-        ${(()=>{ const backups = m.backups||[]; const off = BACKUPS_OFF.has(m.id);
+        ${(()=>{ const backups = m.backups||[]; const cap = m.backup;
+          // Ready = -backup on AND restic installed. When the agent advertises a
+          // capability we trust it; older agents fall back to the 403-derived
+          // BACKUPS_OFF signal. Not-ready shows a "Set up" affordance that
+          // generates the paste-over-SSH command, the way run-as does.
+          const ready = cap ? (cap.enabled && !!cap.restic) : !BACKUPS_OFF.has(m.id);
+          const missing = cap ? [!cap.restic?"restic":null, !cap.enabled?"-backup":null].filter(Boolean).join(" + ") : "";
+          const dis = m.online?"":` disabled style="opacity:.5;cursor:default"`;
           return `<div class="sec-title">Backups${backups.length?` <span class="n">${backups.length}</span>`:""}</div>
           <div class="list">
-            ${off ? `<div class="empty">backups are disabled on this box — start its agent with <b>-backup</b></div>`
-              : `<button class="row runrow" id="backup-new"${m.online?"":` disabled style="opacity:.5;cursor:default"`}>
+            ${ready
+              ? `<button class="row runrow" id="backup-new"${dis}>
                   <span class="gly">⭯</span><span class="nm">Configure a backup…</span>
-                  <span class="rt">${m.online?"restic":"offline"}</span></button>`}
+                  <span class="rt">${m.online?"restic":"offline"}</span></button>
+                 <button class="row" id="backup-setup"${dis}>
+                  <span class="gly">⚙</span><span class="nm">Setup / host a vault…</span>
+                  <span class="rt">${cap&&cap.vault?"vault ✓":"rest-server"}</span></button>`
+              : `<button class="row runrow" id="backup-setup"${dis}>
+                  <span class="gly">⚙</span><span class="nm">Set up backups…</span>
+                  <span class="rt">${m.online?(missing?("needs "+esc(missing)):"setup"):"offline"}</span></button>`}
             ${backups.map(b=>backupRow(b, m.id)).join("")}</div>`; })()}
         ${(()=>{ const items = (RUNS[m.id]||[]).concat(m.tasks||[]);
           return `<div class="sec-title">Tasks${items.length?` <span class="n">${items.length}</span>`:""}</div>
@@ -1047,6 +1060,7 @@
       b.addEventListener("click", ()=> deleteJob(b.dataset.jmid, b.dataset.jrm, b.dataset.jname));
     });
     { const bn = $("#backup-new"); if(bn) bn.addEventListener("click", ()=>{ if(m.online) openBackupSheet(m.id); }); }
+    { const bs = $("#backup-setup"); if(bs) bs.addEventListener("click", ()=>{ if(m.online) openBackupSetupSheet(m); }); }
     app.querySelectorAll("[data-brun]").forEach(b=>{
       b.addEventListener("click", ()=> runBackup(b.dataset.bmid, b.dataset.brun));
     });
@@ -2547,10 +2561,12 @@
         tasks:[{name:"git pull · deploy/api",when:"12m ago",ok:true}] }),
       mk({ id:"nas", agentVersion:"v1.3.0", os:"TrueNAS · ZFS", ip:"100.71.4.2", role:"store", status:"good", cpu:11, mem:34, disk:81, up:"92d", load:"0.4", gpu:null,
         services:[{name:"hush-agent",state:"running",mem:"17 MB"},{name:"smbd",state:"running",mem:"88 MB"},{name:"zfs-scrub",state:"running",mem:"6 MB"}],
+        backup:{enabled:true,restic:"restic 0.16.0",vault:true},
         jobs:[{name:"pull-backups",next:"in 3h 12m",sched:"0 3 * * *"}] }),
       mk({ id:"forge", agentVersion:"v1.2.0", latestVersion:"v1.3.0", agentUpdateAvailable:true, os:"Arch Linux", ip:"100.71.2.5", role:"", status:"warn", cpu:88, mem:71, disk:52, up:"6d", load:"14.2",
         gpu:62, vram:71, gpuName:"RTX 4070", vramText:"8.5 / 12 GB", alert:"load 14.2 · CI backlog building",
         services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"buildkite-agent",state:"running",mem:"120 MB"},{name:"docker",state:"running",mem:"340 MB"}],
+        backup:{enabled:false,restic:""},
         jobs:[{name:"cache-prune",next:"in 40m",sched:"*/30 * * * *"}] }),
       mk({ id:"atlas", agentVersion:"v1.3.0", os:"Ubuntu 24.04", ip:"100.71.9.3", role:"", status:"crit", cpu:5, mem:22, disk:63, up:"2d", load:"0.2",
         gpu:34, vram:41, gpuName:"RTX 3060", vramText:"4.9 / 12 GB", alert:"plex.service failed — exit code 1",
@@ -2789,6 +2805,8 @@
         <label>Repository</label>
         <input type="text" id="bRepo" placeholder="e.g. rest:http://nas:8000/homelab" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(backupDraft.repo)}">
         <div class="hint">a restic backend — a <b>rest-server</b> URL, an <b>sftp:</b> target, or a local path</div>
+        ${(()=>{ const vaults = M.filter(x=>x.backup&&x.backup.vault&&x.ip&&x.id!==backupDraft.id);
+          return vaults.length ? `<div class="hint" style="margin-top:5px">vaults on your fleet: ${vaults.map(v=>`<a data-vault="${esc(v.ip)}" style="cursor:pointer;color:var(--accent)">${esc(v.id)}</a>`).join(" · ")}</div>` : ""; })()}
       </div>
       <div class="field">
         <label>Repository password</label>
@@ -2832,6 +2850,15 @@
     $("#bEx").addEventListener("input", e=>{ backupDraft.excludes = e.target.value; });
     $("#bOFS").addEventListener("change", e=>{ backupDraft.oneFileSystem = e.target.checked; });
     $("#bSched").addEventListener("input", e=>{ backupDraft.schedule = e.target.value; });
+    backupBody.querySelectorAll("[data-vault]").forEach(el=>{
+      // Tapping a vault fills the repo URL: rest://<vault-ip>:8000/<this backup>,
+      // using the source box's name as the sub-repo so machines don't collide.
+      el.addEventListener("click", ()=>{
+        const sub = (backupDraft.name||backupDraft.id||"repo").trim().replace(/[^a-zA-Z0-9._-]/g,"-");
+        backupDraft.repo = `rest:http://${el.dataset.vault}:8000/${sub}`;
+        const ri = $("#bRepo"); if(ri) ri.value = backupDraft.repo;
+      });
+    });
     $("#bPick").addEventListener("click", ()=>{
       if(!backupDraft.id){ toast("pick a machine first"); return; }
       // Reuse the disk-usage treemap as a path picker: the current paths seed the
@@ -2974,6 +3001,101 @@
         canSave: false,
       });
     });
+    backupScrim.classList.add("open");
+  }
+
+  /* ---------- Backups: generate the paste-over-SSH setup command ----------
+     Like run-as, hush-control never touches the box — it generates the exact
+     idempotent root command from what the agent advertises in /vitals (restic
+     present? -backup on? a rest-server binary for a vault?) plus the box's OS
+     (to pick the package manager). You paste it over SSH; re-pasting converges. */
+  function pkgInstallRestic(os){
+    os = (os||"").toLowerCase();
+    if(/debian|ubuntu|mint|raspbian|pop|kali|devuan/.test(os)) return "sudo apt-get update && sudo apt-get install -y restic";
+    if(/arch|manjaro|endeavour|garuda/.test(os)) return "sudo pacman -S --needed --noconfirm restic";
+    if(/fedora|rhel|red hat|centos|rocky|alma|nobara/.test(os)) return "sudo dnf install -y restic";
+    if(/opensuse|suse/.test(os)) return "sudo zypper --non-interactive install restic";
+    if(/alpine/.test(os)) return "sudo apk add restic";
+    if(/nixos/.test(os)) return "# NixOS: add pkgs.restic to environment.systemPackages, then: sudo nixos-rebuild switch";
+    if(/steamos/.test(os)) return "# SteamOS: sudo steamos-readonly disable && sudo pacman -S restic  (or use the static binary from restic.net)";
+    return "# install restic via your package manager, or grab the static binary from https://github.com/restic/restic/releases";
+  }
+
+  // genBackupSetupScript builds the idempotent setup command for one box. It adds
+  // only the steps that are actually missing, so a re-run is a near no-op, and
+  // ends with a hush-agent restart when anything the agent must re-read changed.
+  function genBackupSetupScript(m, wantVault){
+    const cap = m.backup || {};
+    const ip = m.ip || "<this-box-tailnet-ip>";
+    const L = [`# hush backups — set up ${m.id}`];
+    let needRestart = false;
+    if(!cap.restic){
+      L.push("# 1) restic — the tool that does the backing up");
+      L.push(pkgInstallRestic(m.os));
+      needRestart = true;
+    }
+    if(!cap.enabled){
+      L.push("# " + (cap.restic?"1":"2") + ") enable the Backup capability on this box's agent");
+      L.push("sudo mkdir -p /etc/hush && sudo touch /etc/hush/agent.env");
+      L.push("sudo sed -i '/^HUSH_AGENT_BACKUP=/d' /etc/hush/agent.env");
+      L.push("echo 'HUSH_AGENT_BACKUP=1' | sudo tee -a /etc/hush/agent.env >/dev/null");
+      needRestart = true;
+    }
+    if(wantVault){
+      L.push("# vault — a rest-server that stores other machines' backups, tailnet-only + append-only");
+      L.push("sudo useradd -r -s /usr/sbin/nologin restic 2>/dev/null; sudo mkdir -p /srv/restic && sudo chown restic /srv/restic");
+      L.push("# fetch rest-server (bump the version/arch if needed)");
+      L.push("curl -fsSL https://github.com/restic/rest-server/releases/download/v0.13.0/rest-server_0.13.0_linux_amd64.tar.gz -o /tmp/rs.tgz");
+      L.push("sudo tar -xzf /tmp/rs.tgz -C /tmp && sudo install /tmp/rest-server_*/rest-server /usr/local/bin/rest-server");
+      L.push(`sudo tee /etc/systemd/system/rest-server.service >/dev/null <<'UNIT'
+[Unit]
+Description=restic REST server (hush vault)
+After=network-online.target
+Wants=network-online.target
+[Service]
+User=restic
+ExecStart=/usr/local/bin/rest-server --path /srv/restic --listen ${ip}:8000 --append-only --no-auth
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+UNIT`);
+      L.push("sudo systemctl daemon-reload && sudo systemctl enable --now rest-server");
+      L.push(`# other machines back up here with repository:  rest:http://${ip}:8000/<name>`);
+    }
+    if(needRestart) L.push("sudo systemctl restart hush-agent");
+    if(L.length === 1) L.push("# already set up — nothing to do 🎉");
+    return L.join("\n");
+  }
+
+  // openBackupSetupSheet shows a box's detected backup state and the generated
+  // command, with a toggle to also stand up a vault. Reuses the backup scrim.
+  function openBackupSetupSheet(m){
+    const cap = m.backup || {};
+    let wantVault = false, cmd = "";
+    const dot = (ok,label)=> `<span style="white-space:nowrap;color:${ok?'var(--accent)':'var(--faint)'}">${ok?'✓':'○'} ${esc(label)}</span>`;
+    const render = ()=>{ cmd = genBackupSetupScript(m, wantVault); const c = $("#bsCmd"); if(c) c.textContent = cmd; };
+    backupBody.innerHTML = `
+      <h3>Set up backups · ${esc(m.id)}</h3>
+      <p class="sd">hush-control never touches the box — run this on <b>${esc(m.id)}</b> over SSH.</p>
+      <div class="field-note" style="display:flex;gap:16px;flex-wrap:wrap">
+        ${dot(!!cap.restic, cap.restic ? `restic ${esc(cap.restic.replace(/^restic\s*/,'').split(' ')[0])}` : "restic missing")}
+        ${dot(!!cap.enabled, cap.enabled ? "-backup on" : "-backup off")}
+        ${dot(!!cap.vault, cap.vault ? "vault present" : "no vault")}
+      </div>
+      <label class="field" style="flex-direction:row;align-items:center;gap:.5rem;cursor:pointer">
+        <input type="checkbox" id="bsVault" style="width:auto"${cap.vault?" disabled":""}>
+        <span>Also host a <b>vault</b> here — a rest-server that stores other machines' backups${cap.vault?" <span style='opacity:.6'>(already present)</span>":""}</span>
+      </label>
+      <div class="cmdbox"><code id="bsCmd"></code><button class="btn" id="bsCopy">Copy</button></div>
+      <div class="field-note">Idempotent — safe to re-paste. Installs restic, enables <b>-backup</b>, optionally stands up an append-only tailnet vault, then restarts the agent so it re-detects.</div>
+      <div class="sheet-actions"><button class="btn primary" id="bsDone" style="flex:1">Done</button></div>`;
+    const v = $("#bsVault"); if(v) v.addEventListener("change", e=>{ wantVault = e.target.checked; render(); });
+    $("#bsCopy").addEventListener("click", async ()=>{
+      try { await navigator.clipboard.writeText(cmd); toast("copied to clipboard"); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
+    $("#bsDone").addEventListener("click", closeBackupSheet);
+    render();
     backupScrim.classList.add("open");
   }
 

@@ -339,6 +339,19 @@ queued, while a run for the same backup is already in flight, so a long backup
 can't stack copies of itself. The schedule lives in `backups.json` and is
 re-registered on agent restart. An empty schedule is manual-only.
 
+**Setup is generated, never applied.** Getting a box backup-ready needs three
+things — `restic` installed, `-backup` enabled, and (for a vault box) a
+`rest-server` — and, like run-as, `hush-control` is unprivileged and never
+touches the box. So the agent advertises its readiness in `/vitals` (a
+`BackupCapability`: is `-backup` on, restic's version, is a `rest-server` binary
+present), and the console's **Set up backups** sheet turns that plus the box's OS
+into the exact idempotent root command to paste over SSH — the right package
+manager for restic, the `HUSH_AGENT_BACKUP=1` env line, and, optionally, an
+append-only tailnet `rest-server` unit bound to the box's own tailnet IP. It adds
+only the missing steps and ends with an agent restart so the box re-advertises.
+Once a box reports a vault, the create sheet offers it as a one-tap repository
+URL, so pointing one machine at another's vault is a chip, not a typed string.
+
 **Backend.** The blessed target is a [rest-server](https://github.com/restic/rest-server)
 on the Store box (e.g. the NAS), reached over the tailnet — it supports
 append-only repos, so a compromised source can add snapshots but not wipe old
