@@ -12,9 +12,14 @@
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh | sudo sh
 #   curl -fsSL .../install.sh | sudo sh -s -- agent           # hush-agent (default)
-#   curl -fsSL .../install.sh | sudo sh -s -- control         # hush-control, LAN mode
-#   curl -fsSL .../install.sh | sudo sh -s -- control-tsnet   # hush-control, tsnet mode
+#   curl -fsSL .../install.sh | sudo sh -s -- control-tsnet   # hush-control (tailnet/tsnet)
+#   curl -fsSL .../install.sh | sudo sh -s -- control         # alias for control-tsnet
 #   curl -fsSL .../install.sh | sudo sh -s -- all             # agent + control, one box
+#
+# hush-control serves the console only over the tailnet (tsnet): it joins the
+# tailnet as its own node and serves HTTPS with a real cert, gated on Tailscale
+# identity. The old plain-HTTP LAN mode has been removed, so "control" and
+# "control-tsnet" now install the same thing.
 #
 # Installs binaries to /usr/local/bin, the unit to /etc/systemd/system, and
 # an editable env file to /etc/hush/*.env — never clobbered on re-run, so
@@ -296,19 +301,6 @@ install_agent() {
   install_agent_updater
 }
 
-install_control() {
-  fetch_binary hush-control
-  fetch_unit hush-control.service
-  install_env_file control.env \
-    "# hush-control environment — edit, then: systemctl restart hush-control" \
-    "HUSH_CONTROL_LISTEN=127.0.0.1:8080" \
-    "HUSH_CONTROL_CONFIG=$CONFIG_DIR/fleet.json"
-  fetch_fleet_example
-  disable_control_mode hush-control-tsnet.service
-  enable_service hush-control.service
-  install_updater
-}
-
 install_control_tsnet() {
   fetch_binary hush-control
   fetch_unit hush-control-tsnet.service
@@ -322,6 +314,8 @@ install_control_tsnet() {
     "HUSH_CONTROL_HOSTNAME=hush" \
     "HUSH_CONTROL_STATE_DIR=/var/lib/hush" \
     "# To restrict callers, add -allow flags with: systemctl edit --full hush-control-tsnet"
+  fetch_fleet_example
+  # Turn off any control unit left over from the removed plain-HTTP LAN mode.
   disable_control_mode hush-control.service
   enable_service hush-control-tsnet.service
   install_updater
@@ -342,11 +336,17 @@ install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 "$CONFIG_DIR"
 
 case "$TARGET" in
   agent) install_agent ;;
-  control) install_control ;;
+  # Plain-HTTP LAN mode has been removed; hush-control serves only over the
+  # tailnet now. "control" is kept as an alias for "control-tsnet" so existing
+  # docs and muscle memory still work — it installs the tailnet (tsnet) mode.
+  control)
+    echo "note: LAN mode was removed — installing hush-control in tailnet (tsnet) mode" >&2
+    install_control_tsnet
+    ;;
   control-tsnet) install_control_tsnet ;;
   all)
     install_agent
-    install_control
+    install_control_tsnet
     ;;
   *)
     echo "usage: install.sh {agent|control|control-tsnet|all}" >&2

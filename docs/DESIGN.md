@@ -390,30 +390,28 @@ file-level backup of the live root, not a block image.
 ## Running it (dev)
 
 ```bash
-# agent on the box you want to watch
+# agent on the box you want to watch (a literal address is fine for local testing)
 go run ./cmd/hush-agent -listen 127.0.0.1:8765
 
-# control plane serving the UI (defaults to a single local agent)
-go run ./cmd/hush-control -listen 127.0.0.1:8080 -web web
-# open http://127.0.0.1:8080
+# control plane — joins the tailnet and serves the console over HTTPS.
+# TS_AUTHKEY provisions the node on first run; -web serves the on-disk UI.
+TS_AUTHKEY=tskey-auth-… go run ./cmd/hush-control -tsnet -hostname hush -state-dir ./tsstate -web web
+# open the printed https://hush.<tailnet>.ts.net URL
 ```
 
 Point `hush-control` at a real fleet by copying `fleet.example.json` to
-`fleet.json` and editing the agent addresses.
+`fleet.json` and editing the agent addresses (or add machines from the console).
 
 ## Run modes
 
-`hush-control` serves the same console two ways. LAN mode is the Phase 0
-default; tsnet mode is the secure, reach-from-anywhere target.
+`hush-control` serves the console **only over the tailnet** (tsnet). The old
+plain-HTTP LAN mode has been removed: an unauthenticated console on a trusted
+LAN was a Phase 0 convenience, but the security boundary hush wants is Tailscale
+identity, and running two modes was a standing source of misconfiguration (e.g.
+a box coming back from a reboot serving LAN-only with no tailnet node). One mode,
+gated the same way every time.
 
-### LAN mode (default)
-
-Plain HTTP on `-listen`, agents addressed by IP in `fleet.json`. It is
-**unauthenticated** — trusted networks only, never expose agent ports publicly.
-Good for dev and trusted-LAN use; the UI falls back to demo data when
-`/api/fleet` is unreachable.
-
-### tsnet mode (`-tsnet`)
+### Serving over the tailnet (`-tsnet`, now implied)
 
 `hush-control` joins the tailnet as its **own node** (default hostname `hush`,
 independent of the host's Tailscale identity) using

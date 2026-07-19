@@ -138,7 +138,8 @@ func TestAPIDiscoverEndpoint(t *testing.T) {
 }
 
 // muxDiscoverer builds a discoverer for buildMux in tests that don't exercise
-// discovery: LAN mode (no lister) with a probe that never reaches anything.
+// discovery: no lister set (as before the tsnet node is provisioned) with a
+// probe that never reaches anything.
 func muxDiscoverer(store *agentStore) *discoverer {
 	return newDiscoverer(&discoverySource{}, func(string) testAgentResult {
 		return testAgentResult{Error: "unreachable"}
@@ -155,9 +156,9 @@ func TestAPIDiscoverRejectsPOST(t *testing.T) {
 	}
 }
 
-func TestAPIDiscoverUnavailableInLANMode(t *testing.T) {
-	// No lister set (LAN mode): the endpoint responds, but reports discovery
-	// unavailable rather than erroring.
+func TestAPIDiscoverUnavailableWithoutLister(t *testing.T) {
+	// No lister set (e.g. before the tsnet node is provisioned): the endpoint
+	// responds, but reports discovery unavailable rather than erroring.
 	store := newTestStore(t, nil)
 	mux, _ := buildMux(store, muxDiscoverer(store), "")
 	rr := httptest.NewRecorder()
@@ -170,7 +171,7 @@ func TestAPIDiscoverUnavailableInLANMode(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	if got.Available {
-		t.Fatalf("LAN-mode discover: Available = true, want false")
+		t.Fatalf("discover without a lister: Available = true, want false")
 	}
 }
 
