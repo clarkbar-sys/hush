@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 // A box can carry backups the agent does not run. The Backup construct
@@ -40,12 +43,108 @@ const defaultBackupStatusDir = "/var/lib/hush-backups"
 type conventionBackupStatus struct {
 	Name       string          `json:"name"`
 	Repository string          `json:"repository"`
+	Paths      []string        `json:"paths,omitempty"`
 	Started    string          `json:"started"`
 	Finished   string          `json:"finished"`
 	ExitCode   int             `json:"exit_code"`
 	OK         bool            `json:"ok"`
 	Incomplete bool            `json:"incomplete"`
 	Summary    json.RawMessage `json:"summary,omitempty"`
+
+	// History and NextRun are assembled by the agent rather than read from the
+	// status file: history lives in its own append-only log, and the next fire
+	// is systemd's to answer, not something a finished run can know.
+	History []json.RawMessage `json:"history,omitempty"`
+	NextRun string            `json:"next_run,omitempty"`
+}
+
+// historyLimit is how many past runs are reported. The console draws a
+// two-week strip; the runner keeps a little more on disk than this.
+const historyLimit = 14
+
+// readHistory returns up to historyLimit past runs, oldest first, from the
+// append-only log beside the status file.
+//
+// Each line is passed through as raw JSON for the same reason the summary is:
+// the agent stays ignorant of restic's schema, so a field added to the runner's
+// history entry reaches the console without a change here. A line that does not
+// parse is dropped rather than failing the read — a truncated final line (a
+// crash mid-append) must not cost the reader the other thirteen days.
+func readHistory(dir, name string) []json.RawMessage {
+	b, err := os.ReadFile(filepath.Join(dir, name+".history.jsonl"))
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(lines) > historyLimit {
+		lines = lines[len(lines)-historyLimit:]
+	}
+	out := make([]json.RawMessage, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if !json.Valid([]byte(line)) {
+			continue
+		}
+		out = append(out, json.RawMessage(line))
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// nextRun asks systemd when this backup's timer fires next, as RFC 3339.
+//
+// It is queried live rather than recorded by the runner because a recorded
+// value goes stale the moment the schedule changes — and a console showing a
+// next-run time that no longer matches the timer is worse than showing none.
+// Everything about this degrades to an empty string: no systemd, no such timer,
+// a disabled timer, or a systemctl that takes too long. The field is omitempty,
+// so the console simply doesn't draw it.
+func nextRun(name string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	unit := backupTimerUnit(name)
+	// list-timers --output=json, NOT `show --property=NextElapseUSecRealtime`.
+	// Despite the USec name, that property renders as a locale- and
+	// timezone-formatted string ("Mon 2026-07-20 00:00:03 EDT"), so parsing it
+	// as a number always fails — and with a silent fallback that means the
+	// field is simply never populated, on every box, forever. list-timers emits
+	// real microseconds.
+	out, err := exec.CommandContext(ctx, "systemctl", "list-timers", unit,
+		"--no-pager", "--output=json").Output()
+	if err != nil {
+		return ""
+	}
+	return parseNextElapse(out, unit)
+}
+
+func backupTimerUnit(name string) string { return "restic-backup@" + name + ".timer" }
+
+// parseNextElapse pulls one unit's next fire out of `systemctl list-timers
+// --output=json`, as RFC 3339. Split from the exec call so the parsing is
+// testable without depending on which timers happen to exist on the machine.
+//
+// Returns "" for anything unusable — no match, a monotonic-only timer (next is
+// 0), or output from a systemd too old to know --output=json.
+func parseNextElapse(out []byte, unit string) string {
+	var timers []struct {
+		Unit string `json:"unit"`
+		Next int64  `json:"next"`
+	}
+	if err := json.Unmarshal(out, &timers); err != nil {
+		return ""
+	}
+	for _, t := range timers {
+		if t.Unit == unit && t.Next > 0 {
+			return time.UnixMicro(t.Next).Format(time.RFC3339)
+		}
+	}
+	return ""
 }
 
 // readConventionBackupStatuses loads every <name>.json in dir, sorted by name so the
@@ -67,6 +166,9 @@ func readConventionBackupStatuses(dir string) ([]conventionBackupStatus, error) 
 
 	out := make([]conventionBackupStatus, 0, len(entries))
 	for _, e := range entries {
+		// The .history.jsonl logs sit in this directory too, but end in
+		// .jsonl, so this filter already passes over them; they are read per
+		// backup below rather than enumerated as statuses of their own.
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
@@ -86,6 +188,8 @@ func readConventionBackupStatuses(dir string) ([]conventionBackupStatus, error) 
 			// field still identifies itself in the console.
 			s.Name = strings.TrimSuffix(e.Name(), ".json")
 		}
+		s.History = readHistory(dir, strings.TrimSuffix(e.Name(), ".json"))
+		s.NextRun = nextRun(s.Name)
 		out = append(out, s)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })

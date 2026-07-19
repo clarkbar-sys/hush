@@ -13,10 +13,11 @@ A backup on a box is four files named after it, plus one enabled timer
 instance. Nothing else, and no fleet-wide config to edit.
 
 ```
-/etc/restic/<name>.env               credentials             0600 root
-/etc/restic/<name>.paths             what to back up         one path per line
-/etc/restic/<name>.excludes          what to skip            one pattern per line
-/var/lib/hush-backups/<name>.json    last-run status         0644, no secrets
+/etc/restic/<name>.env                       credentials       0600 root
+/etc/restic/<name>.paths                     what to back up   one path per line
+/etc/restic/<name>.excludes                  what to skip      one pattern per line
+/var/lib/hush-backups/<name>.json            last-run status   0644, no secrets
+/var/lib/hush-backups/<name>.history.jsonl   past runs         0644, one per line
 ```
 
 ```
@@ -48,6 +49,7 @@ repository string is itself a credential.
 {
   "name": "jaassh-nas",
   "repository": "rest:http://nas:8000/jaassh/",
+  "paths": ["/etc", "/home/josh", "/data/gage"],
   "started": "2026-07-19T03:00:04-04:00",
   "finished": "2026-07-19T03:07:41-04:00",
   "exit_code": 0,
@@ -55,6 +57,24 @@ repository string is itself a credential.
   "incomplete": false,
   "summary": { "...": "restic's own --json summary, embedded verbatim" }
 }
+```
+
+`paths` is what the console shows a backup as covering. These are not secrets,
+but they do describe the box's layout to any local user — the file is
+world-readable so the unprivileged agent can read it. A box that considers its
+directory names sensitive should point `HUSH_BACKUP_STATUS_DIR` somewhere
+tighter and adjust the agent to match.
+
+### History
+
+`<name>.history.jsonl` holds one line per run, appended and trimmed on every
+write (`HUSH_BACKUP_HISTORY_KEEP`, default 30). A separate file rather than an
+array inside the status JSON, because appending a line needs no JSON parsing —
+and parsing JSON in POSIX shell, with no `jq` or `python` to lean on, is exactly
+how a status writer starts emitting malformed output.
+
+```json
+{"finished":"…","exit_code":0,"ok":true,"incomplete":false,"summary":{…}}
 ```
 
 `summary` is restic's final `--json` summary line, stored as-is rather than
@@ -131,9 +151,25 @@ entry per machine, each marked `reachable` so a box that cannot be asked is
 as reachable with no backups, so a partial rollout doesn't draw healthy machines
 as broken.
 
+The agent adds two fields the status file cannot hold: `history` (from the log
+above) and `next_run`, which only systemd can answer.
+
+`next_run` comes from `systemctl list-timers --output=json`, **not** from
+`systemctl show --property=NextElapseUSecRealtime`. Despite the name, that
+property renders a locale- and timezone-formatted string
+(`Mon 2026-07-20 00:00:03 EDT`), so a numeric parse of it fails on every box —
+and behind a silent fallback that means the field is simply never populated.
+It is queried live rather than recorded at write time, because a recorded value
+goes stale the moment the schedule changes.
+
 The console shows them in a **Backups** rollup on the fleet view, which opens
-itself when something is wrong. Each row reads `source → target`, the target
-being pulled from the redacted repository URL.
+itself when something is wrong. Each card reads `source → target`, the target
+being pulled from the redacted repository URL, with the last fortnight of runs
+as a strip.
+
+Every field is drawn only when the box actually reported it. An older agent, a
+first run, or a box without systemd shows less — rather than the console
+inventing a plausible number.
 
 Statuses ride through both hops as raw JSON, so neither hush-control nor the
 console needs to know restic's schema — a new field in the status file reaches
