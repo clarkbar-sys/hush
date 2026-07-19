@@ -135,8 +135,13 @@ func newBackupManager(path string) *backupManager {
 
 func (m *backupManager) Start() { m.cron.Start() }
 
-// Stop halts the cron engine, waiting for any in-flight scheduled fire to return.
-func (m *backupManager) Stop() { m.cron.Stop() }
+// Stop halts the cron engine and waits for any in-flight scheduled fire to
+// return. cron.Stop() only signals the run loop and returns a context that closes
+// once running jobs finish — it does not itself block — so we wait on that
+// context. Without the wait, a fire still inside restic (reading the package's
+// restic.Binary, say) can outlive Stop and race a caller that tears down shared
+// state afterward, which is exactly what -race catches in the schedule test.
+func (m *backupManager) Stop() { <-m.cron.Stop().Done() }
 
 // register wires one backup's schedule into cron so it fires unattended. The
 // caller holds m.mu (or, at construction, has exclusive access).

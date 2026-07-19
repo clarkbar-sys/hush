@@ -265,6 +265,15 @@ Then, from the console: **Build → Backup**, pick the machine, the repo, the pa
 (or the treemap), a schedule — and verify it with a **Run**, then a **Restore**
 of the snapshot it wrote into a scratch dir.
 
+**Escrow the repo keys.** The encryption password is stored only in the agent's
+`0700` state dir on the box it backs up — the same box the backup exists to
+survive, so its disk holds the *only* copy of the key. Save a copy off-box: run
+`hush-agent -export-keys` over SSH to print the box's repo keys as JSON and stash
+them in a password manager (not on a box you back up). Lose the key and its
+snapshots are unrecoverable by design. The console's **Backups → Escrow repo
+keys** row generates that command and tracks (browser-locally) which boxes you've
+saved — the key itself never passes through hush-control.
+
 ## Run as a service
 
 `install.sh` (above) already does this — every install is a systemd service

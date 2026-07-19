@@ -314,6 +314,17 @@ explicit argument slice (no `sh -c`), so a path that looks like a flag or holds
 shell metacharacters is passed through literally — the stricter handling a typed
 backup wants, versus the Task runner's deliberately-unjailed `sh -c`.
 
+**Escrow without breaking the rule.** Keeping the key on the box has a circular
+edge: the box a backup exists to survive is the one box holding the sole copy of
+the key that decrypts its snapshots. `hush-agent -export-keys` closes that gap
+without inverting the rule — run over SSH, it prints the box's own repo keys as
+JSON on local stdout and exits, so an operator can escrow them into a password
+manager while the secret still never transits hush-control or the phone (the same
+boundary the running agent keeps). The console's **Escrow repo keys** sheet
+*generates* that command rather than running it, mirroring the setup helper, and
+records which boxes have been escrowed as a browser-local note only — a claim
+about a key, never the key, so the control plane stays free of both.
+
 **Picking what to save — the treemap doubles as a picker.** The Store's
 windirstat-style disk-usage treemap (`/du`, below) does double duty: from the
 backup sheet, "Pick from disk usage" opens it in a **select mode** where tapping

@@ -1045,7 +1045,17 @@
           const ready = cap ? (cap.enabled && !!cap.restic) : !BACKUPS_OFF.has(m.id);
           const missing = cap ? [!cap.restic?"restic":null, !cap.enabled?"-backup":null].filter(Boolean).join(" + ") : "";
           const dis = m.online?"":` disabled style="opacity:.5;cursor:default"`;
-          return `<div class="sec-title">Backups${backups.length?` <span class="n">${backups.length}</span>`:""}</div>
+          // Escrow badge: once a box holds repo keys, nudge saving them off-box —
+          // the key lives only on the box, so a dead box is otherwise the last copy.
+          // escrowedAt is a local note (never a key, never sent to hush-control);
+          // the badge and row open the escrow sheet and work even while offline,
+          // since the export runs over SSH and the mark is browser-local.
+          const escBadge = backups.length
+            ? (escrowedAt(m.id)
+                ? ` <span class="escbadge" id="backup-escrow-badge" title="you've marked this box's keys as saved off-box" style="cursor:pointer;color:var(--accent);font-size:.72rem;font-weight:600">keys escrowed ✓</span>`
+                : ` <span class="escbadge" id="backup-escrow-badge" title="save these repo keys off-box before you need them" style="cursor:pointer;color:var(--warn);font-size:.72rem;font-weight:600">keys not saved ⚠</span>`)
+            : "";
+          return `<div class="sec-title">Backups${backups.length?` <span class="n">${backups.length}</span>`:""}${escBadge}</div>
           <div class="list">
             ${ready
               ? `<button class="row runrow" id="backup-new"${dis}>
@@ -1057,6 +1067,9 @@
               : `<button class="row runrow" id="backup-setup"${dis}>
                   <span class="gly">⚙</span><span class="nm">Set up backups…</span>
                   <span class="rt">${m.online?(missing?("needs "+esc(missing)):"setup"):"offline"}</span></button>`}
+            ${backups.length?`<button class="row" id="backup-escrow">
+                  <span class="gly">⚷</span><span class="nm">Escrow repo keys…</span>
+                  <span class="rt">${escrowedAt(m.id)?"saved ✓":"off-box"}</span></button>`:""}
             ${backups.map(b=>backupRow(b, m.id)).join("")}</div>`; })()}
         ${(()=>{ const items = (RUNS[m.id]||[]).concat(m.tasks||[]);
           return `<div class="sec-title">Tasks${items.length?` <span class="n">${items.length}</span>`:""}</div>
@@ -1083,6 +1096,9 @@
     });
     { const bn = $("#backup-new"); if(bn) bn.addEventListener("click", ()=>{ if(m.online) openBackupSheet(m.id); }); }
     { const bs = $("#backup-setup"); if(bs) bs.addEventListener("click", ()=>{ if(m.online) openBackupSetupSheet(m); }); }
+    // Escrow works over SSH + a browser-local mark, so it isn't gated on m.online.
+    { const be = $("#backup-escrow"); if(be) be.addEventListener("click", ()=>openBackupEscrowSheet(m)); }
+    { const beb = $("#backup-escrow-badge"); if(beb) beb.addEventListener("click", ()=>openBackupEscrowSheet(m)); }
     app.querySelectorAll("[data-brun]").forEach(b=>{
       b.addEventListener("click", ()=> runBackup(b.dataset.bmid, b.dataset.brun));
     });
@@ -3384,6 +3400,66 @@ UNIT`);
     });
     $("#bsDone").addEventListener("click", closeBackupSheet);
     render();
+    backupScrim.classList.add("open");
+  }
+
+  /* ---------- Backups: key escrow ----------
+     A restic repo key lives only in the agent's 0700 state dir on the box it
+     backs up — the "the key stays on the box" rule hush-control leans on so the
+     control plane can never leak it. The flip side is a circular risk: if the box
+     dies, its disk took the sole copy of the key with it, and the snapshots it
+     wrote are encrypted with that key. Escrow closes that gap WITHOUT undoing the
+     rule: the operator runs `hush-agent -export-keys` over their own SSH session
+     to print the keys and stash them off-box, so the secret still never transits
+     hush-control or the phone. */
+
+  // Escrow status is a local, per-browser note that a box's repo keys have been
+  // saved off-box. It is deliberately NOT sent to hush-control: the control plane
+  // never holds keys and shouldn't hold claims about them either. Only a timestamp
+  // per machine id is stored — never a key. localStorage can throw (private mode,
+  // storage disabled), so every access is guarded and degrades to "not escrowed".
+  const ESCROW_LS_KEY = "hush.escrowed";
+  function escrowMap(){ try { return JSON.parse(localStorage.getItem(ESCROW_LS_KEY)||"{}")||{}; } catch(e){ return {}; } }
+  function escrowedAt(id){ return escrowMap()[id]||""; }
+  function setEscrowed(id,on){ try { const mm=escrowMap(); if(on) mm[id]=new Date().toISOString(); else delete mm[id]; localStorage.setItem(ESCROW_LS_KEY, JSON.stringify(mm)); } catch(e){} }
+
+  // genBackupKeyExportCommand builds the on-box escrow command — the same
+  // "generated here, executed on the box" pattern the setup sheet uses. It prints
+  // the repo keys as JSON on stdout; the operator saves that off-box.
+  function genBackupKeyExportCommand(m){
+    return [
+      `# hush backups — escrow ${m.id}'s repo keys off-box`,
+      "# prints the repository keys as JSON; save the output in a password manager,",
+      "# NOT on a box you back up — lose the key and the snapshots are unrecoverable.",
+      "sudo hush-agent -export-keys",
+    ].join("\n");
+  }
+
+  // openBackupEscrowSheet shows the on-box export command and a toggle to record
+  // that you've saved the keys off-box. The command runs over SSH (hush-control
+  // never sees the key); the "saved" flag is a browser-local reminder only.
+  function openBackupEscrowSheet(m){
+    const backups = m.backups||[];
+    const cmd = genBackupKeyExportCommand(m);
+    const when = escrowedAt(m.id);
+    backupBody.innerHTML = `
+      <h3>Escrow repo keys · ${esc(m.id)}</h3>
+      <p class="sd">The repo key lives only on <b>${esc(m.id)}</b> — if the box dies, so does the only copy, and its snapshots are encrypted with it. Run this over SSH and stash the output in a password manager (never on a box you back up).</p>
+      <div class="cmdbox"><code id="beCmd">${esc(cmd)}</code><button class="btn" id="beCopy">Copy</button></div>
+      <div class="field-note">Read-only — prints ${backups.length} key${backups.length===1?"":"s"} as JSON and exits, over your own SSH session. The key never passes through hush-control or the phone.</div>
+      <label class="field" style="flex-direction:row;align-items:center;gap:.5rem;cursor:pointer">
+        <input type="checkbox" id="beSaved"${when?" checked":""} style="width:auto">
+        <span>I've saved these keys off-box${when?` <span style='opacity:.6'>· marked ${esc(when.slice(0,10))}</span>`:""}</span>
+      </label>
+      <div class="field-note" style="opacity:.7">This checkbox is a private reminder kept in this browser only — hush-control never records it, and never sees the key.</div>
+      <div class="sheet-actions"><button class="btn primary" id="beDone" style="flex:1">Done</button></div>`;
+    $("#beCopy").addEventListener("click", async ()=>{
+      try { await navigator.clipboard.writeText(cmd); toast("copied to clipboard"); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
+    $("#beSaved").addEventListener("change", e=>{ setEscrowed(m.id, e.target.checked); toast(e.target.checked?"marked as escrowed":"escrow mark cleared"); });
+    // Re-render the machine view on close so the section badge reflects the mark.
+    $("#beDone").addEventListener("click", ()=>{ closeBackupSheet(); renderMachine(); });
     backupScrim.classList.add("open");
   }
 

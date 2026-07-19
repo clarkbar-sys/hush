@@ -9,6 +9,10 @@
 // default (a Job runs unattended), enabled with -jobs or HUSH_AGENT_JOBS=1;
 // definitions persist to jobs.json under the agent's state directory.
 //
+// The one-shot -export-keys mode prints this box's backup repository keys as JSON
+// to stdout and exits, for an operator to escrow them off-box over SSH — the key
+// stays on the box otherwise, so a dead box would take the only copy with it.
+//
 // Deploy is one static binary with no runtime dependencies:
 //
 //	GOOS=linux GOARCH=arm64 go build ./cmd/hush-agent   # e.g. for the Pi
@@ -43,6 +47,7 @@ func main() {
 	listen := flag.String("listen", ":8765", `address to listen on, or "tailnet" to bind this machine's Tailscale IP (tailnet-only; "tailnet:PORT" for a non-default port)`)
 	showVersion := flag.Bool("version", false, "print the hush-agent version and exit")
 	selfUpdate := flag.Bool("self-update", false, "check for a newer release and replace this binary in place, then exit (run as root by hush-agent-update.service)")
+	exportKeysFlag := flag.Bool("export-keys", false, "print this box's backup repository keys as JSON to stdout and exit — run it over SSH to escrow the keys off-box; the key never passes through hush-control")
 	allowExec := flag.Bool("exec", true, "serve /exec, the Task construct's one-shot command runner (on by default; -exec=false disables). Commands run as the unprivileged hush user")
 	allowJobs := flag.Bool("jobs", false, "serve /jobs, the Job construct's cron scheduler (off by default; -jobs enables). Jobs fire unattended as the unprivileged hush user")
 	allowBackup := flag.Bool("backup", false, "serve /backups, the Backup construct's restic backups (off by default; -backup enables). Reads the paths you name and needs the restic binary")
@@ -94,6 +99,14 @@ func main() {
 	}
 	if *selfUpdate {
 		os.Exit(runSelfUpdate())
+	}
+	// -export-keys is a read-only, on-box escrow helper: it prints this box's repo
+	// keys and exits without starting the agent, so an operator can pull them into
+	// a password manager over their own SSH session. It resolves the state dir the
+	// same way the running agent does (so it reads the real backups.json) and needs
+	// no network — the key stays on the box's local stdout.
+	if *exportKeysFlag {
+		os.Exit(runExportKeys(resolveStateDir(*stateDir)))
 	}
 
 	listenAddr, err := resolveListen(*listen)
