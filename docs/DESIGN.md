@@ -124,20 +124,18 @@ built around backups and sets the direction from here.
   machine to see its services, plus adding a machine through the console.
 - **Store.** Read-only **file browsing** and a windirstat-style **disk-usage
   treemap** on every box (see "Store — browsing files").
-- **Backups.** The restic-backed Backup construct: create / schedule / run /
-  snapshots / restore / off-box key escrow (see "Backups — restic").
+- **Backups.** Root-run restic backups set up on the box over SSH (the
+  [backup convention](./BACKUP-CONVENTION.md)); the console reports their status
+  read-only over `/backup-status` (see "Backups — restic").
 
 **Shipped — the backup-first pivot.**
 
 - **Backup posture as the map's primary signal.** The fleet leads with protected
   / at risk / unprotected / failed, sorts trouble to the top, and every card
   carries a backup line. Vitals still colour the rings; they're no longer the
-  fleet's verdict. (See "Backup posture, alerts, and snapshot browsing".)
+  fleet's verdict. (See "Backup posture and alerts".)
 - **Alert center.** Fleet backup problems aggregated into a ranked list behind a
   header bell, each alert jumping to its machine.
-- **Browse inside a snapshot.** Walk a snapshot's file tree from the phone
-  (`restic ls`, proxied read-only) to confirm the data is really there before
-  trusting a restore.
 
 **Next — making the backup console whole.**
 
@@ -155,9 +153,17 @@ built around backups and sets the direction from here.
 **Removed (the "run things" half).** hush once shipped ad-hoc and saved command
 execution (Tasks), cron scheduling (Jobs), wired sequences (Workflows), and a
 `sudo -u` run-as allowlist. After dogfooding, that whole half was cut: the agent
-no longer serves `/exec` or `/jobs`, and the console is purely a backup and
-read-only fleet view. The write path that remains is backups. Dedicated Service
-start/stop/restart and a live journal tail were never built and are not planned.
+no longer serves `/exec` or `/jobs`. Dedicated Service start/stop/restart and a
+live journal tail were never built and are not planned.
+
+**Removed (the in-agent Backup construct).** hush also shipped restic *inside*
+`hush-agent` — the `-backup` flag, the `/backups` API (create / run / schedule /
+snapshots / restore), `backups.json`, and `-export-keys` off-box escrow — driving
+backups from the phone. It put a repository key on the box in the agent's reach
+and made the console a write path into your data, so it was cut in favour of the
+[backup convention](./BACKUP-CONVENTION.md): backups are set up (and restored)
+on the box over SSH, and hush stays a read-only reader. The console is now a
+**read-only fleet and backup monitor** — no write path remains.
 
 ## Store — browsing files
 
@@ -192,97 +198,44 @@ bounded — a 25-second walk deadline and a cap on files stated — so pointing 
 at something enormous (a whole root filesystem, a NAS's media pool) returns a
 partial, `truncated` answer instead of hanging the request.
 
-## Backups — restic, the first slice
+## Backups — restic, set up on the box
 
-The **Backup** construct ("a scheduled restic run that hauls a Machine into a Store, dedup'd") is
-a saved set of paths a box sends into a [restic](https://restic.net) repository,
-encrypted and dedup'd. restic gives hush the three things a bare NAS-local copy
-can't — content-defined **dedup**, **snapshot** history, and client-side
-**encryption** — and this package is a thin, streaming shell over the restic
-binary, not a reimplementation of any of it. A Backup lives on the **agent**:
-the box that holds the data holds the repository key, so the console
-drives backups through hush-control's pass-through proxy
-(`/api/machines/{host}/backups`, `…/{id}/run`, `…/{id}/snapshots`) rather than a
-control-side store. A box serves `/backups` only when its agent is started with
-`-backup` (or `HUSH_AGENT_BACKUP=1`) — off by default, since a backup reads
-whatever paths you point it at; until then the endpoint returns `403`, surfaced
-as "backups disabled".
+A **Backup** is a scheduled [restic](https://restic.net) run that hauls a
+Machine's paths into a Store, encrypted and dedup'd. restic gives hush the three
+things a bare NAS-local copy can't — content-defined **dedup**, **snapshot**
+history, and client-side **encryption**.
 
-**The key stays on the box.** A restic repo is a backend location plus an
-encryption password. hush keeps that password in the agent's `0700` state dir
-(`backups.json`) and hands it to restic through the
-environment — `RESTIC_REPOSITORY` / `RESTIC_PASSWORD`, never argv, so it never
-lands in the process table or an audit log. It is the one field the API never
-returns (`GET /backups` omits it by construction) and never accepts back through
-hush-control's audit log (a create logs only the backup's name and repo). The
-control plane and the phone drive backups without the key ever passing through
-them, so neither can become the thing that leaks it. restic is invoked with an
-explicit argument slice (no `sh -c`), so a path that looks like a flag or holds
-shell metacharacters is passed through literally — the stricter handling a typed
-backup wants.
+**hush reads backups; it does not run them.** A backup needs root — it reads
+`/home`, service state dirs, and other data an unprivileged user cannot — and it
+holds a repository credential. `hush-agent` runs unprivileged by design and must
+never hold that credential. So a backup is set up **on the box itself**, over
+SSH, following the [backup convention](./BACKUP-CONVENTION.md): a few files under
+`/etc/restic/` plus a `restic-backup@<name>` systemd timer. The privileged runner
+writes a **secret-free status file**; the agent only ever *reads* it and reports
+it on `GET /backup-status` (ungated — it runs no restic and exposes no secret).
+Privilege flows one way, information the other, and nothing about the agent has
+to change to support a new backup.
 
-**Escrow without breaking the rule.** Keeping the key on the box has a circular
-edge: the box a backup exists to survive is the one box holding the sole copy of
-the key that decrypts its snapshots. `hush-agent -export-keys` closes that gap
-without inverting the rule — run over SSH, it prints the box's own repo keys as
-JSON on local stdout and exits, so an operator can escrow them into a password
-manager while the secret still never transits hush-control or the phone (the same
-boundary the running agent keeps). The console's **Escrow repo keys** sheet
-*generates* that command rather than running it, mirroring the setup helper, and
-records which boxes have been escrowed as a browser-local note only — a claim
-about a key, never the key, so the control plane stays free of both.
+**Why not run it inside the agent?** hush once shipped a "Backup construct" that
+did exactly that — restic *inside* `hush-agent`, with create/run/restore/browse
+driven from the phone (the `-backup` flag, `/backups`, `backups.json`, off-box
+key escrow). It read well but inverted the rule above: it put a repository key on
+the box in the agent's reach and made the console a *write* path into your data.
+After dogfooding it was cut. What remains is a **read-only backup monitor** — the
+console shows posture, the last runs, history, and what's at risk; you set
+backups up, and restore them, over SSH where the credential already lives.
 
-**Picking what to save — the treemap doubles as a picker.** The Store's
-windirstat-style disk-usage treemap (`/du`, below) does double duty: from the
-backup sheet, "Pick from disk usage" opens it in a **select mode** where tapping
-a box includes that path (a folder still drills in via its ⤢ corner) and a
-running "N selected · size" totals the choice, so "opt in what I want to save" is
-a matter of tapping the big boxes rather than typing paths. The selection writes
-absolute paths back into the sheet; the whole-machine toggle (`--one-file-system`
-over `/`) is the other end of the spectrum for a box you want in full.
+**Setup.** `sudo sh scripts/install-backup.sh` (download and read it first — it
+takes a credential and runs as root) asks for a name, repository URL,
+credentials, paths, and a schedule, then writes the convention files,
+initialises the repository, and enables the timer. The generated repository
+password lives on the box the backup exists to survive, so escrow it off-box by
+hand. See [BACKUP-CONVENTION.md](./BACKUP-CONVENTION.md).
 
-**Create proves the repo works.** Adding a backup initialises the repository
-(tolerating one that already exists, so a second machine can point at the same
-repo) and lists its snapshots to verify the password — a bad backend URL or
-wrong key fails at create time, not silently at 3am. A run streams restic's
-output to the console's run terminal as Server-Sent Events
-(`start` → `out` → `exit`), and records the last run's outcome and the
-snapshot it wrote. Deleting a backup forgets its definition only; the
-repository's snapshots are left for `restic` to prune directly, so a mistaken
-delete loses the schedule, never the data.
-
-**Restore closes the loop.** From the Snapshots view, a snapshot restores into a
-target directory (`POST /backups/{id}/restore` with `{snapshot, target}`),
-streaming through the same run terminal a run does. The console defaults the
-target to a scratch dir rather than the original location, so inspecting a
-restore can't clobber the live files by accident — an in-place restore is
-something the operator types the path for. The snapshot id is validated (hex or
-`latest`) and the target must be absolute, both before the stream begins; a
-restore only ever *writes* into the target, never touching the snapshots, so it
-can't harm the backup history. That makes the lifecycle whole: configure → run
-(or schedule) → snapshots → restore.
-
-**Runs on demand or on a schedule.** A backup can be run by hand from the
-console, or given an optional 5-field cron schedule (`@daily` macros too) so the
-agent fires it unattended, on the box, via a robfig/cron engine. A scheduled fire
-has no client to stream to; the outcome lands in the backup's status (and its
-next-run time is reported to the console) either way. A fire is skipped, not
-queued, while a run for the same backup is already in flight, so a long backup
-can't stack copies of itself. The schedule lives in `backups.json` and is
-re-registered on agent restart. An empty schedule is manual-only.
-
-**Setup is generated, never applied.** Getting a box backup-ready needs three
-things — `restic` installed, `-backup` enabled, and (for a vault box) a
-`rest-server` — and `hush-control` is unprivileged and never
-touches the box. So the agent advertises its readiness in `/vitals` (a
-`BackupCapability`: is `-backup` on, restic's version, is a `rest-server` binary
-present), and the console's **Set up backups** sheet turns that plus the box's OS
-into the exact idempotent root command to paste over SSH — the right package
-manager for restic, the `HUSH_AGENT_BACKUP=1` env line, and, optionally, an
-append-only tailnet `rest-server` unit bound to the box's own tailnet IP. It adds
-only the missing steps and ends with an agent restart so the box re-advertises.
-Once a box reports a vault, the create sheet offers it as a one-tap repository
-URL, so pointing one machine at another's vault is a chip, not a typed string.
+**Restore.** A restore reads a repo credential too, so — like setup — it runs on
+the box over SSH (`restic restore <snapshot> --target <dir>`), never from the
+console. The console's job is to tell you *which* snapshot you'd reach for and
+that it ran clean; the recovery itself happens where the key is.
 
 **Backend.** The blessed target is a [rest-server](https://github.com/restic/rest-server)
 on the Store box (e.g. the NAS), reached over the tailnet — it supports
@@ -293,10 +246,10 @@ real 3-2-1 story — is the next slice. A whole-machine backup uses
 `--one-file-system` with restic's standard excludes; it is a restorable
 file-level backup of the live root, not a block image.
 
-## Backup posture, alerts, and snapshot browsing
+## Backup posture and alerts
 
-These three are the backup-first pivot: they turn the restic plumbing above into
-a console whose whole job is "is the fleet protected, and can I get it back?"
+These are the backup-first pivot: they turn the restic status feed above into a
+console whose whole job is "is the fleet protected, and can I get it back?"
 
 **Backup posture — the map's signal.** Every machine is reduced to one of five
 states, read from the same `/api/backup-status` feed the Backups section renders
@@ -321,20 +274,6 @@ the colour of the worst open alert. Tapping an alert opens its machine. It is
 in-console today, deliberately: the alert *model* (what's wrong, how it's ranked,
 how it reads) is the load-bearing part, and out-of-band delivery (push, email) is
 a thin hop on top of it — the next slice, not a rebuild.
-
-**Browsing a snapshot — restore confidence.** A restore you've never tested is a
-hope, not a backup. The agent's `GET /backups/{id}/snapshots/{snap}/ls?path=`
-runs `restic ls` and returns one directory level (`{path, entries, truncated}`);
-`hush-control` proxies it at
-`/api/machines/{host}/backups/{id}/snapshots/{snap}/ls`, so the phone walks a
-snapshot's tree the same lazy, one-directory-at-a-time way it walks a live
-filesystem in the Store. It is strictly **read-only** — a snapshot is immutable
-and `restic ls` never writes — so confirming your data is really in there can
-never harm the backup. The listing is bounded (immediate children only, capped
-and marked `truncated`, a 30s deadline) so browsing a snapshot of a million-file
-directory returns a partial answer instead of hanging, the same contract the
-`/du` treemap uses. The snapshot id is validated (hex or `latest`) and any path
-must be absolute, both before restic is invoked.
 
 ## Running it (dev)
 

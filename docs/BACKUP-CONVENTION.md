@@ -3,9 +3,9 @@
 How a box declares a restic backup so that hush can *report* it without ever
 holding a credential or needing privilege.
 
-This is the counterpart to the [Backup construct](./DESIGN.md#backups--restic-the-first-slice),
-not a replacement for it — see [Why not the Backup construct?](#why-not-the-backup-construct)
-for when each applies.
+This is how backups work in hush: set up on the box, run with the privilege they
+actually need, and *read* by the unprivileged agent — never run by it. See
+[Why hush reads instead of runs](#why-hush-reads-instead-of-runs) for the reasoning.
 
 ## The shape
 
@@ -117,25 +117,24 @@ password lives on the box the backup exists to survive.** Losing it makes every
 snapshot in the repository unrecoverable — that is restic's design, not a bug.
 Put it somewhere that is not a box you back up.
 
-## Why not the Backup construct?
+## Why hush reads instead of runs
 
-hush's [Backup construct](./DESIGN.md#backups--restic-the-first-slice) runs
-restic *inside* `hush-agent`. That is the right tool when the data is readable
-by the agent's unprivileged user and you want create/run/schedule from the
-phone.
-
-It cannot be the tool for a whole-box backup, for two reasons:
+hush once ran restic *inside* `hush-agent` — a "Backup construct" with
+create / run / restore driven from the phone. It was removed, because running the
+backup from the agent can't be right for a whole-box backup, for two reasons:
 
 1. **Reach.** The agent runs unprivileged, so restic under it can only read
    what that user can read. On a box with per-service home directories and
-   `0700` user data, that excludes most of what a backup is for.
-2. **Credentials.** Widening the agent's access is worse than it sounds,
-   because the agent also serves `/exec` as that same user — so anything the
-   agent can read becomes readable through the console. A backup should not be
-   the reason personal data enters a console's access domain.
+   `0700` user data, that excludes most of what a backup is for — the backup has
+   to run as root to reach it.
+2. **Credentials.** For the agent to run the backup it must hold the repository
+   key — on the very box the backup exists to survive, in reach of a process the
+   console can talk to. A backup should not be the reason a decryption key enters
+   the console's access domain.
 
-This convention exists for that case: the backup runs with the privilege it
-actually needs, and hush stays a reader.
+So the backup runs with the privilege it actually needs (root, on the box), and
+hush stays a reader: the agent holds no key and only reports the secret-free
+status file.
 
 ## How hush reads it
 

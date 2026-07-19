@@ -1,10 +1,10 @@
 // Package store provides a small durable-list primitive: an in-memory slice of
 // T mirrored to a JSON file, rewritten wholesale and atomically on every change.
-// It factors out the persistence dance the fleet's constructs repeat — a
-// tolerant load, a snapshot taken under a lock, and a crash-safe temp-then-rename
-// write. The agent persists its restic backup definitions (backups.json) through
-// it, and hush-control leans on the same atomic write for its fleet config, which
-// is why this lives in internal/ rather than beside either binary.
+// It factors out the persistence dance the control plane repeats — a tolerant
+// load, a snapshot taken under a lock, and a crash-safe temp-then-rename write.
+// hush-control persists its fleet config (fleet.json) through it when machines
+// are added or removed from the console, which is why this lives in internal/
+// rather than beside the binary.
 package store
 
 import (
