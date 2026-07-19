@@ -226,6 +226,12 @@
      glance on the map. */
   .bkline.run  { color:var(--accent); border-color:var(--accent-soft); background:var(--accent-soft); }
   .bkline.run .g { animation: blink 1.4s steps(2,start) infinite; }
+  /* receive line — the destination side of a backup on a target's own card.
+     Sits just under the posture line, dashed and a touch quieter, so it reads
+     as "backups land here" rather than a second verdict on this box. It keeps
+     the sev tints above (warn/crit/run) for a troubled incoming upload. */
+  .bkline.recv { margin-top:6px; border-style:dashed; }
+  .bkline.recv .g { opacity:.75; }
 
   /* alert center — header bell + panel rows */
   .chip.alert-bell { cursor:pointer; font-weight:700; }
@@ -881,6 +887,39 @@
     return m ? m[1] : "";
   }
 
+  // hostMatchesTarget decides whether machine `m` is the box a backup's
+  // repository points at. The target is a bare hostname pulled from the repo
+  // URL ("nas"); a machine is identified by its agent name (m.id) or tailnet
+  // IP (m.ip), either of which may be a MagicDNS name ("nas.tail1234.ts.net").
+  // Match leniently — exact id/ip, or a shared first DNS label — so "nas"
+  // resolves to the box however it happened to be addressed in the repo string.
+  function hostMatchesTarget(m, tgt){
+    if(!tgt || !m) return false;
+    const t = String(tgt).toLowerCase();
+    const id = String(m.id||"").toLowerCase();
+    const ip = String(m.ip||"").toLowerCase();
+    if(t===id || t===ip) return true;
+    const label = s => s.split(".")[0];
+    return !!label(id) && label(id)===label(t);
+  }
+
+  // backupSourcesFor lists every backup elsewhere in the fleet that ships *to*
+  // this machine — the destination side of "source → target" that the map
+  // otherwise never draws. A store like the NAS has no backup of its own, so
+  // without this it reads as "unprotected" while quietly holding the whole
+  // fleet's snapshots. A box's own backups are excluded: receiving from
+  // yourself isn't receiving.
+  function backupSourcesFor(m){
+    const out = [];
+    for(const h of CONV_BACKUPS){
+      if(h.host===m.id) continue;
+      for(const b of (h.backups||[])){
+        if(hostMatchesTarget(m, backupTarget(b.repository))) out.push({host:h.host, b});
+      }
+    }
+    return out;
+  }
+
   // bkRunning is true while a run is in flight — the runner writes
   // "state":"running" at the start and overwrites it with the outcome when
   // restic exits. It is checked before ok/incomplete everywhere below because a
@@ -1027,6 +1066,23 @@
       detail = `${word}${when?` · ${when}`:""}${tgt?` <span class="ar">→</span> ${esc(tgt)}`:""}`;
     }
     return `<div class="bkline ${meta.sev}"><span class="g">${meta.glyph}</span><span class="t">${detail}</span></div>`;
+  }
+
+  // receiveLine is backupLine's mirror on a target's own card: the box others
+  // back up to now says so, instead of reading as an unprotected gap. It stays
+  // neutral while every incoming run is healthy — this line is about "backups
+  // land here", not a verdict on this box — but tints warn/crit when an upload
+  // to it has stalled or failed, so trouble is visible on the destination and
+  // not only on the source that reported it.
+  function receiveLine(m){
+    const src = backupSourcesFor(m);
+    if(!src.length) return "";
+    const sevs = src.map(x=>bkSeverity(x.b));
+    const tint = sevs.includes("crit") ? " crit"
+      : sevs.includes("warn") ? " warn"
+      : sevs.includes("run") ? " run" : "";
+    const n = src.length;
+    return `<div class="bkline recv${tint}"><span class="g">↙</span><span class="t">${n} ${n===1?"box backs":"boxes back"} up here</span></div>`;
   }
 
   /* ---------- alert center: backups that need attention ----------
@@ -1365,6 +1421,7 @@
           ${netSpark(rxHist, txHist, 200, 13, "spark netmini")}
         </div>
         ${backupLine(m)}
+        ${receiveLine(m)}
         <div class="foot">
           ${m.agentUpdateAvailable?`<span class="badge upd">⇧&nbsp;<span class="lbl">update</span></span>`:""}
           ${badge}
@@ -1425,6 +1482,16 @@
           <div class="wf-saved">${bks.length
             ? `<div class="bk-cards">${bks.map(b=>backupCard(m.id, b)).join("")}</div>`
             : `<div class="empty">${m.online ? "no scheduled backups reporting — set them up over SSH (docs/BACKUP-CONVENTION.md)" : "machine unreachable"}</div>`}</div>`; })()}
+
+        ${(()=>{ const inc = backupSourcesFor(m);
+          // The destination side: every other box that ships its snapshots here.
+          // Only drawn when this box actually receives something, so a plain
+          // machine's view is unchanged. Each is the source's own backup card,
+          // so "citadel → nas" reads the same here as it does on the Fleet page.
+          return inc.length
+            ? `<div class="sec-title">Receiving <span class="n">${inc.length}</span></div>
+               <div class="wf-saved"><div class="bk-cards">${inc.map(x=>backupCard(x.host, x.b)).join("")}</div></div>`
+            : ""; })()}
       </main>`;
     $("#bk").addEventListener("click", goFleet);
     const agentUpdBadge = $("#agentUpdBadge");
