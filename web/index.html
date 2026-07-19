@@ -518,14 +518,6 @@
   .grab { width:38px; height:4px; border-radius:99px; background: var(--border); margin: 6px auto 12px; }
   .sheet h3 { margin: 0 0 2px; font-size: 16px; }
   .sheet p.sd { margin: 0 0 14px; font-family:var(--mono); font-size:11px; color:var(--faint); }
-  .palette { display:grid; grid-template-columns: 1fr 1fr; gap: 9px; }
-  .pitem { display:flex; gap:11px; align-items:flex-start; padding: 11px;
-    border:1px solid var(--border); border-radius: 10px; background: var(--panel-2); cursor:pointer; }
-  .pitem:hover { border-color: var(--accent); }
-  .pitem .pg { width:30px; height:30px; border-radius:8px; display:grid; place-items:center;
-    font-size: 15px; background: var(--panel); border:1px solid var(--border-soft); color:var(--accent); flex:none; }
-  .pitem .pn { font-family:var(--mono); font-weight:700; font-size:13px; }
-  .pitem .pdz { font-size: 11px; color: var(--muted); line-height:1.35; margin-top:2px; }
 
   /* ---- toast ---- */
   #toast { position: fixed; left:50%; bottom: 84px; transform: translateX(-50%) translateY(20px);
@@ -538,13 +530,13 @@
     padding: 14px 16px 0; }
 
   /* ============================================================
-     CYBER SKIN — structural HUD treatment on top of the palette.
+     CYBER SKIN — structural HUD treatment on the base components.
      Sharp corners, terminal chrome, target brackets. Single theme,
      so these ride directly on the base components.
      ============================================================ */
   /* sharpen every rounded holdout (status LEDs stay round on purpose) */
   .chip, .pill, .role, .badge, .row, .row .gly, .btn, .term,
-  .sheet, .grab, .pitem, .pitem .pg, #toast, .alertbar { border-radius: 0; }
+  .sheet, .grab, #toast, .alertbar { border-radius: 0; }
 
   /* header: blinking cursor on the wordmark */
   .brand b::after { content:"_"; color: var(--accent); margin-left:1px;
@@ -658,16 +650,7 @@
   <div class="dock">
     <span class="hint" id="dockHint">loading fleet…</span>
     <button class="btn" id="reportBtn" title="Download a JSON snapshot of the whole fleet">⬇ Report</button>
-    <button class="btn primary build" id="buildBtn">＋ Build<span class="badge-count on-primary" id="addBadge" style="display:none"></span></button>
-  </div>
-</div>
-
-<div class="scrim" id="scrim">
-  <div class="sheet" role="dialog" aria-label="Build a construct">
-    <div class="grab"></div>
-    <h3>Build a construct</h3>
-    <p class="sd">the whole vocabulary — eight nouns, nothing else</p>
-    <div class="palette" id="palette"></div>
+    <button class="btn primary build" id="buildBtn">＋ Machine<span class="badge-count on-primary" id="addBadge" style="display:none"></span></button>
   </div>
 </div>
 
@@ -709,13 +692,6 @@
   const HIST = 26;                 // sparkline sample count
 
   /* ---------- state ---------- */
-  const CONSTRUCTS = [
-    ["Machine","▦","a tailnet host — has vitals, holds everything else"],
-    ["Service","◉","a systemd unit — persistent, running or stopped"],
-    ["Store","▤","a disk / dataset — the NAS especially"],
-    ["Backup","⭯","a scheduled restic run that hauls a machine into a Store, dedup'd"],
-    ["Link","⇄","the tailnet edge between two machines"],
-  ];
   const sevRank = { crit:2, warn:1, good:0 };
 
   let M = [];                      // current fleet
@@ -3046,30 +3022,10 @@ UNIT`);
     backupScrim.classList.add("open");
   }
 
-  /* ---------- build sheet ---------- */
-  const scrim = $("#scrim");
-  $("#palette").innerHTML = CONSTRUCTS.map(c=>{
-    // Machine is the one construct that already ships (via the add-machine flow),
-    // so it carries the "agents waiting to be added" dot the rest don't have.
-    const badge = c[0]==="Machine" ? `<span class="badge-count" id="machineBadge" style="display:none"></span>` : "";
-    return `
-    <div class="pitem" data-c="${c[0]}">
-      <span class="pg">${c[1]}</span>
-      <div><div class="pn">${c[0]}${badge}</div><div class="pdz">${c[2]}</div></div>
-    </div>`;
-  }).join("");
-  $("#buildBtn").addEventListener("click", ()=>scrim.classList.add("open"));
-  scrim.addEventListener("click", e=>{ if(e.target===scrim) scrim.classList.remove("open"); });
-  $("#palette").querySelectorAll(".pitem").forEach(el=>{
-    el.addEventListener("click", ()=>{
-      scrim.classList.remove("open");
-      // Machine and Backup are the constructs that actually do something today;
-      // the rest are still placeholders.
-      if(el.dataset.c === "Machine"){ openAddSheet(); return; }
-      if(el.dataset.c === "Backup"){ openBackupSheet(null); return; }
-      toast(`＋ ${el.dataset.c} builder — coming in a later phase`);
-    });
-  });
+  /* ---------- build → add a machine ---------- */
+  // v2: the dock button does one thing — add a machine — so it opens the
+  // add-machine sheet directly instead of a palette of not-yet-built constructs.
+  $("#buildBtn").addEventListener("click", ()=>openAddSheet());
 
   /* ---------- add machine sheet ---------- */
   const addScrim = $("#addScrim");
@@ -3309,13 +3265,12 @@ UNIT`);
 
   function updateAddBadge(){
     const n = (lastDiscover && lastDiscover.available) ? lastDiscover.candidates.length : 0;
-    // The dot rides on Build (the dock button) and on the Machine row inside its palette.
-    ["#addBadge","#machineBadge"].forEach(sel=>{
-      const b = $(sel);
-      if(!b) return;
-      if(n > 0){ b.textContent = n; b.style.display = ""; }
-      else { b.style.display = "none"; }
-    });
+    // The dot rides on the Build (add-machine) dock button.
+    const badge = $("#addBadge");
+    if(badge){
+      if(n > 0){ badge.textContent = n; badge.style.display = ""; }
+      else { badge.style.display = "none"; }
+    }
     const btn = $("#buildBtn");
     if(btn){
       if(n > 0) btn.title = n + " agent" + (n===1?"":"s") + " found on your tailnet, not yet added";
