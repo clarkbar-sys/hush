@@ -98,6 +98,28 @@ func proxyBackupSnapshots(w http.ResponseWriter, r *http.Request, client *http.C
 	relayAgentJSON(w, req, client, a.Name)
 }
 
+// proxyBackupSnapshotLS forwards a snapshot directory listing to the agent's
+// /backups/{id}/snapshots/{snap}/ls and relays the JSON verbatim — the browse-
+// inside-a-snapshot read path. Like the snapshots listing it's read-only and
+// reaches across the tailnet to the rest-server, so it rides the same longer
+// client rather than the 2s fleet-poll one. The ?path= query is carried through.
+func proxyBackupSnapshotLS(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent, id, snap string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	u := strings.TrimRight(a.Addr, "/") + "/backups/" + id + "/snapshots/" + snap + "/ls"
+	if q := r.URL.RawQuery; q != "" {
+		u += "?" + q
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, u, nil)
+	if err != nil {
+		http.Error(w, "bad upstream request", http.StatusInternalServerError)
+		return
+	}
+	relayAgentJSON(w, req, client, a.Name)
+}
+
 // proxyBackupRun forwards a run to the agent's /backups/{id}/run and streams the
 // Server-Sent Events back to the phone, flushing each frame — the same streaming
 // relay proxyExec does. A run can take a very long time (an initial full backup),

@@ -1,11 +1,21 @@
 # hush — design
 
-> Give your fleet a place and a face.
+> Know your fleet is backed up — from your phone.
 
-`hush` is a control plane for a homelab of tailnet machines, driven from a
-phone. Not by SSHing and typing — by looking at a map and placing things. The
-mental model is **Factorio for your homelab**: see the whole base at a glance,
-build by pointing, and once something is laid down it runs itself.
+`hush` is a **backup console** for a homelab of tailnet machines, driven from a
+phone. Its first question is the one a homelab usually can't answer at a glance:
+*is everything backed up, and could I actually get it back?* Every machine is a
+place on a map coloured by its **backup posture** — protected, at risk, failed,
+or unprotected — so the box that isn't safe is the box that stands out.
+
+hush began as a general "see and run your fleet" console (the *Factorio for your
+homelab* framing below), and that substrate is still here — live vitals, a
+file/store browser, ad-hoc commands, scheduled jobs, wired workflows. But the
+thing hush does that nothing else in a homelab does well is make **backups
+legible and trustworthy**: restic snapshots flowing into a vault, an alert the
+moment a nightly fails, and a snapshot you can walk on your phone to confirm your
+data is really there before you ever need it. That is the product; the rest is
+the substrate it stands on.
 
 The full initiative and rationale live in
 [issue #6](https://github.com/clarkbar-sys/hush/issues/6). This document is the
@@ -13,17 +23,23 @@ distilled, in-repo reference.
 
 ## Principle
 
-**Every thing is a place. Read is a glance, write is deliberate, nothing hides.**
+**Protection is a place. Read is a glance, write is deliberate, nothing hides.**
 
-Factorio is legible because of two things, and sysadmin has neither:
+A homelab has no idea whether it's backed up, and sysadmin tools don't help.
+hush borrows the two things that make a Factorio base legible:
 
-1. **Spatial persistence** — every thing lives somewhere; you navigate by place.
-2. **Status at a glance** — the map tells you what's wrong; red means go look.
+1. **Spatial persistence** — every machine (and its backup) lives somewhere; you
+   navigate by place, not by remembering which box runs the nightly.
+2. **Status at a glance** — the map tells you what's unprotected; red means go
+   look. A failed backup isn't a line in a log you'll never read — it's a badge
+   on the map and a bell in the header.
 
 ## The construct vocabulary (8 nouns)
 
-Everything you can put on the fleet is exactly one of these. If it can't be
-expressed as one of these, it doesn't belong in v1.
+Everything you can put on the fleet is exactly one of these — the substrate the
+backup console stands on. **Machine, Store, and Backup are the spine** (what am I
+protecting, where does it live, is it safe?); Service, Job, Task, Workflow, and
+Link are the supporting cast, the "and you can also run things" half.
 
 | Construct | What it is |
 |---|---|
@@ -40,9 +56,12 @@ expressed as one of these, it doesn't belong in v1.
 
 One canvas, three depths. You never navigate away, you get closer. Phone-first.
 
-- **Fleet** — every machine as a node, sorted so trouble floats to the top;
-  health aura + severity stripe, live dual-ring vitals, a load sparkline, a
-  status badge. Alerts surface as badges on the map.
+- **Fleet** — every machine as a node, sorted by **backup posture** so an
+  unprotected or failing box floats to the top. The summary counts protected / at
+  risk / unprotected / failed; each card carries an always-on backup line (posture
+  + last run + where it ships to). Live dual-ring vitals, a load sparkline, and a
+  status badge still colour each card — vitals just no longer decide the fleet's
+  verdict. Backup problems also aggregate into the header's **alert bell**.
 - **Machine** — "enter the building": header (OS, tailnet IP, uptime, GPU),
   full-size vitals, and constructs grouped into Services / Jobs / Tasks. Tapping
   the CPU ring or the network panel opens a live **htop-style** read of the box —
@@ -97,32 +116,52 @@ Language: **Go** across the backend. **Scheme** is reserved for the Workflow DSL
 
 ## Roadmap
 
-Each phase layers on the same map. Delivery hasn't landed strictly in order —
-Tasks, Jobs, Workflows, and the Backup construct (the write-side slices of
-Phases 1–4) shipped ahead of dedicated Service actions, which are the one
-piece still outstanding.
+The original roadmap layered generic fleet capabilities over a read-only map
+(the Phases below, mostly shipped). The **pivot** re-centres everything already
+built around backups and sets the direction from here.
 
-- **Phase 0 — Proof of life (read-only).** Fleet map + live vitals + drill into
-  a machine to *see* its services. No construct button changes anything; the
-  one exception is fleet membership itself — adding a machine through the
-  console. **Shipped.**
-- **Phase 1 — Actions.** Start / stop / restart Services; live journal tail.
-  **Not yet shipped.** Ad-hoc commands — including a manual `systemctl
-  restart ...` — are available today via the Task construct; dedicated
-  Service controls and a live journal tail are still to come. ← we are here
-- **Phase 2 — Creation.** Build new Services and Jobs from the palette.
-  **Jobs: shipped** (cron-scheduled commands); Service creation is still to
-  come.
-- **Phase 3 — Workflows.** The visual blueprint builder (Scheme DSL). A first
-  slice lands early: saved multi-step blueprints that sequence the existing
-  `/exec` in plain Go (see below), so Workflows are usable before the Lisp.
-  **Shipped** (the plain-Go slice); the Scheme DSL builder is still to come.
-- **Phase 4 — Backups & Store.** The NAS view; intelligent dedup'd backups.
-  Two slices land early: read-only **file browsing** on every machine (see
-  below), so the NAS is walkable; and the **Backup** construct — on-demand
-  restic backups, dedup'd and encrypted (see "Backups — restic" below).
-  **Shipped**, including unattended scheduling and snapshot restore;
-  cross-site replication is still to come.
+**Shipped — the substrate (generic fleet console).**
+
+- **Phase 0 — Proof of life (read-only).** Fleet map + live vitals + drill into a
+  machine to see its services, plus adding a machine through the console.
+- **Store.** Read-only **file browsing** and a windirstat-style **disk-usage
+  treemap** on every box (see "Store — browsing files").
+- **Tasks / run-as / Jobs / Workflows.** Ad-hoc and saved commands, scoped to
+  another user via `sudo -u`, scheduled on the agent (cron), and sequenced into
+  plain-Go Workflows (see those sections below).
+- **Backups.** The restic-backed Backup construct: create / schedule / run /
+  snapshots / restore / off-box key escrow (see "Backups — restic").
+
+**Shipped — the backup-first pivot.**
+
+- **Backup posture as the map's primary signal.** The fleet leads with protected
+  / at risk / unprotected / failed, sorts trouble to the top, and every card
+  carries a backup line. Vitals still colour the rings; they're no longer the
+  fleet's verdict. (See "Backup posture, alerts, and snapshot browsing".)
+- **Alert center.** Fleet backup problems aggregated into a ranked list behind a
+  header bell, each alert jumping to its machine.
+- **Browse inside a snapshot.** Walk a snapshot's file tree from the phone
+  (`restic ls`, proxied read-only) to confirm the data is really there before
+  trusting a restore.
+
+**Next — making the backup console whole.**
+
+- **Push / email delivery of alerts.** The in-console bell is the model; a failed
+  nightly should reach you when you aren't looking at the console.
+- **Cross-site replication.** An off-site copy of the repo — the durability layer
+  that turns "a second copy on the same NAS" into a real 3-2-1 story.
+- **Retention / prune policy.** keep-daily/weekly/monthly, managed from the
+  console instead of `restic forget` by hand.
+- **Vaults view.** Repositories as first-class objects (size, snapshot count,
+  dedup ratio, health), not a string field per backup.
+- **Scheduled restore-tests / `restic check`.** A green "verified restorable"
+  badge, so confidence isn't a manual walk.
+
+**Deferred (from the original roadmap).** Dedicated Service start/stop/restart,
+a live journal tail, Service/Job **creation** from the palette, and the Scheme
+Workflow DSL are all still unbuilt — and no longer the priority. An ad-hoc
+`systemctl restart …` is available today via the Task construct. These remain
+part of the substrate's story, not the backup console's.
 
 ## Store — browsing files
 
@@ -386,6 +425,49 @@ the durability layer that makes distributing across a two-site tailnet fleet a
 real 3-2-1 story — is the next slice. A whole-machine backup uses
 `--one-file-system` with restic's standard excludes; it is a restorable
 file-level backup of the live root, not a block image.
+
+## Backup posture, alerts, and snapshot browsing
+
+These three are the backup-first pivot: they turn the restic plumbing above into
+a console whose whole job is "is the fleet protected, and can I get it back?"
+
+**Backup posture — the map's signal.** Every machine is reduced to one of five
+states, read from the same `/api/backup-status` feed the Backups section renders
+(so the map and the cards can never disagree), worst-wins:
+
+| Posture | Means |
+|---|---|
+| **failed** | a run finished non-zero — restic couldn't write a snapshot |
+| **none** | reachable, but no backup configured — a total gap |
+| **at risk** | a run was incomplete (restic exit 3), or the newest snapshot is stale (older than ~36h — a nightly that missed a night) |
+| **protected** | every backup ran clean and recently |
+| **unknown** | the box couldn't be asked |
+
+Posture drives the fleet summary counts, the per-card backup line, and the sort
+order (`failed > none > at risk > unknown > protected`), so the least-safe box is
+the one at the top of the map. It's derived on the client — no new endpoint —
+because the status feed already carries everything it needs.
+
+**Alert center.** The same posture feeds a ranked alert list (failed, then
+unprotected, then at-risk) behind a header **bell** that shows a count and takes
+the colour of the worst open alert. Tapping an alert opens its machine. It is
+in-console today, deliberately: the alert *model* (what's wrong, how it's ranked,
+how it reads) is the load-bearing part, and out-of-band delivery (push, email) is
+a thin hop on top of it — the next slice, not a rebuild.
+
+**Browsing a snapshot — restore confidence.** A restore you've never tested is a
+hope, not a backup. The agent's `GET /backups/{id}/snapshots/{snap}/ls?path=`
+runs `restic ls` and returns one directory level (`{path, entries, truncated}`);
+`hush-control` proxies it at
+`/api/machines/{host}/backups/{id}/snapshots/{snap}/ls`, so the phone walks a
+snapshot's tree the same lazy, one-directory-at-a-time way it walks a live
+filesystem in the Store. It is strictly **read-only** — a snapshot is immutable
+and `restic ls` never writes — so confirming your data is really in there can
+never harm the backup. The listing is bounded (immediate children only, capped
+and marked `truncated`, a 30s deadline) so browsing a snapshot of a million-file
+directory returns a partial answer instead of hanging, the same contract the
+`/du` treemap uses. The snapshot id is validated (hex or `latest`) and any path
+must be absolute, both before restic is invoked.
 
 ## Running it (dev)
 

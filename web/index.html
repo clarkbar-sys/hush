@@ -215,6 +215,16 @@
   .bkline.warn { color:var(--warn); border-color:var(--warn-soft); background:var(--warn-soft); }
   .bkline.crit { color:var(--crit); border-color:var(--crit-soft); background:var(--crit-soft); }
 
+  /* alert center — header bell + panel rows */
+  .chip.alert-bell { cursor:pointer; font-weight:700; }
+  .chip.alert-bell b { font-family:var(--mono); }
+  .chip.alert-bell.warn { color:var(--warn); border-color:var(--warn-soft); background:var(--warn-soft); }
+  .chip.alert-bell.crit { color:var(--crit); border-color:var(--crit-soft); background:var(--crit-soft); }
+  .alert-row { align-items:flex-start; }
+  .alert-row .alert-sub { display:block; margin-top:2px; font-family:var(--mono); font-size:11px; color:var(--muted); white-space:normal; }
+  .alert-row.crit > .gly { color:var(--crit); }
+  .alert-row.warn > .gly { color:var(--warn); }
+
   /* ---- machine view ---- */
   .mhead { background: var(--panel); border:1px solid var(--border); border-radius: var(--r);
     padding: 16px; box-shadow: var(--shadow); margin-top: 8px; }
@@ -674,6 +684,7 @@
       <span class="dot-h"></span><b>hush</b>
     </div>
     <div class="spacer"></div>
+    <button class="chip alert-bell" id="alertBell" type="button" hidden aria-label="Backup alerts"></button>
     <button class="chip ver" id="verChip" type="button" hidden></button>
     <div class="chip" id="statusChip"><span class="live"></span>connecting…</div>
   </header>
@@ -700,6 +711,13 @@
   <div class="sheet" role="dialog" aria-label="Add a machine">
     <div class="grab"></div>
     <div id="addSheetBody"></div>
+  </div>
+</div>
+
+<div class="scrim" id="alertScrim">
+  <div class="sheet" role="dialog" aria-label="Backup alerts">
+    <div class="grab"></div>
+    <div id="alertSheetBody"></div>
   </div>
 </div>
 
@@ -863,6 +881,7 @@
     if(state.view==="fleet") renderFleet();
     else if(state.view==="machine") renderMachine();
     else renderConstruct();
+    renderAlertBell();
   }
 
   function renderFleet(){
@@ -1060,6 +1079,71 @@
       detail = `${word}${when?` · ${when}`:""}${tgt?` <span class="ar">→</span> ${esc(tgt)}`:""}`;
     }
     return `<div class="bkline ${meta.sev}"><span class="g">${meta.glyph}</span><span class="t">${detail}</span></div>`;
+  }
+
+  /* ---------- alert center: backups that need attention ----------
+     A backup console's core job is to tell you when the nightly failed or a box
+     drifted out of protection. Posture is aggregated into a ranked alert list,
+     surfaced as a header bell you can't miss and a panel that jumps you to the
+     machine. In-console today; push/email delivery is the next hop. */
+  const alertScrim = $("#alertScrim");
+  const alertBody = $("#alertSheetBody");
+  const alertBell = $("#alertBell");
+  function closeAlerts(){ alertScrim.classList.remove("open"); }
+  alertScrim.addEventListener("click", e=>{ if(e.target===alertScrim) closeAlerts(); });
+  alertBell.addEventListener("click", openAlerts);
+
+  // fleetAlerts turns each machine's backup posture into an actionable alert —
+  // failed, unprotected, or at risk — worst first. Protected and unknown boxes
+  // raise nothing.
+  function fleetAlerts(){
+    const out = [];
+    M.forEach(m=>{
+      const p = backupPosture(m.id);
+      if(p!=="failed" && p!=="none" && p!=="risk") return;
+      const bks = ((hostBackupEntry(m.id)||{}).backups) || [];
+      const lead = bks.slice().sort((a,b)=>bkRank(b)-bkRank(a))[0];
+      const when = lead ? relTimeISO(lead.finished||lead.started||"") : "";
+      let msg;
+      if(p==="failed") msg = `backup failed${lead&&lead.exit_code?` · exit ${lead.exit_code}`:""}${when?` · ${when}`:""}`;
+      else if(p==="none") msg = "no backup configured — this box is unprotected";
+      else msg = (lead&&lead.incomplete) ? `backup incomplete${when?` · ${when}`:""}` : `no recent snapshot${when?` · last ${when}`:""}`;
+      out.push({ id:m.id, posture:p, sev:POSTURE[p].sev, msg, tgt: lead ? backupTarget(lead.repository) : "" });
+    });
+    out.sort((a,b)=> postureRank[b.posture]-postureRank[a.posture]);
+    return out;
+  }
+
+  // renderAlertBell keeps the header bell in sync with the current alerts — hidden
+  // when all clear, coloured by the worst open alert otherwise. Called by render().
+  function renderAlertBell(){
+    if(!alertBell) return;
+    const alerts = fleetAlerts();
+    if(!alerts.length){ alertBell.hidden = true; return; }
+    alertBell.hidden = false;
+    alertBell.className = "chip alert-bell " + (alerts.some(a=>a.sev==="crit") ? "crit" : "warn");
+    alertBell.innerHTML = `⚠ <b>${alerts.length}</b>`;
+    alertBell.title = `${alerts.length} backup alert${alerts.length>1?"s":""}`;
+  }
+
+  function openAlerts(){
+    const alerts = fleetAlerts();
+    const rows = alerts.map(a=>`
+      <button class="row alert-row ${a.sev}" data-alert="${esc(a.id)}">
+        <span class="gly">${POSTURE[a.posture].glyph}</span>
+        <span class="nm">${esc(a.id)}<span class="alert-sub">${esc(a.msg)}${a.tgt?` <span class="ar">→</span> ${esc(a.tgt)}`:""}</span></span>
+        <span class="rt">${esc(POSTURE[a.posture].label)}</span>
+      </button>`).join("");
+    alertBody.innerHTML = `
+      <h3>Alerts${alerts.length?` <span class="n">${alerts.length}</span>`:""}</h3>
+      <p class="sd">backups that need attention — worst first · tap to open the machine</p>
+      <div class="list">${rows || `<div class="empty">all clear — every machine is protected</div>`}</div>
+      <div class="sheet-actions"><button class="btn primary" id="alClose" style="flex:1">Close</button></div>`;
+    $("#alClose").addEventListener("click", closeAlerts);
+    alertBody.querySelectorAll("[data-alert]").forEach(el=>{
+      el.addEventListener("click", ()=>{ closeAlerts(); enterMachine(el.dataset.alert); });
+    });
+    alertScrim.classList.add("open");
   }
 
   // One convention backup (docs/BACKUP-CONVENTION.md) as a card. A backup is a
@@ -3513,17 +3597,20 @@
   }
 
   async function openSnapshots(mid, bid, name){
-    if(MODE === "demo"){ toast("snapshots are live-mode only"); return; }
-    toast("loading snapshots…");
     let snaps;
-    try {
-      const r = await fetch(`api/machines/${encodeURIComponent(mid)}/backups/${encodeURIComponent(bid)}/snapshots`, {cache:"no-store"});
-      if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
-      snaps = await r.json();
-    } catch(err){ toast((err&&err.message) ? err.message : "couldn't load snapshots"); return; }
+    if(MODE === "demo"){
+      snaps = demoSnapshots(mid, bid);
+    } else {
+      toast("loading snapshots…");
+      try {
+        const r = await fetch(`api/machines/${encodeURIComponent(mid)}/backups/${encodeURIComponent(bid)}/snapshots`, {cache:"no-store"});
+        if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
+        snaps = await r.json();
+      } catch(err){ toast((err&&err.message) ? err.message : "couldn't load snapshots"); return; }
+    }
     const rows = (Array.isArray(snaps)?snaps:[]).slice().reverse().map(s=>{
       const sid = esc(s.short_id||s.id||"");
-      return `<div class="row" style="cursor:default">
+      return `<div class="row" data-bbrowse="${sid}" style="cursor:pointer" title="Browse this snapshot's files">
         <span class="gly">⭯</span>
         <span class="nm mono">${sid}</span>
         <span class="rt">${esc((s.paths||[]).join(", "))}</span>
@@ -3532,14 +3619,121 @@
       </div>`;}).join("");
     backupBody.innerHTML = `
       <h3>Snapshots · ${esc(name||bid)}</h3>
-      <p class="sd">what restic holds for this backup, newest first · ⤓ restores one</p>
+      <p class="sd">what restic holds for this backup, newest first · tap to browse, ⤓ restores one</p>
       <div class="list">${rows || `<div class="empty">no snapshots yet — run the backup to make the first one</div>`}</div>
       <div class="sheet-actions"><button class="btn primary" id="bSnapClose" style="flex:1">Close</button></div>`;
     $("#bSnapClose").addEventListener("click", closeBackupSheet);
+    backupBody.querySelectorAll("[data-bbrowse]").forEach(el=>{
+      el.addEventListener("click", e=>{
+        if(e.target.closest("[data-brestore]")) return; // the ⤓ button owns its click
+        openSnapshotBrowse(mid, bid, name, el.dataset.bbrowse, "/");
+      });
+    });
     backupBody.querySelectorAll("[data-brestore]").forEach(el=>{
-      el.addEventListener("click", ()=> openRestore(mid, bid, name, el.dataset.brestore));
+      el.addEventListener("click", e=>{ e.stopPropagation(); openRestore(mid, bid, name, el.dataset.brestore); });
     });
     backupScrim.classList.add("open");
+  }
+
+  // openSnapshotBrowse walks one directory level inside a snapshot — the restore-
+  // confidence feature. It reads the agent's /backups/{id}/snapshots/{snap}/ls
+  // (proxied by hush-control), which is read-only: a snapshot is immutable, so
+  // confirming your files are really in there can never harm the backup. Browsing
+  // is lazy, one directory at a time, exactly like the live filesystem Store.
+  async function openSnapshotBrowse(mid, bid, name, snap, path){
+    const clean = path && path !== "/" ? path : "/";
+    let data;
+    if(MODE === "demo"){
+      data = { path: clean, entries: demoSnapshotLS(mid, bid, snap, clean), truncated: false };
+    } else {
+      toast("reading snapshot…");
+      try {
+        const q = clean === "/" ? "" : `?path=${encodeURIComponent(clean)}`;
+        const r = await fetch(`api/machines/${encodeURIComponent(mid)}/backups/${encodeURIComponent(bid)}/snapshots/${encodeURIComponent(snap)}/ls${q}`, {cache:"no-store"});
+        if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
+        data = await r.json();
+      } catch(err){ toast((err&&err.message) ? err.message : "couldn't read snapshot"); return; }
+    }
+    const entries = Array.isArray(data.entries) ? data.entries : [];
+    const cur = data.path || clean;
+    const parts = cur.split("/").filter(Boolean);
+    const parent = cur === "/" ? null : (parts.length <= 1 ? "/" : "/" + parts.slice(0,-1).join("/"));
+    const rows = entries.map(e=>{
+      const isDir = e.type === "dir";
+      const child = (cur === "/" ? "" : cur) + "/" + e.name;
+      const meta = e.type === "symlink" ? `→ ${esc(e.target||"")}` : (isDir ? "" : fmtBytes(e.size||0));
+      const gly = isDir ? "▸" : (e.type === "symlink" ? "↳" : "·");
+      return `<div class="row"${isDir?` data-snapdir="${esc(child)}" style="cursor:pointer"`:` style="cursor:default"`}>
+        <span class="gly">${gly}</span><span class="nm${isDir?"":" mono"}">${esc(e.name)}</span>
+        <span class="rt">${meta}</span></div>`;
+    }).join("");
+    // Clickable breadcrumb: root, then each segment up to the current directory.
+    let acc = "";
+    const crumbSegs = [`<a data-snapcrumb="/">snapshot</a>`].concat(parts.map(seg=>{
+      acc += "/" + seg;
+      return `<span class="sep">/</span><a data-snapcrumb="${esc(acc)}">${esc(seg)}</a>`;
+    }));
+    backupBody.innerHTML = `
+      <h3>Snapshot <span class="mono">${esc(snap)}</span></h3>
+      <p class="sd">browsing what this snapshot holds — read-only, so you can confirm your files are really in here</p>
+      <div class="crumbs snapcrumb">${crumbSegs.join("")}</div>
+      <div class="list">${rows || `<div class="empty">this directory is empty in the snapshot</div>`}</div>
+      ${data.truncated ? `<div class="empty">partial listing — more entries than shown</div>` : ""}
+      <div class="sheet-actions">
+        <button class="btn ghost" id="snapUp"${parent==null?" disabled":""}>↑ Up</button>
+        <button class="btn" id="snapToList">← Snapshots</button>
+      </div>`;
+    backupBody.querySelectorAll("[data-snapdir]").forEach(el=>{
+      el.addEventListener("click", ()=> openSnapshotBrowse(mid, bid, name, snap, el.dataset.snapdir));
+    });
+    backupBody.querySelectorAll("[data-snapcrumb]").forEach(el=>{
+      el.addEventListener("click", ()=> openSnapshotBrowse(mid, bid, name, snap, el.dataset.snapcrumb));
+    });
+    if(parent!=null) $("#snapUp").addEventListener("click", ()=> openSnapshotBrowse(mid, bid, name, snap, parent));
+    $("#snapToList").addEventListener("click", ()=> openSnapshots(mid, bid, name));
+    backupScrim.classList.add("open");
+  }
+
+  // demoSnapshots fabricates a believable snapshot history for MODE="demo" from a
+  // backup's paths, so the snapshot browser (the flagship restore-confidence
+  // feature) is reachable without a live repo behind it — oldest first, the order
+  // openSnapshots reverses to show newest at the top.
+  function demoSnapshots(mid, bid){
+    const h = hostBackupEntry(mid);
+    const bks = (h && h.backups) || [];
+    const lead = bks.find(b=>b.id===bid) || bks[0] || {};
+    const paths = (lead.paths && lead.paths.length) ? lead.paths : ["/"];
+    const rand = mulberry32(hashStr(mid+"::"+bid));
+    const out = [];
+    for(let i=6;i>=0;i--){
+      const idhex = Math.floor(rand()*0xffffffff).toString(16).padStart(8,"0");
+      out.push({ id:idhex+"cafe", short_id:idhex, time:new Date(Date.now()-(6+i*24)*3600e3).toISOString(), paths });
+    }
+    return out;
+  }
+
+  // demoSnapshotLS synthesises one directory level of a snapshot's tree, reusing
+  // the same seeded generator the disk-usage treemap uses so a demo walk is
+  // stable and believable. The root level is the backup's named roots.
+  function demoSnapshotLS(mid, bid, snap, path){
+    const clean = path && path !== "" ? path : "/";
+    if(clean === "/"){
+      const h = hostBackupEntry(mid);
+      const bks = (h && h.backups) || [];
+      const lead = bks.find(b=>b.id===bid) || bks[0] || {};
+      const roots = (lead.paths && lead.paths.length) ? lead.paths : ["/"];
+      const names = new Set();
+      roots.forEach(p=>{ const seg = p.split("/").filter(Boolean); if(seg.length) names.add(seg[0]); });
+      if(!names.size){ ["etc","home","srv","usr","var"].forEach(n=>names.add(n)); }
+      return [...names].map(n=>({ name:n, type:"dir", path:"/"+n }));
+    }
+    const depth = clean.split("/").filter(Boolean).length;
+    return synthDuEntries(mid+"::"+snap+"::"+clean, depth).map(e=>({
+      name: e.name,
+      type: e.isDir ? "dir" : "file",
+      size: e.size,
+      path: (clean === "/" ? "" : clean) + "/" + e.name,
+    }));
   }
 
   // openRestore renders a small form to restore one snapshot. It restores INTO a
