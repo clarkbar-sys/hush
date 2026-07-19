@@ -2,9 +2,15 @@ name: Deploy release site (GitHub Pages)
 
 # Publishes site/ — a small static page that shows the latest GitHub Release
 # (fetched client-side from the Releases API, so it never goes stale) — to the
-# root of the gh-pages branch. The PR-preview workflow (pr-preview.yml) already
-# owns gh-pages/pr-preview/pr-<N>/ for per-PR console previews; this job only
-# touches the root, so the two coexist. Requires GitHub Pages to be enabled
+# root of the gh-pages branch. The landing page leads with a live, interactive
+# preview of the console itself: it stages web/ (the console running in its
+# built-in demo mode, no backend required) into site/demo/ via
+# scripts/build-web-preview.sh, so the page embeds /demo/ in an <iframe> and
+# visitors see the actual app, not a mockup that could drift.
+#
+# The PR-preview workflow (pr-preview.yml) already owns gh-pages/pr-preview/
+# pr-<N>/ for per-PR console previews; this job only touches the root and
+# root/demo/, so the two coexist. Requires GitHub Pages to be enabled
 # (Settings -> Pages -> Deploy from a branch -> gh-pages / root), same as the
 # preview workflow.
 
@@ -28,6 +34,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      - name: Stage the console demo into site/demo
+        # Same self-contained demo bundle the PR-preview workflow uses, staged
+        # under site/demo/ so the landing page's <iframe src="demo/"> has the
+        # real console (MODE=demo, no hush-control) to embed.
+        run: ./scripts/build-web-preview.sh site/demo
 
       - name: Deploy to gh-pages root
         uses: peaceiris/actions-gh-pages@v4

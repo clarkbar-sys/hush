@@ -13,6 +13,8 @@ tmp/
 
 # ── Staged web preview (scripts/build-web-preview.sh output) ──
 /_preview/
+# Live console demo staged into the landing page at deploy time (pages-site.yml)
+/site/demo/
 
 # ── Secrets & local env (never commit these) ─────────────────
 .env
