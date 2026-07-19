@@ -203,6 +203,18 @@
   .badge.ok { color: var(--good); background: var(--good-soft); }
   .badge.upd { color: var(--good); background: var(--good-soft); cursor: pointer; }
 
+  /* backup posture line — the always-on backup readout on every Fleet card */
+  .bkline { display:flex; align-items:center; gap:6px; margin-top:8px;
+    padding:5px 8px; border-radius:8px; border:1px solid var(--border);
+    background:var(--panel-2); color:var(--muted);
+    font-family:var(--mono); font-size:10.5px; }
+  .bkline .g { font-weight:700; flex:none; }
+  .bkline .t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .bkline .ar { opacity:.6; }
+  .bkline.good { color:var(--good); border-color:var(--good-soft); background:var(--good-soft); }
+  .bkline.warn { color:var(--warn); border-color:var(--warn-soft); background:var(--warn-soft); }
+  .bkline.crit { color:var(--crit); border-color:var(--crit-soft); background:var(--crit-soft); }
+
   /* ---- machine view ---- */
   .mhead { background: var(--panel); border:1px solid var(--border); border-radius: var(--r);
     padding: 16px; box-shadow: var(--shadow); margin-top: 8px; }
@@ -854,9 +866,14 @@
   }
 
   function renderFleet(){
-    const crit = M.filter(m=>m.status==="crit").length;
-    const warn = M.filter(m=>m.status==="warn").length;
-    const good = M.filter(m=>m.status==="good").length;
+    // The summary leads with backup posture — this is a backup console, so the
+    // headline question is "is the fleet protected?", not "how's CPU". Vitals
+    // still colour each card's rings; they're just no longer the fleet verdict.
+    const post = M.map(m=>backupPosture(m.id));
+    const nProt = post.filter(p=>p==="protected").length;
+    const nRisk = post.filter(p=>p==="risk").length;
+    const nFail = post.filter(p=>p==="failed").length;
+    const nNone = post.filter(p=>p==="none").length;
     // Backups are flattened across machines because the question is
     // fleet-shaped ("is everything backed up?"), not per-box.
     const bkAll = CONV_BACKUPS.flatMap(h => (h.backups||[]).map(b => ({host:h.host, b})));
@@ -871,15 +888,19 @@
           <div class="h-title">Fleet</div>
         </div>
         <div class="summ">
-          <span class="s"><span class="swatch" style="background:var(--good)"></span><b>${good}</b> ok</span>
-          <span class="s"><span class="swatch" style="background:var(--warn)"></span><b>${warn}</b> warn</span>
-          <span class="s"><span class="swatch" style="background:var(--crit)"></span><b>${crit}</b> crit</span>
+          <span class="s"><span class="swatch" style="background:var(--good)"></span><b>${nProt}</b> protected</span>
+          <span class="s"><span class="swatch" style="background:var(--warn)"></span><b>${nRisk}</b> at risk</span>
+          <span class="s"><span class="swatch" style="background:var(--faint)"></span><b>${nNone}</b> unprotected</span>
+          <span class="s"><span class="swatch" style="background:var(--crit)"></span><b>${nFail}</b> failed</span>
         </div>
       </div>
       <main>
         <div class="grid">
           ${PENDING.map(pendingNodeCard).join("")}
-          ${M.slice().sort((a,b)=>sevRank[b.status]-sevRank[a.status]).map(nodeCard).join("")}
+          ${M.slice().sort((a,b)=>{
+            const pr = postureRank[backupPosture(b.id)] - postureRank[backupPosture(a.id)];
+            return pr || (sevRank[b.status]-sevRank[a.status]);
+          }).map(nodeCard).join("")}
         </div>
         ${(M.length+PENDING.length) ? "" : `<p class="note">no machines reporting yet</p>`}
 
@@ -980,6 +1001,66 @@
   // is missing files. Folding that into either "complete" or "failed" would
   // hide the outcome most likely to be mistaken for success.
   function bkSeverity(b){ return b.ok ? "good" : (b.incomplete ? "warn" : "crit"); }
+
+  /* ---------- backup posture: the map's primary signal ----------
+     hush is a backup console now, so a machine's place on the map is decided by
+     "is this box protected?", not by CPU. Posture reads the same /api/backup-status
+     feed the Backups section renders (seeded in demo mode by demoConvBackups), so
+     the map and the cards can never disagree. One of five states, worst-wins:
+       failed    — a run finished non-zero (restic couldn't write a snapshot)
+       none      — reachable, but no backup configured (a total gap)
+       risk      — a run was incomplete (exit 3), or the newest snapshot is stale
+       protected — every backup ran clean and recently
+       unknown   — the box couldn't be asked (backup state genuinely unknown) */
+  function hostBackupEntry(id){ return CONV_BACKUPS.find(h=>h.host===id); }
+  function backupPosture(id){
+    const h = hostBackupEntry(id);
+    if(!h || !h.reachable) return "unknown";
+    const bks = h.backups || [];
+    if(!bks.length) return "none";
+    if(bks.some(b=>!b.ok && !b.incomplete)) return "failed";
+    if(bks.some(b=>b.incomplete)) return "risk";
+    // Stale: a nightly that missed a night. Newest run older than ~36h is the
+    // cheapest honest "the schedule stopped firing" tell without per-box cadence.
+    const newest = bks.reduce((t,b)=>Math.max(t, Date.parse(b.finished||b.started||"")||0), 0);
+    if(newest && (Date.now()-newest) > 36*3600e3) return "risk";
+    return "protected";
+  }
+  const POSTURE = {
+    failed:    { sev:"crit",  glyph:"✕", label:"backup failed" },
+    none:      { sev:"warn",  glyph:"○", label:"no backup" },
+    risk:      { sev:"warn",  glyph:"▲", label:"at risk" },
+    protected: { sev:"good",  glyph:"✓", label:"protected" },
+    unknown:   { sev:"muted", glyph:"·", label:"unknown" },
+  };
+  // Ordering for "trouble floats to the top" — a failed backup is the loudest,
+  // then an outright gap, then an at-risk run, then boxes we couldn't ask.
+  const postureRank = { failed:4, none:3, risk:2, unknown:1, protected:0 };
+
+  // bkRank picks the backup that *defines* a host's posture — the worst one — so
+  // the node-card line leads with the run that matters, not just the first.
+  function bkRank(b){ return (!b.ok && !b.incomplete) ? 3 : b.incomplete ? 2 : 1; }
+
+  // backupLine is the always-on backup readout on every Fleet card: posture
+  // glyph + the worst run's outcome, when it ran, and where it ships to.
+  function backupLine(m){
+    const p = backupPosture(m.id);
+    const meta = POSTURE[p];
+    const bks = ((hostBackupEntry(m.id)||{}).backups) || [];
+    const lead = bks.slice().sort((a,b)=>bkRank(b)-bkRank(a))[0];
+    let detail;
+    if(p==="none") detail = "no backup configured";
+    else if(p==="unknown" || !lead) detail = "backup state unknown";
+    else {
+      const when = relTimeISO(lead.finished || lead.started || "");
+      const tgt = backupTarget(lead.repository);
+      const word = p==="failed" ? "backup failed"
+        : p==="risk" ? (lead.incomplete ? "incomplete" : "stale")
+        : "protected";
+      detail = `${word}${when?` · ${when}`:""}${tgt?` <span class="ar">→</span> ${esc(tgt)}`:""}`;
+    }
+    return `<div class="bkline ${meta.sev}"><span class="g">${meta.glyph}</span><span class="t">${detail}</span></div>`;
+  }
 
   // One convention backup (docs/BACKUP-CONVENTION.md) as a card. A backup is a
   // direction, not a machine, so it leads with "source → target".
@@ -1087,6 +1168,7 @@
           ${sparkline(hist, 200, 26)}
           ${netSpark(rxHist, txHist, 200, 13, "spark netmini")}
         </div>
+        ${backupLine(m)}
         <div class="foot">
           <span class="cons"><b>${m.services.length}</b>&nbsp;svc <b>${m.jobs.length}</b>&nbsp;job</span>
           ${m.agentUpdateAvailable?`<span class="badge upd">⇧&nbsp;<span class="lbl">update</span></span>`:""}
@@ -1915,10 +1997,16 @@
 
   // relTime renders a coarse "how long ago" for ephemeral run records.
   function relTime(ts){
-    const s = Math.round((Date.now()-ts)/1000);
+    // Handles both directions: "6h ago" for a past run, "in 18h" for the next
+    // scheduled one. A backup's next_run is a future timestamp, and clamping it
+    // to "just now" (as this did) hid the one number a backup console exists to
+    // show — when the nightly fires next.
+    const d = Date.now() - ts;
+    const s = Math.round(Math.abs(d) / 1000);
     if(s < 45) return "just now";
-    const m = Math.round(s/60); if(m < 60) return m+"m ago";
-    return Math.round(m/60)+"h ago";
+    const m = Math.round(s/60);
+    const say = m < 60 ? m+"m" : Math.round(m/60)+"h";
+    return d < 0 ? "in "+say : say+" ago";
   }
 
   /* ---------- Task: run a one-shot command, streamed live ----------
@@ -2835,7 +2923,7 @@
       } else {
         // never connected at all (local preview, file://, no backend running) —
         // this is the legitimate demo-data fallback.
-        if(MODE!=="demo"){ M = demoFleet(); }
+        if(MODE!=="demo"){ M = demoFleet(); CONV_BACKUPS = demoConvBackups(); }
         MODE = "demo";
         jitterDemo();
       }
@@ -2891,6 +2979,63 @@
       mk({ id:"lab-01", agentVersion:"v1.3.0", os:"NixOS 24.05", ip:"100.71.5.7", role:"", status:"good", cpu:9, mem:19, disk:12, up:"3d", load:"0.3",
         gpu:88, vram:91, gpuName:"RTX 4090", vramText:"21.8 / 24 GB",
         services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"k3s",state:"running",mem:"430 MB"}] }),
+    ];
+  }
+  // demoConvBackups seeds the backup-first fleet story for MODE="demo": the
+  // shape /api/backup-status returns, so the Fleet page's Backups section and
+  // every posture signal render exactly as they would against a live fleet.
+  // The story is deliberate — most boxes shipping clean nightly snapshots into
+  // the nas vault, the vault itself copying offsite (the 3-2-1 second hop), one
+  // run coming back incomplete, and one outright failing:
+  //   citadel → nas   protected   (clean nightly)
+  //   nas     → offsite protected (the vault's own offsite copy)
+  //   pi-gate → nas   protected   (small, clean)
+  //   lab-01  → nas   at risk     (restic exit 3 — files it couldn't read)
+  //   atlas   → nas   FAILED      (exit 1 — a healthy history that just broke)
+  //   forge   —       unprotected (reachable, no backup configured)
+  function demoConvBackups(){
+    const ago = h => new Date(Date.now() - h*3600e3).toISOString();
+    const soon = h => new Date(Date.now() + h*3600e3).toISOString();
+    const GiB = n => Math.round(n*1073741824);
+    // hist builds the history-bar series backupCard draws; each {h} hours ago,
+    // {add} GiB added, optionally warn/fail.
+    const hist = spec => spec.map(x => ({
+      ok: x.fail ? false : true, incomplete: !!x.warn,
+      finished: ago(x.h), exit_code: x.fail ? 1 : x.warn ? 3 : 0,
+      summary: { data_added: GiB(x.add) },
+    }));
+    return [
+      { host:"citadel", reachable:true, backups:[{
+        name:"citadel-root", repository:"rest:http://nas:8000/citadel", paths:["/"],
+        started:ago(6.1), finished:ago(6), exit_code:0, ok:true, incomplete:false, next_run:soon(18),
+        summary:{ total_bytes_processed:GiB(214), data_added:GiB(1.9) },
+        history:hist([{h:150,add:2.4},{h:126,add:1.6},{h:102,add:2.1},{h:78,add:1.3},{h:54,add:2.0},{h:30,add:1.7},{h:6,add:1.9}]),
+      }]},
+      { host:"nas", reachable:true, backups:[{
+        name:"nas-config", repository:"sftp:offsite:/hush/nas", paths:["/etc","/srv/config"],
+        started:ago(10.05), finished:ago(10), exit_code:0, ok:true, incomplete:false, next_run:soon(14),
+        summary:{ total_bytes_processed:GiB(38), data_added:GiB(0.3) },
+        history:hist([{h:154,add:0.5},{h:130,add:0.2},{h:106,add:0.4},{h:82,add:0.3},{h:58,add:0.2},{h:34,add:0.4},{h:10,add:0.3}]),
+      }]},
+      { host:"pi-gate", reachable:true, backups:[{
+        name:"pi-gate-etc", repository:"rest:http://nas:8000/pi-gate", paths:["/etc","/var/lib/adguardhome"],
+        started:ago(5.02), finished:ago(5), exit_code:0, ok:true, incomplete:false, next_run:soon(19),
+        summary:{ total_bytes_processed:GiB(2.1), data_added:GiB(0.08) },
+        history:hist([{h:149,add:0.12},{h:125,add:0.06},{h:101,add:0.09},{h:77,add:0.05},{h:53,add:0.11},{h:29,add:0.07},{h:5,add:0.08}]),
+      }]},
+      { host:"lab-01", reachable:true, backups:[{
+        name:"lab-01-home", repository:"rest:http://nas:8000/lab-01", paths:["/home","/srv/models"],
+        started:ago(8.2), finished:ago(8), exit_code:3, ok:false, incomplete:true, next_run:soon(16),
+        summary:{ total_bytes_processed:GiB(96), data_added:GiB(3.1) },
+        history:hist([{h:152,add:2.9},{h:128,add:3.4},{h:104,add:2.7},{h:80,add:3.0},{h:56,add:2.8},{h:32,add:3.2},{h:8,add:3.1,warn:true}]),
+      }]},
+      { host:"atlas", reachable:true, backups:[{
+        name:"atlas-media", repository:"rest:http://nas:8000/atlas", paths:["/var/lib/plex","/srv/media/config"],
+        started:ago(2.1), finished:ago(2), exit_code:1, ok:false, incomplete:false, next_run:soon(22),
+        summary:{ total_bytes_processed:GiB(0), data_added:GiB(0) },
+        history:hist([{h:146,add:1.1},{h:122,add:0.9},{h:98,add:1.3},{h:74,add:1.0},{h:50,add:1.2},{h:26,add:0.8},{h:2,add:0,fail:true}]),
+      }]},
+      { host:"forge", reachable:true, backups:[] },
     ];
   }
   function jitterDemo(){
