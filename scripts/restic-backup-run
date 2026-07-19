@@ -38,6 +38,10 @@ fi
 CONF_DIR="${RESTIC_CONF_DIR:-/etc/restic}"
 STATUS_DIR="${HUSH_BACKUP_STATUS_DIR:-/var/lib/hush-backups}"
 
+# Runs kept in <name>.history.jsonl. The console draws 14; the surplus is
+# headroom so a couple of manual runs don't push a fortnight off the strip.
+HISTORY_KEEP="${HUSH_BACKUP_HISTORY_KEEP:-30}"
+
 ENV_FILE="$CONF_DIR/$NAME.env"
 PATHS_FILE="$CONF_DIR/$NAME.paths"
 EXCLUDES_FILE="$CONF_DIR/$NAME.excludes"
@@ -97,6 +101,28 @@ summary="$(grep '"message_type":"summary"' "$output" | tail -n 1 || true)"
 [ -n "$summary" ] || summary=null
 
 if [ "$rc" -eq 0 ]; then ok=true; else ok=false; fi
+if [ "$rc" -eq 3 ]; then incomplete=true; else incomplete=false; fi
+finished="$(date -Is)"
+
+# paths_json renders the .paths file as a JSON array so the console can show
+# what a backup actually covers. Only two characters can break a JSON string in
+# a path — backslash and double quote — so only those are escaped. Comments and
+# blank lines are dropped, matching what --files-from itself ignores.
+#
+# These land in a world-readable file. They are not secrets, but they do
+# describe the box's layout to any local user; a box that considers its
+# directory names sensitive should tighten HUSH_BACKUP_STATUS_DIR.
+paths_json() {
+  _first=1
+  printf '['
+  while IFS= read -r _line || [ -n "$_line" ]; do
+    case "$_line" in '' | '#'*) continue ;; esac
+    _esc="$(printf '%s' "$_line" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+    if [ "$_first" -eq 1 ]; then _first=0; else printf ','; fi
+    printf '"%s"' "$_esc"
+  done <"$1"
+  printf ']'
+}
 
 # Deliberately does NOT embed restic's stderr: escaping arbitrary text into
 # JSON from shell is a good way to emit invalid JSON. Diagnostics live in the
@@ -106,15 +132,34 @@ cat >"$tmp_status" <<EOF
 {
   "name": "$NAME",
   "repository": "$(redact_repo "${RESTIC_REPOSITORY:-}")",
+  "paths": $(paths_json "$PATHS_FILE"),
   "started": "$started",
-  "finished": "$(date -Is)",
+  "finished": "$finished",
   "exit_code": $rc,
   "ok": $ok,
-  "incomplete": $([ "$rc" -eq 3 ] && echo true || echo false),
+  "incomplete": $incomplete,
   "summary": $summary
 }
 EOF
 chmod 0644 "$tmp_status"
 mv "$tmp_status" "$STATUS_DIR/$NAME.json"
+
+# One run per line, appended. A separate file rather than a history array
+# inside the status JSON, because appending a line needs no JSON parsing —
+# and parsing JSON in POSIX sh, with no jq or python to lean on, is exactly
+# how a status writer starts emitting malformed output.
+history_file="$STATUS_DIR/$NAME.history.jsonl"
+printf '{"finished":"%s","exit_code":%s,"ok":%s,"incomplete":%s,"summary":%s}\n' \
+  "$finished" "$rc" "$ok" "$incomplete" "$summary" >>"$history_file"
+
+# Bounded on every write. The console draws a two-week strip; keeping a little
+# more than that leaves headroom without letting the file grow forever on a box
+# nobody thinks to prune.
+if tail -n "$HISTORY_KEEP" "$history_file" >"$history_file.tmp" 2>/dev/null; then
+  mv "$history_file.tmp" "$history_file"
+else
+  rm -f "$history_file.tmp"
+fi
+chmod 0644 "$history_file"
 
 exit "$rc"

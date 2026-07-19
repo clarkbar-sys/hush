@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func writeStatus(t *testing.T, dir, name, body string) {
@@ -135,5 +136,123 @@ func TestHandleBackupStatusRejectsNonGET(t *testing.T) {
 
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want 405", rr.Code)
+	}
+}
+
+func TestReadHistoryReturnsOldestFirstAndCaps(t *testing.T) {
+	dir := t.TempDir()
+	writeStatus(t, dir, "many.json", `{"name":"many","ok":true}`)
+
+	var lines string
+	for i := 0; i < historyLimit+6; i++ {
+		lines += `{"finished":"2026-07-` + string(rune('0'+i%10)) + `","seq":` + string(rune('0'+i%10)) + `}` + "\n"
+	}
+	writeStatus(t, dir, "many.history.jsonl", lines)
+
+	got := readHistory(dir, "many")
+	if len(got) != historyLimit {
+		t.Fatalf("len = %d, want %d (capped)", len(got), historyLimit)
+	}
+}
+
+func TestReadHistorySkipsTruncatedLine(t *testing.T) {
+	dir := t.TempDir()
+	// A crash mid-append leaves a partial final line. It must cost that one
+	// entry, not the whole strip.
+	writeStatus(t, dir, "b.history.jsonl", "{\"ok\":true}\n{\"ok\":false}\n{\"ok\":tr")
+
+	got := readHistory(dir, "b")
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2 valid entries", len(got))
+	}
+}
+
+func TestReadHistoryMissingIsNil(t *testing.T) {
+	if got := readHistory(t.TempDir(), "absent"); got != nil {
+		t.Fatalf("got %v, want nil so the field is omitted", got)
+	}
+}
+
+func TestHistoryLogIsNotListedAsABackup(t *testing.T) {
+	dir := t.TempDir()
+	writeStatus(t, dir, "one.json", `{"name":"one","ok":true}`)
+	writeStatus(t, dir, "one.history.jsonl", `{"ok":true}`)
+
+	got, err := readConventionBackupStatuses(dir)
+	if err != nil {
+		t.Fatalf("readConventionBackupStatuses: %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "one" {
+		t.Fatalf("history log leaked in as a backup: %+v", got)
+	}
+	if len(got[0].History) != 1 {
+		t.Fatalf("history not attached: %+v", got[0])
+	}
+}
+
+func TestStatusCarriesPaths(t *testing.T) {
+	dir := t.TempDir()
+	writeStatus(t, dir, "p.json", `{"name":"p","ok":true,"paths":["/etc","/home/josh"]}`)
+
+	got, err := readConventionBackupStatuses(dir)
+	if err != nil {
+		t.Fatalf("readConventionBackupStatuses: %v", err)
+	}
+	if len(got[0].Paths) != 2 || got[0].Paths[0] != "/etc" {
+		t.Fatalf("paths lost: %+v", got[0].Paths)
+	}
+}
+
+func TestNextRunDegradesToEmpty(t *testing.T) {
+	// No such timer (and possibly no systemd at all, e.g. in CI containers or
+	// on a dev mac). Either way it must be an empty string, never a fabricated
+	// time and never a failure.
+	if got := nextRun("definitely-not-a-real-backup-name"); got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
+func TestParseNextElapseReadsRealSystemdOutput(t *testing.T) {
+	// Captured verbatim from `systemctl list-timers <unit> --no-pager
+	// --output=json` on systemd 257. The point of pinning real output is that
+	// `show --property=NextElapseUSecRealtime` looks like it should work and
+	// does not — it renders a formatted timestamp, not microseconds, so a
+	// numeric parse fails silently and the field stays empty on every box.
+	out := []byte(`[{"next":1784520003798018,"left":1784520003798018,"last":1784439292006193,"passed":3268279931,"unit":"logrotate.timer","activates":"logrotate.service"}]`)
+
+	got := parseNextElapse(out, "logrotate.timer")
+	if got == "" {
+		t.Fatal("got empty, want a parsed timestamp")
+	}
+	if want := time.UnixMicro(1784520003798018).Format(time.RFC3339); got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestParseNextElapseIgnoresOtherUnitsAndMonotonic(t *testing.T) {
+	out := []byte(`[{"next":1784520003798018,"unit":"someone-else.timer"},{"next":0,"unit":"restic-backup@a.timer"}]`)
+
+	if got := parseNextElapse(out, "restic-backup@b.timer"); got != "" {
+		t.Fatalf("matched the wrong unit: %q", got)
+	}
+	// next == 0 is a monotonic-only timer: no realtime fire to report.
+	if got := parseNextElapse(out, "restic-backup@a.timer"); got != "" {
+		t.Fatalf("zero next should be empty, got %q", got)
+	}
+}
+
+func TestParseNextElapseTolerantOfOldSystemd(t *testing.T) {
+	// A systemd too old for --output=json prints a table, not JSON.
+	if got := parseNextElapse([]byte("NEXT LEFT LAST PASSED UNIT\n"), "x.timer"); got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+	if got := parseNextElapse(nil, "x.timer"); got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
+
+func TestBackupTimerUnitNaming(t *testing.T) {
+	if got := backupTimerUnit("jaassh-nas"); got != "restic-backup@jaassh-nas.timer" {
+		t.Fatalf("got %q", got)
 	}
 }

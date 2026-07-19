@@ -609,6 +609,46 @@
   @media (prefers-reduced-motion: reduce) {
     *, ::before, ::after { animation-duration: .001ms !important; transition: none !important; }
   }
+  /* Backups (docs/BACKUP-CONVENTION.md). A backup is a direction, so the card
+     leads with source → target; everything else hangs off that. Prefixed bk-
+     so it can't collide with the Backup construct's own styles. */
+  .bk-cards { display:grid; gap:10px; }
+  @media (min-width: 760px){ .bk-cards { grid-template-columns:1fr 1fr; } }
+  .bk-card { background:var(--panel-2); border:1px solid var(--border-soft);
+    border-radius:10px; overflow:hidden; border-left:3px solid var(--good); }
+  .bk-card.warn { border-left-color:var(--warn); }
+  .bk-card.crit { border-left-color:var(--crit); }
+  .bk-hd { padding:11px 12px 9px; }
+  .bk-route { display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+    font-family:var(--mono); font-weight:700; font-size:14px; }
+  .bk-route .ar { color:var(--accent); font-weight:400; }
+  .bk-state { margin-left:auto; display:inline-flex; align-items:center; gap:5px;
+    font-family:var(--mono); font-size:10px; font-weight:600; padding:3px 8px;
+    border-radius:999px; white-space:nowrap; }
+  .bk-state .d { width:5px; height:5px; border-radius:50%; background:currentColor; }
+  .bk-state.good { color:var(--good); background:var(--good-soft); }
+  .bk-state.warn { color:var(--warn); background:var(--warn-soft); }
+  .bk-state.crit { color:var(--crit); background:var(--crit-soft); }
+  .bk-repo { font-family:var(--mono); font-size:10.5px; color:var(--muted);
+    margin-top:5px; overflow-wrap:anywhere; }
+  .bk-metrics { display:grid; grid-template-columns:repeat(2,1fr); gap:1px;
+    background:var(--border-soft); }
+  .bk-m { background:var(--panel-2); padding:8px 12px; }
+  .bk-mk { font-family:var(--mono); font-size:9px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--faint); }
+  .bk-mv { font-family:var(--mono); font-size:12.5px; font-weight:600;
+    font-variant-numeric:tabular-nums; }
+  .bk-hist { padding:9px 12px 11px; border-top:1px solid var(--border-soft); }
+  .bk-histk { font-family:var(--mono); font-size:9px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--faint); margin-bottom:6px; }
+  .bk-bars { display:flex; gap:2px; align-items:flex-end; height:22px; }
+  .bk-bar { flex:1; min-width:3px; border-radius:2px; background:var(--good); opacity:.8; }
+  .bk-bar.warn { background:var(--warn); }
+  .bk-bar.crit { background:var(--crit); }
+  .bk-paths { padding:0 12px 11px; display:flex; flex-wrap:wrap; gap:4px; }
+  .bk-path { font-family:var(--mono); font-size:10px; padding:2px 7px;
+    border-radius:5px; background:var(--panel); border:1px solid var(--border-soft);
+    color:var(--muted); }
 </style>
 </head>
 <body>
@@ -857,7 +897,8 @@
 
         <details class="rollup"${bkBad?" open":""}>
           <summary class="sec-title">Backups <span class="n">${bkAll.length}</span></summary>
-          <div class="wf-saved">${bkAll.length ? bkAll.map(x=>backupFleetRow(x.host, x.b)).join("")
+          <div class="wf-saved">${bkAll.length
+            ? `<div class="bk-cards">${bkAll.map(x=>backupCard(x.host, x.b)).join("")}</div>`
             : `<div class="empty">no scheduled backups reporting — see docs/BACKUP-CONVENTION.md</div>`}
             ${bkUnreachable.length ? `<div class="empty">couldn't reach ${esc(bkUnreachable.join(", "))} — backup state unknown</div>` : ""}</div>
         </details>
@@ -934,27 +975,66 @@
     return m ? m[1] : "";
   }
 
-  // One convention backup (docs/BACKUP-CONVENTION.md) as a fleet row. A backup
-  // is a direction, not a machine, so it reads "source → target".
+  // bkSeverity maps a run to one of three states — never two. restic exits 3
+  // when some source data could not be read, which leaves a real snapshot that
+  // is missing files. Folding that into either "complete" or "failed" would
+  // hide the outcome most likely to be mistaken for success.
+  function bkSeverity(b){ return b.ok ? "good" : (b.incomplete ? "warn" : "crit"); }
+
+  // One convention backup (docs/BACKUP-CONVENTION.md) as a card. A backup is a
+  // direction, not a machine, so it leads with "source → target".
   //
-  // Three states, not two: restic exits 3 when some source data could not be
-  // read, which leaves a real snapshot that is missing files. That is drawn as
-  // a warning rather than folded into either "complete" or "failed" — it is the
-  // outcome most likely to be mistaken for success.
-  function backupFleetRow(host, b){
-    const sev = b.ok ? "good" : (b.incomplete ? "warn" : "crit");
+  // Every field is drawn only when the box actually reported it. next run needs
+  // systemd, history needs past runs, paths need a runner new enough to record
+  // them — an older agent or a first run simply shows less, rather than the
+  // console inventing a plausible number.
+  function backupCard(host, b){
+    const sev = bkSeverity(b);
     const label = b.ok ? "complete"
-      : b.incomplete ? `incomplete · exit ${b.exit_code} · some files unreadable`
+      : b.incomplete ? `incomplete · exit ${b.exit_code}`
       : `failed · exit ${b.exit_code}`;
     const target = backupTarget(b.repository);
     const s = b.summary || {};
+
+    const metric = (k, v) => v
+      ? `<div class="bk-m"><div class="bk-mk">${k}</div><div class="bk-mv">${esc(v)}</div></div>` : "";
+    const last = relTimeISO(b.finished || b.started || "");
+    const next = b.next_run ? relTimeISO(b.next_run) : "";
+    const protectedSize = (typeof s.total_bytes_processed === "number") ? fmtBytes(s.total_bytes_processed) : "";
     const added = (typeof s.data_added === "number") ? fmtBytes(s.data_added) : "";
-    const when = relTimeISO(b.finished || b.started || "");
-    return `<div class="wf-item">
-      <div class="wf-meta">
-        <div class="wf-nm"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--${sev});margin-right:7px;vertical-align:middle"></span>${esc(host)}${target?` <span style="color:var(--accent)">→</span> ${esc(target)}`:""}</div>
-        <div class="wf-sub">${esc(label)}${when?` · ${esc(when)}`:""}${added?` · ${esc(added)} added`:""}</div>
+    const metrics = [metric("last run", last), metric("next run", next),
+                     metric("protected", protectedSize), metric("added", added)].join("");
+
+    // Bar heights are scaled against the largest run in the window, so the
+    // strip reads as relative volume. A failed run still gets a visible stub —
+    // a zero-height bar would read as "no run happened", which is a different
+    // and less alarming thing.
+    const hist = Array.isArray(b.history) ? b.history : [];
+    const peak = hist.reduce((m,h)=>Math.max(m, (h.summary&&h.summary.data_added)||0), 0);
+    const bars = hist.map(h=>{
+      const hv = (h.summary && h.summary.data_added) || 0;
+      const pct = peak > 0 ? Math.max(18, Math.round(hv/peak*100)) : 40;
+      const hs = h.ok ? "" : (h.incomplete ? " warn" : " crit");
+      return `<div class="bk-bar${hs}" style="height:${pct}%"></div>`;
+    }).join("");
+    const bad = hist.filter(h=>!h.ok).length;
+    const histBlock = hist.length ? `<div class="bk-hist">
+        <div class="bk-histk">last ${hist.length} run${hist.length>1?"s":""}${bad?` · ${bad} not complete`:""}</div>
+        <div class="bk-bars">${bars}</div>
+      </div>` : "";
+
+    const paths = Array.isArray(b.paths) && b.paths.length
+      ? `<div class="bk-paths">${b.paths.map(p=>`<span class="bk-path">${esc(p)}</span>`).join("")}</div>` : "";
+
+    return `<div class="bk-card${sev==="good"?"":" "+sev}">
+      <div class="bk-hd">
+        <div class="bk-route">${esc(host)}${target?` <span class="ar">→</span> ${esc(target)}`:""}
+          <span class="bk-state ${sev}"><span class="d"></span>${esc(label)}</span></div>
+        ${b.repository?`<div class="bk-repo">${esc(b.repository)}</div>`:""}
       </div>
+      <div class="bk-metrics">${metrics}</div>
+      ${histBlock}
+      ${paths}
     </div>`;
   }
 
