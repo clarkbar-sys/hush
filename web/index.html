@@ -126,11 +126,18 @@
     text-transform: uppercase; color: var(--faint); }
   .h-title { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin: 2px 0 0; }
 
-  .summ { display:flex; flex-wrap: wrap; gap: 8px 14px; }
-  .summ .s { display:flex; align-items:center; gap:6px; font-family:var(--mono);
-    font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .summ-wrap > summary.summ { cursor:pointer; list-style:none; gap:10px; }
+  .summ-wrap > summary.summ::-webkit-details-marker { display:none; }
+  .summ-wrap > summary.summ::after { content:"▸"; color:var(--faint); font-size:9px;
+    margin-left:2px; transition: transform .15s; }
+  .summ-wrap[open] > summary.summ::after { transform: rotate(90deg); }
+  .summ .s, .summ-legend .s { display:flex; align-items:center; gap:6px; font-family:var(--mono);
+    color: var(--muted); white-space: nowrap; }
+  .summ .s { font-size: 12px; }
   .summ .s b { color: var(--text); }
-  .swatch { width:8px; height:8px; border-radius:50%; }
+  .swatch { width:8px; height:8px; border-radius:50%; flex:none; }
+  .summ-legend { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:8px; padding-left:2px; }
+  .summ-legend .s { font-size: 11px; color: var(--faint); }
 
   main { padding: 4px 16px 96px; }
 
@@ -801,7 +808,7 @@
   const cpuHist = {};              // id -> rolling cpu samples (live mode)
   const netRxHist = {};            // id -> rolling inbound bytes/sec samples (live mode)
   const netTxHist = {};            // id -> rolling outbound bytes/sec samples (live mode)
-  const state = { view:"fleet", mid:null, cname:null, browsePath:null };
+  const state = { view:"fleet", mid:null, cname:null, browsePath:null, summLegendOpen:false };
   const byId = id => M.find(m=>m.id===id);
   let PENDING = [];                // machines just added via the UI, awaiting first check-in
   const RUNS = {};                 // machine id -> recent Task runs this session (ephemeral)
@@ -922,13 +929,22 @@
         <div style="flex:1">
           <div class="h-title">Fleet</div>
         </div>
-        <div class="summ">
-          <span class="s"><span class="swatch" style="background:var(--good)"></span><b>${nProt}</b> protected</span>
-          ${nRun?`<span class="s"><span class="swatch" style="background:var(--accent)"></span><b>${nRun}</b> backing up</span>`:""}
-          <span class="s"><span class="swatch" style="background:var(--warn)"></span><b>${nRisk}</b> at risk</span>
-          <span class="s"><span class="swatch" style="background:var(--faint)"></span><b>${nNone}</b> unprotected</span>
-          <span class="s"><span class="swatch" style="background:var(--crit)"></span><b>${nFail}</b> failed</span>
-        </div>
+        <details class="summ-wrap"${state.summLegendOpen?" open":""}>
+          <summary class="chip summ">
+            <span class="s"><span class="swatch" style="background:var(--good)"></span><b>${nProt}</b></span>
+            ${nRun?`<span class="s"><span class="swatch" style="background:var(--accent)"></span><b>${nRun}</b></span>`:""}
+            <span class="s"><span class="swatch" style="background:var(--warn)"></span><b>${nRisk}</b></span>
+            <span class="s"><span class="swatch" style="background:var(--faint)"></span><b>${nNone}</b></span>
+            <span class="s"><span class="swatch" style="background:var(--crit)"></span><b>${nFail}</b></span>
+          </summary>
+          <div class="summ-legend">
+            <span class="s"><span class="swatch" style="background:var(--good)"></span>protected</span>
+            ${nRun?`<span class="s"><span class="swatch" style="background:var(--accent)"></span>backing up</span>`:""}
+            <span class="s"><span class="swatch" style="background:var(--warn)"></span>at risk</span>
+            <span class="s"><span class="swatch" style="background:var(--faint)"></span>unprotected</span>
+            <span class="s"><span class="swatch" style="background:var(--crit)"></span>failed</span>
+          </div>
+        </details>
       </div>
       <main>
         <div class="grid">
@@ -960,6 +976,10 @@
             ${bkUnreachable.length ? `<div class="empty">couldn't reach ${esc(bkUnreachable.join(", "))} — backup state unknown</div>` : ""}</div>
         </details>
       </main>`;
+    // Legend toggle state is re-applied via state.summLegendOpen above — without
+    // this, the next 2.5s poll's re-render would snap it shut on the user.
+    const summEl = app.querySelector("details.summ-wrap");
+    if(summEl) summEl.addEventListener("toggle", ()=>{ state.summLegendOpen = summEl.open; });
     app.querySelectorAll(".node[data-id]").forEach(el=>{
       el.addEventListener("click", ()=>enterMachine(el.dataset.id));
     });
