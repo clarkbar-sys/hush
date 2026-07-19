@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.0](https://github.com/clarkbar-sys/hush/compare/v1.27.0...v1.28.0) (2026-07-19)
+
+
+### Features
+
+* **backups:** show a run in progress, distinct from unprotected ([#146](https://github.com/clarkbar-sys/hush/issues/146)) ([1bcf291](https://github.com/clarkbar-sys/hush/commit/1bcf291609c770af9264c79bdf8aad71a17526a3))
+
 ## [1.27.0](https://github.com/clarkbar-sys/hush/compare/v1.26.1...v1.27.0) (2026-07-19)
 
 
