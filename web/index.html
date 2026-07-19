@@ -2902,7 +2902,54 @@
      answers 403, surfaced as "backups disabled". */
   const backupScrim = $("#backupScrim");
   const backupBody = $("#backupSheetBody");
-  let backupDraft = { id:null, name:"", repo:"", password:"", paths:"", excludes:"", oneFileSystem:false, schedule:"" };
+
+  // BACKUP_FREQ maps a plain-English cadence to the cron spec the agent runs
+  // on. Time Machine never asks anyone for a crontab, so neither do we —
+  // "Custom…" is the escape hatch for the one operator who wants one.
+  const BACKUP_FREQ = {
+    hourly: { label:"Every hour",              cron:"0 * * * *" },
+    daily:  { label:"Every day, 3am",          cron:"0 3 * * *" },
+    weekly: { label:"Every week (Sun, 3am)",   cron:"0 3 * * 0" },
+    manual: { label:"Manual only",             cron:"" },
+    custom: { label:"Custom…",                 cron:null },
+  };
+
+  // genBackupPassword mints a random repo key so nobody has to invent one —
+  // the same "just turn it on" move Time Machine makes with FileVault. 192
+  // bits of entropy, base64url so it's easy to select and copy.
+  function genBackupPassword(){
+    const b = new Uint8Array(24);
+    crypto.getRandomValues(b);
+    let s = ""; for(const x of b) s += String.fromCharCode(x);
+    return btoa(s).replace(/[+/=]/g, c => ({"+":"-","/":"_","=":""}[c]));
+  }
+
+  // vaultsFor lists the fleet's detected backup vaults a machine could send to,
+  // the console's stand-in for Time Machine's "choose a disk" list.
+  function vaultsFor(machineId){
+    return M.filter(x=>x.backup&&x.backup.vault&&x.ip&&x.id!==machineId);
+  }
+
+  function freshBackupDraft(id){
+    return {
+      id, name:"", paths:"", excludes:"",
+      dest:"", repo:"", password: genBackupPassword(), passReveal:false,
+      whole:true, oneFileSystem:true, advOpen:false,
+      freq:"daily", schedule: BACKUP_FREQ.daily.cron,
+    };
+  }
+
+  // computeBackupRepo derives the repo URL from the chosen vault + backup name
+  // (rest:http://<vault-ip>:8000/<name>, one sub-repo per source machine so
+  // they don't collide) — a no-op when the operator picked "Custom repository".
+  function computeBackupRepo(){
+    if(!backupDraft || backupDraft.dest === "custom") return;
+    const ip = backupDraft.dest.slice("vault:".length);
+    const sub = (backupDraft.name||backupDraft.id||"repo").trim().replace(/[^a-zA-Z0-9._-]/g,"-");
+    backupDraft.repo = `rest:http://${ip}:8000/${sub}`;
+  }
+
+  let backupDraft = null;
 
   // loadBackups pulls one box's backups into the BACKUPS cache and re-renders if
   // we're still looking at it. A 403 means the agent has backups disabled;
@@ -2930,11 +2977,17 @@
   function openBackupSheet(preId){
     const online = M.filter(m=>m.online);
     if(preId && BACKUPS_OFF.has(preId)){ toast("backups are disabled on that box — start its agent with -backup"); return; }
-    backupDraft = { id: preId || (online[0] && online[0].id) || null, name:"", repo:"", password:"", paths:"", excludes:"", oneFileSystem:false, schedule:"" };
+    backupDraft = freshBackupDraft(preId || (online[0] && online[0].id) || null);
     renderBackupSheet();
     backupScrim.classList.add("open");
   }
 
+  // renderBackupSheet draws the Time-Machine-style flow: pick a machine, pick a
+  // destination (a detected vault, pre-filled — or a raw repository for anyone
+  // who has one already), an auto-generated key, and a plain-English cadence.
+  // "Whole machine" is the default, same as Time Machine backing up everything
+  // on the disk; choosing specific folders is one tap away, not the starting
+  // point. Naming and a custom repository URL live under Advanced.
   function renderBackupSheet(){
     const online = M.filter(m=>m.online);
     if(!online.length){
@@ -2945,34 +2998,63 @@
       $("#bClose").addEventListener("click", closeBackupSheet);
       return;
     }
-    if(!online.some(m=>m.id===backupDraft.id)) backupDraft.id = online[0].id;
-    const opts = online.map(m=>`<option value="${esc(m.id)}"${m.id===backupDraft.id?" selected":""}>${esc(m.id)}${m.os?` · ${esc(m.os)}`:""}</option>`).join("");
+    if(!backupDraft || !online.some(m=>m.id===backupDraft.id)) backupDraft = freshBackupDraft(online[0].id);
+    if(!backupDraft.name) backupDraft.name = `${backupDraft.id}-backup`;
+    const vaults = vaultsFor(backupDraft.id);
+    if(!backupDraft.dest) backupDraft.dest = vaults.length ? `vault:${vaults[0].ip}` : "custom";
+    if(backupDraft.dest !== "custom" && !vaults.some(v=>`vault:${v.ip}`===backupDraft.dest)){
+      backupDraft.dest = vaults.length ? `vault:${vaults[0].ip}` : "custom";
+    }
+    computeBackupRepo();
+
+    const mOpts = online.map(m=>`<option value="${esc(m.id)}"${m.id===backupDraft.id?" selected":""}>${esc(m.id)}${m.os?` · ${esc(m.os)}`:""}</option>`).join("");
+    const destOpts = vaults.map(v=>`<option value="vault:${esc(v.ip)}"${backupDraft.dest===`vault:${v.ip}`?" selected":""}>${esc(v.id)} (vault)</option>`)
+      .concat(`<option value="custom"${backupDraft.dest==="custom"?" selected":""}>Custom repository…</option>`).join("");
+    const freqOpts = Object.entries(BACKUP_FREQ).map(([k,f])=>`<option value="${k}"${backupDraft.freq===k?" selected":""}>${esc(f.label)}</option>`).join("");
+
     backupBody.innerHTML = `
       <h3>Configure a backup</h3>
-      <p class="sd">restic snapshots — dedup'd and encrypted — of the paths you name</p>
+      <p class="sd">pick a machine and a destination — restic snapshots it, encrypted and dedup'd, on the schedule you set</p>
       <div class="field">
         <label>Machine</label>
-        <select id="bMachine">${opts}</select>
+        <select id="bMachine">${mOpts}</select>
       </div>
       <div class="field">
-        <label>Name</label>
-        <input type="text" id="bName" placeholder="e.g. debian-root" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(backupDraft.name)}">
+        <label>Back up to</label>
+        ${vaults.length ? `<select id="bDest">${destOpts}</select>`
+          : `<div class="hint">no vault detected on your fleet yet — enter a repository below, or <a id="bSetupVault" style="cursor:pointer;color:var(--accent)">set one up</a></div>`}
       </div>
+      ${backupDraft.dest === "custom" ? `
       <div class="field">
         <label>Repository</label>
         <input type="text" id="bRepo" placeholder="e.g. rest:http://nas:8000/homelab" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(backupDraft.repo)}">
         <div class="hint">a restic backend — a <b>rest-server</b> URL, an <b>sftp:</b> target, or a local path</div>
-        ${(()=>{ const vaults = M.filter(x=>x.backup&&x.backup.vault&&x.ip&&x.id!==backupDraft.id);
-          return vaults.length ? `<div class="hint" style="margin-top:5px">vaults on your fleet: ${vaults.map(v=>`<a data-vault="${esc(v.ip)}" style="cursor:pointer;color:var(--accent)">${esc(v.id)}</a>`).join(" · ")}</div>` : ""; })()}
+      </div>` : `
+      <div class="hint" style="margin:-9px 0 14px 2px">→ <span class="mono" id="bRepoPreview">${esc(backupDraft.repo)}</span></div>`}
+      <div class="field">
+        <label>Encryption key</label>
+        <div style="display:flex;gap:6px">
+          <input type="${backupDraft.passReveal?"text":"password"}" id="bPass" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(backupDraft.password)}" style="flex:1">
+          <button type="button" class="btn ghost" id="bPassEye" title="${backupDraft.passReveal?"Hide":"Show"}" style="padding:0 12px">${backupDraft.passReveal?"hide":"show"}</button>
+          <button type="button" class="btn ghost" id="bPassCopy" title="Copy" style="padding:0 12px">copy</button>
+        </div>
+        <div class="hint">auto-generated, stored on <b>${esc(backupDraft.id)}</b> only — the console never sees it. <b>Save a copy</b>: it's the only key that unlocks this backup.</div>
       </div>
       <div class="field">
-        <label>Repository password</label>
-        <input type="password" id="bPass" placeholder="the repo's encryption key" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(backupDraft.password)}">
-        <div class="hint">stored on <b>${esc(backupDraft.id)}</b> only — it never passes through the console</div>
+        <label>Frequency</label>
+        <select id="bFreq">${freqOpts}</select>
+        ${backupDraft.freq==="custom" ? `
+        <input type="text" id="bSched" style="margin-top:8px" placeholder="e.g. 0 3 * * *  (or @daily)" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(backupDraft.schedule)}">
+        <div class="hint">5-field cron, or a macro like <b>@daily</b></div>` : ``}
       </div>
+      <label class="field" style="flex-direction:row;align-items:center;gap:.5rem;cursor:pointer">
+        <input type="checkbox" id="bWhole" style="width:auto"${backupDraft.whole?" checked":""}>
+        <span>Back up the whole machine <span style="opacity:.6">(everything under /, not crossing mount points)</span></span>
+      </label>
+      ${!backupDraft.whole ? `
       <div class="field">
         <label>Paths</label>
-        <textarea id="bPaths" rows="3" placeholder="/&#10;/etc&#10;/home/josh" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(backupDraft.paths)}</textarea>
+        <textarea id="bPaths" rows="3" placeholder="/etc&#10;/home/josh" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(backupDraft.paths)}</textarea>
         <div class="hint" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
           <span>one absolute path per line</span>
           <button type="button" class="btn ghost" id="bPick" style="padding:3px 9px">▦ Pick from disk usage</button>
@@ -2985,38 +3067,63 @@
       </div>
       <label class="field" style="flex-direction:row;align-items:center;gap:.5rem;cursor:pointer">
         <input type="checkbox" id="bOFS" style="width:auto"${backupDraft.oneFileSystem?" checked":""}>
-        <span>Whole machine (<b>--one-file-system</b>, don't cross mount points)</span>
-      </label>
-      <div class="field">
-        <label>Schedule <span style="opacity:.6">(optional)</span></label>
-        <input type="text" id="bSched" placeholder="e.g. 0 3 * * *  (or @daily) — leave blank for manual" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(backupDraft.schedule)}">
-        <div class="hint">5-field cron, or a macro like <b>@daily</b> — fires unattended on the box</div>
-      </div>
+        <span>Don't cross mount points (<b>--one-file-system</b>)</span>
+      </label>` : ``}
+      <details class="rollup"${backupDraft.advOpen?" open":""}>
+        <summary class="sec-title">Advanced</summary>
+        <div class="field" style="margin-top:8px">
+          <label>Name</label>
+          <input type="text" id="bName" placeholder="e.g. debian-root" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(backupDraft.name)}">
+        </div>
+      </details>
       <div class="field-note">
-        <b>Heads up —</b> creating this initialises the repo and verifies the password against it, so a bad address or key fails now, not at 3am.
+        <b>Heads up —</b> creating this initialises the repo and verifies the key against it, so a bad address or key fails now, not at 3am.
       </div>
       <div class="sheet-actions">
         <button class="btn ghost" id="bCancel">Cancel</button>
         <button class="btn primary" id="bSave">⭯ Create</button>
       </div>`;
-    $("#bMachine").addEventListener("change", e=>{ backupDraft.id = e.target.value; renderBackupSheet(); });
-    $("#bName").addEventListener("input", e=>{ backupDraft.name = e.target.value; });
-    $("#bRepo").addEventListener("input", e=>{ backupDraft.repo = e.target.value; });
-    $("#bPass").addEventListener("input", e=>{ backupDraft.password = e.target.value; });
-    $("#bPaths").addEventListener("input", e=>{ backupDraft.paths = e.target.value; });
-    $("#bEx").addEventListener("input", e=>{ backupDraft.excludes = e.target.value; });
-    $("#bOFS").addEventListener("change", e=>{ backupDraft.oneFileSystem = e.target.checked; });
-    $("#bSched").addEventListener("input", e=>{ backupDraft.schedule = e.target.value; });
-    backupBody.querySelectorAll("[data-vault]").forEach(el=>{
-      // Tapping a vault fills the repo URL: rest://<vault-ip>:8000/<this backup>,
-      // using the source box's name as the sub-repo so machines don't collide.
-      el.addEventListener("click", ()=>{
-        const sub = (backupDraft.name||backupDraft.id||"repo").trim().replace(/[^a-zA-Z0-9._-]/g,"-");
-        backupDraft.repo = `rest:http://${el.dataset.vault}:8000/${sub}`;
-        const ri = $("#bRepo"); if(ri) ri.value = backupDraft.repo;
-      });
+
+    $("#bMachine").addEventListener("change", e=>{
+      const oldId = backupDraft.id, newId = e.target.value;
+      if(backupDraft.name === `${oldId}-backup`) backupDraft.name = `${newId}-backup`;
+      backupDraft.id = newId;
+      backupDraft.dest = "";
+      renderBackupSheet();
     });
-    $("#bPick").addEventListener("click", ()=>{
+    const destSel = $("#bDest");
+    if(destSel) destSel.addEventListener("change", e=>{ backupDraft.dest = e.target.value; renderBackupSheet(); });
+    const setupLink = $("#bSetupVault");
+    if(setupLink) setupLink.addEventListener("click", ()=>{ const m = byId(backupDraft.id); if(m) openBackupSetupSheet(m); });
+    const repoInput = $("#bRepo");
+    if(repoInput) repoInput.addEventListener("input", e=>{ backupDraft.repo = e.target.value; });
+    $("#bPass").addEventListener("input", e=>{ backupDraft.password = e.target.value; });
+    $("#bPassEye").addEventListener("click", ()=>{ backupDraft.passReveal = !backupDraft.passReveal; renderBackupSheet(); });
+    $("#bPassCopy").addEventListener("click", async ()=>{
+      try { await navigator.clipboard.writeText(backupDraft.password); toast("copied — keep it somewhere safe"); }
+      catch(e){ toast("couldn't copy"); }
+    });
+    $("#bFreq").addEventListener("change", e=>{
+      backupDraft.freq = e.target.value;
+      const f = BACKUP_FREQ[backupDraft.freq];
+      if(f.cron !== null) backupDraft.schedule = f.cron;
+      renderBackupSheet();
+    });
+    const schedInput = $("#bSched");
+    if(schedInput) schedInput.addEventListener("input", e=>{ backupDraft.schedule = e.target.value; });
+    $("#bWhole").addEventListener("change", e=>{
+      backupDraft.whole = e.target.checked;
+      backupDraft.oneFileSystem = backupDraft.whole;
+      renderBackupSheet();
+    });
+    const pathsTa = $("#bPaths");
+    if(pathsTa) pathsTa.addEventListener("input", e=>{ backupDraft.paths = e.target.value; });
+    const exTa = $("#bEx");
+    if(exTa) exTa.addEventListener("input", e=>{ backupDraft.excludes = e.target.value; });
+    const ofsBox = $("#bOFS");
+    if(ofsBox) ofsBox.addEventListener("change", e=>{ backupDraft.oneFileSystem = e.target.checked; });
+    const pickBtn = $("#bPick");
+    if(pickBtn) pickBtn.addEventListener("click", ()=>{
       if(!backupDraft.id){ toast("pick a machine first"); return; }
       // Reuse the disk-usage treemap as a path picker: the current paths seed the
       // selection, and Add writes the chosen absolute paths back into the field.
@@ -3025,9 +3132,17 @@
         const ta = $("#bPaths"); if(ta) ta.value = backupDraft.paths;
       }});
     });
+    $("#bName").addEventListener("input", e=>{
+      backupDraft.name = e.target.value;
+      if(backupDraft.dest !== "custom"){
+        computeBackupRepo();
+        const prev = $("#bRepoPreview"); if(prev) prev.textContent = backupDraft.repo;
+      }
+    });
+    const advEl = backupBody.querySelector("details.rollup");
+    if(advEl) advEl.addEventListener("toggle", ()=>{ backupDraft.advOpen = advEl.open; });
     $("#bCancel").addEventListener("click", closeBackupSheet);
     $("#bSave").addEventListener("click", createBackup);
-    $("#bName").focus();
   }
 
   // lines splits a textarea into trimmed, non-empty lines — the shape the paths
@@ -3036,26 +3151,26 @@
 
   async function createBackup(){
     const id = backupDraft.id;
-    const name = (backupDraft.name||"").trim();
+    const name = (backupDraft.name||"").trim() || `${id}-backup`;
     const repo = (backupDraft.repo||"").trim();
     const password = backupDraft.password||"";
-    const paths = lines(backupDraft.paths);
-    const excludes = lines(backupDraft.excludes);
-    const schedule = (backupDraft.schedule||"").trim();
+    const paths = backupDraft.whole ? ["/"] : lines(backupDraft.paths);
+    const excludes = backupDraft.whole ? [] : lines(backupDraft.excludes);
+    const oneFileSystem = !!backupDraft.oneFileSystem;
+    const schedule = (backupDraft.freq === "custom" ? (backupDraft.schedule||"") : (BACKUP_FREQ[backupDraft.freq]||{}).cron||"").trim();
     if(!id) return;
-    if(!name){ $("#bName").focus(); toast("give the backup a name"); return; }
-    if(!repo){ $("#bRepo").focus(); toast("add a repository"); return; }
-    if(!password){ $("#bPass").focus(); toast("add the repository password"); return; }
-    if(!paths.length){ $("#bPaths").focus(); toast("add at least one path"); return; }
+    if(!repo){ const ri=$("#bRepo"); if(ri) ri.focus(); toast("add a repository"); return; }
+    if(!password){ $("#bPass").focus(); toast("add an encryption key"); return; }
+    if(!paths.length){ toast("add at least one path"); return; }
     if(MODE === "demo"){
-      const m = byId(id); if(m){ (m.backups = m.backups || []).push({ id:"bk-"+Math.random().toString(36).slice(2,8), name, repo, paths, oneFileSystem:backupDraft.oneFileSystem, schedule, status:{} }); }
+      const m = byId(id); if(m){ (m.backups = m.backups || []).push({ id:"bk-"+Math.random().toString(36).slice(2,8), name, repo, paths, oneFileSystem, schedule, status:{} }); }
       closeBackupSheet(); render(); toast("configured (demo)"); return;
     }
     const btn = $("#bSave"); btn.disabled = true; btn.textContent = "Creating…";
     try {
       const r = await fetch(`api/machines/${encodeURIComponent(id)}/backups`, {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ name, repo, password, paths, excludes, oneFileSystem:backupDraft.oneFileSystem, schedule }) });
+        body: JSON.stringify({ name, repo, password, paths, excludes, oneFileSystem, schedule }) });
       if(r.status === 403){ BACKUPS_OFF.add(id); throw new Error("backups are disabled on that box — start its agent with -backup"); }
       if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
       await loadBackups(id);
