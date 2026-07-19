@@ -117,8 +117,30 @@ It cannot be the tool for a whole-box backup, for two reasons:
 This convention exists for that case: the backup runs with the privilege it
 actually needs, and hush stays a reader.
 
+## How hush reads it
+
+`hush-agent` serves this box's status files as a JSON array on
+**`GET /backup-status`**. It is ungated — unlike `/backups` it neither runs
+restic nor exposes a secret, so a box reports its backups without also having to
+grant the agent the power to make new ones. Point it elsewhere with
+`-backup-status-dir`.
+
+`hush-control` aggregates every agent's into **`GET /api/backup-status`**, one
+entry per machine, each marked `reachable` so a box that cannot be asked is
+*named* rather than quietly dropped. An agent too old to know the endpoint reads
+as reachable with no backups, so a partial rollout doesn't draw healthy machines
+as broken.
+
+The console shows them in a **Backups** rollup on the fleet view, which opens
+itself when something is wrong. Each row reads `source → target`, the target
+being pulled from the redacted repository URL.
+
+Statuses ride through both hops as raw JSON, so neither hush-control nor the
+console needs to know restic's schema — a new field in the status file reaches
+the screen without a Go change.
+
 ## Not yet implemented
 
-`hush-agent` does not read `/var/lib/hush-backups/` yet — this change ships the
-convention and the installer only. Discovery, the `/backups` surface, and the
-fleet view are the next slice.
+Retention. Append-only repositories cannot be pruned by the client that writes
+them, so a repo grows until someone prunes it server-side. Nothing here reports
+repository size or snapshot count over time.

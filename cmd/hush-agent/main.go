@@ -53,6 +53,7 @@ func main() {
 	allowBackup := flag.Bool("backup", false, "serve /backups, the Backup construct's restic backups (off by default; -backup enables). Reads the paths you name and needs the restic binary")
 	runAsFlag := flag.String("run-as", "", "comma-separated OS users a Task may run as via `sudo -u` (e.g. media,deploy). Empty = off. Needs a matching sudoers grant; never list root or a sudo-capable user")
 	stateDir := flag.String("state-dir", "", "directory for persisted state such as jobs.json and backups.json (default: $STATE_DIRECTORY from systemd, else /var/lib/hush)")
+	backupStatusDir := flag.String("backup-status-dir", defaultBackupStatusDir, "directory of status files written by root-run convention backups (see docs/BACKUP-CONVENTION.md). Read-only; served on /backup-status")
 	flag.Parse()
 
 	// Exec is on by default; a box can opt out with -exec=false or, so the
@@ -202,6 +203,10 @@ func main() {
 	mux.HandleFunc("/browse", handleBrowse)
 	mux.HandleFunc("/du", handleDu)
 	mux.HandleFunc("/file", handleFile)
+	// Ungated on purpose — unlike /backups it neither runs restic nor exposes a
+	// secret, it just reads status files a root-run backup left behind. See
+	// backupstatus.go.
+	mux.HandleFunc("/backup-status", handleConventionBackupStatus(*backupStatusDir))
 	// /exec is always routed so a box that opted out returns a clear "disabled"
 	// rather than a bare 404 (which would be indistinguishable from an old agent).
 	execHandle := execHandler(runAs)

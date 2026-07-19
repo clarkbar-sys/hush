@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>hush — backups</title>
+<style>
+  /* Tokens lifted from fleet-console.html so the two mockups stay one system. */
+  :root {
+    --ground: #eef2f2;
+    --panel: #ffffff;
+    --panel-2: #f6f9f9;
+    --border: #d6e0e0;
+    --border-soft: #e4ebeb;
+    --text: #17242a;
+    --muted: #5d7178;
+    --faint: #90a4aa;
+    --accent: #0d9488;
+    --accent-soft: #d4f0ec;
+    --good: #2f9e52;
+    --good-soft: #d8efdf;
+    --warn: #b7791f;
+    --warn-soft: #f5e8cd;
+    --crit: #c8443c;
+    --crit-soft: #f5dad7;
+    --shadow: 0 1px 2px rgba(20,40,45,.06), 0 8px 24px rgba(20,40,45,.06);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --r: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0c1214; --panel: #131c1f; --panel-2: #182327;
+      --border: #26343a; --border-soft: #1e2c31;
+      --text: #dde7e9; --muted: #869aa1; --faint: #5e7178;
+      --accent: #2dd4bf; --accent-soft: #123632;
+      --good: #56c26a; --good-soft: #12301c;
+      --warn: #e0a94b; --warn-soft: #322611;
+      --crit: #e5675e; --crit-soft: #371815;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #eef2f2; --panel: #ffffff; --panel-2: #f6f9f9;
+    --border: #d6e0e0; --border-soft: #e4ebeb;
+    --text: #17242a; --muted: #5d7178; --faint: #90a4aa;
+    --accent: #0d9488; --accent-soft: #d4f0ec;
+    --good: #2f9e52; --good-soft: #d8efdf;
+    --warn: #b7791f; --warn-soft: #f5e8cd;
+    --crit: #c8443c; --crit-soft: #f5dad7;
+    --shadow: 0 1px 2px rgba(20,40,45,.06), 0 8px 24px rgba(20,40,45,.06);
+  }
+  :root[data-theme="dark"] {
+    --ground: #0c1214; --panel: #131c1f; --panel-2: #182327;
+    --border: #26343a; --border-soft: #1e2c31;
+    --text: #dde7e9; --muted: #869aa1; --faint: #5e7178;
+    --accent: #2dd4bf; --accent-soft: #123632;
+    --good: #56c26a; --good-soft: #12301c;
+    --warn: #e0a94b; --warn-soft: #322611;
+    --crit: #e5675e; --crit-soft: #371815;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--text);
+    font-family: var(--sans); line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 18px 16px 56px; }
+
+  header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .mark { font-family: var(--mono); font-weight: 700; font-size: 17px; letter-spacing: -.02em; }
+  .mark .dot { color: var(--accent); }
+  .crumb { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .chip {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--warn-soft); color: var(--warn); background: var(--panel);
+  }
+  .chip .d { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  .lede { color: var(--muted); font-size: 13.5px; margin: 10px 0 18px; max-width: 62ch; }
+
+  /* Summary strip — the answer before the detail. */
+  .summary {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px;
+    background: var(--border-soft); border: 1px solid var(--border);
+    border-radius: var(--r); overflow: hidden; margin-bottom: 20px;
+  }
+  .summary .cell { background: var(--panel); padding: 13px 14px; }
+  .summary .k {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--faint); margin-bottom: 4px;
+  }
+  .summary .v { font-family: var(--mono); font-size: 19px; font-weight: 700; letter-spacing: -.02em; }
+  .summary .v.ok { color: var(--good); }
+  .summary .sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+
+  .grid { display: grid; gap: 16px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden;
+  }
+  .card.ok { border-left: 3px solid var(--good); }
+
+  .chd { padding: 15px 16px 13px; border-bottom: 1px solid var(--border-soft); }
+  .route { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .host { font-family: var(--mono); font-weight: 700; font-size: 16px; letter-spacing: -.02em; }
+  .arrow { color: var(--accent); font-family: var(--mono); font-size: 15px; }
+  .pill {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    padding: 5px 11px; border-radius: 999px;
+    color: var(--good); background: var(--good-soft);
+  }
+  .pill .d { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .sub code { font-family: var(--mono); font-size: 11.5px; color: var(--text); }
+
+  .metrics {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 1px; background: var(--border-soft);
+  }
+  .m { background: var(--panel); padding: 12px 14px; }
+  .mk {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--faint); margin-bottom: 3px;
+  }
+  .mv { font-family: var(--mono); font-size: 14px; font-weight: 600; }
+  .mv .unit { font-weight: 400; color: var(--muted); font-size: 12px; }
+
+  /* 14-day history: state as form, not just number. */
+  .hist { padding: 13px 14px 14px; border-top: 1px solid var(--border-soft); background: var(--panel-2); }
+  .hist .hk {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--faint); margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .hist .hk .legend { margin-left: auto; text-transform: none; letter-spacing: 0; color: var(--muted); }
+  .bars { display: flex; gap: 3px; align-items: flex-end; height: 30px; }
+  .bar { flex: 1; border-radius: 2px; min-width: 4px; background: var(--good); opacity: .82; }
+  .bar.warn { background: var(--warn); }
+  .bar.none { background: var(--border); }
+
+  .foot { padding: 12px 14px 14px; border-top: 1px solid var(--border-soft); }
+  .fk {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--faint); margin-bottom: 6px;
+  }
+  .paths { display: flex; flex-wrap: wrap; gap: 5px; }
+  .path {
+    font-family: var(--mono); font-size: 11px; padding: 3px 8px;
+    border-radius: 6px; background: var(--panel-2);
+    border: 1px solid var(--border-soft); color: var(--muted);
+  }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+    padding: 3px 9px; border-radius: 999px;
+    color: var(--accent); background: var(--accent-soft);
+  }
+
+  .note {
+    margin-top: 22px; padding: 13px 15px; border-radius: var(--r);
+    border: 1px dashed var(--border); color: var(--muted);
+    font-size: 12.5px; background: var(--panel);
+  }
+  .note strong { color: var(--text); }
+
+  @media (min-width: 820px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+    .summary { grid-template-columns: repeat(4, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="mark">hush<span class="dot">.</span></span>
+    <span class="crumb">/ backups</span>
+    <span class="chip"><span class="d"></span>mockup</span>
+  </header>
+
+  <p class="lede">
+    Every backup on the tailnet, both directions. hush reads each box's status file —
+    it never holds a repository key and never runs the backup itself.
+  </p>
+
+  <section class="summary">
+    <div class="cell">
+      <div class="k">protected</div>
+      <div class="v">2</div>
+      <div class="sub">machines, both directions</div>
+    </div>
+    <div class="cell">
+      <div class="k">last 24h</div>
+      <div class="v ok">2 / 2</div>
+      <div class="sub">complete, no failures</div>
+    </div>
+    <div class="cell">
+      <div class="k">stored</div>
+      <div class="v">424<span style="font-weight:400;color:var(--muted);font-size:13px"> GB</span></div>
+      <div class="sub">deduplicated, both repos</div>
+    </div>
+    <div class="cell">
+      <div class="k">oldest snapshot</div>
+      <div class="v">31<span style="font-weight:400;color:var(--muted);font-size:13px"> d</span></div>
+      <div class="sub">retention not yet enforced</div>
+    </div>
+  </section>
+
+  <div class="grid">
+
+    <!-- jaassh -> nas -->
+    <article class="card ok">
+      <div class="chd">
+        <div class="route">
+          <span class="host">jaassh</span>
+          <span class="arrow">&rarr;</span>
+          <span class="host">nas</span>
+          <span class="pill"><span class="d"></span>complete</span>
+        </div>
+        <div class="sub">
+          <code>rest:http://nas:8000/jaassh/</code> &middot; offsite
+        </div>
+      </div>
+
+      <div class="metrics">
+        <div class="m">
+          <div class="mk">last run</div>
+          <div class="mv">03:00 <span class="unit">&middot; 7m 12s</span></div>
+        </div>
+        <div class="m">
+          <div class="mk">next run</div>
+          <div class="mv">03:00 <span class="unit">&middot; in 19h</span></div>
+        </div>
+        <div class="m">
+          <div class="mk">protected</div>
+          <div class="mv">12.4 <span class="unit">GB</span></div>
+        </div>
+        <div class="m">
+          <div class="mk">added</div>
+          <div class="mv">248 <span class="unit">MB</span></div>
+        </div>
+      </div>
+
+      <div class="hist">
+        <div class="hk">14 days <span class="legend">every run complete</span></div>
+        <div class="bars">
+          <div class="bar" style="height:70%"></div>
+          <div class="bar" style="height:64%"></div>
+          <div class="bar" style="height:88%"></div>
+          <div class="bar" style="height:59%"></div>
+          <div class="bar" style="height:73%"></div>
+          <div class="bar" style="height:61%"></div>
+          <div class="bar" style="height:95%"></div>
+          <div class="bar" style="height:66%"></div>
+          <div class="bar" style="height:58%"></div>
+          <div class="bar" style="height:80%"></div>
+          <div class="bar" style="height:62%"></div>
+          <div class="bar" style="height:71%"></div>
+          <div class="bar" style="height:56%"></div>
+          <div class="bar" style="height:68%"></div>
+        </div>
+      </div>
+
+      <div class="foot">
+        <div class="fk">paths</div>
+        <div class="paths">
+          <span class="path">/etc</span>
+          <span class="path">/home/josh</span>
+          <span class="path">/data/gage</span>
+          <span class="path">/data/git</span>
+          <span class="path">/data/jaashboard</span>
+          <span class="path">/data/clark</span>
+        </div>
+        <div class="tags">
+          <span class="tag">append-only</span>
+          <span class="tag">key escrowed</span>
+          <span class="tag">snapshot 4cef7f1f</span>
+        </div>
+      </div>
+    </article>
+
+    <!-- nas -> jaassh -->
+    <article class="card ok">
+      <div class="chd">
+        <div class="route">
+          <span class="host">nas</span>
+          <span class="arrow">&rarr;</span>
+          <span class="host">jaassh</span>
+          <span class="pill"><span class="d"></span>complete</span>
+        </div>
+        <div class="sub">
+          <code>rest:http://jaassh:8000/nas/</code> &middot; offsite
+        </div>
+      </div>
+
+      <div class="metrics">
+        <div class="m">
+          <div class="mk">last run</div>
+          <div class="mv">04:00 <span class="unit">&middot; 1h 04m</span></div>
+        </div>
+        <div class="m">
+          <div class="mk">next run</div>
+          <div class="mv">04:00 <span class="unit">&middot; in 20h</span></div>
+        </div>
+        <div class="m">
+          <div class="mk">protected</div>
+          <div class="mv">412 <span class="unit">GB</span></div>
+        </div>
+        <div class="m">
+          <div class="mk">added</div>
+          <div class="mv">1.2 <span class="unit">GB</span></div>
+        </div>
+      </div>
+
+      <div class="hist">
+        <div class="hk">14 days <span class="legend">1 incomplete &middot; exit 3</span></div>
+        <div class="bars">
+          <div class="bar" style="height:72%"></div>
+          <div class="bar" style="height:66%"></div>
+          <div class="bar" style="height:70%"></div>
+          <div class="bar warn" style="height:41%"></div>
+          <div class="bar" style="height:75%"></div>
+          <div class="bar" style="height:69%"></div>
+          <div class="bar" style="height:83%"></div>
+          <div class="bar" style="height:64%"></div>
+          <div class="bar" style="height:71%"></div>
+          <div class="bar" style="height:60%"></div>
+          <div class="bar" style="height:77%"></div>
+          <div class="bar" style="height:65%"></div>
+          <div class="bar" style="height:74%"></div>
+          <div class="bar" style="height:68%"></div>
+        </div>
+      </div>
+
+      <div class="foot">
+        <div class="fk">paths</div>
+        <div class="paths">
+          <span class="path">/etc</span>
+          <span class="path">/media/raid10/archivist</span>
+          <span class="path">/media/raid10/asi</span>
+        </div>
+        <div class="tags">
+          <span class="tag">append-only</span>
+          <span class="tag">key escrowed</span>
+          <span class="tag">snapshot 9b3ac71e</span>
+        </div>
+      </div>
+    </article>
+
+  </div>
+
+  <p class="note">
+    <strong>What's real today:</strong> jaassh &rarr; nas runs nightly and has been
+    verified end to end, including a restore. <strong>What isn't:</strong> nas &rarr; jaassh
+    doesn't exist yet, and hush doesn't read the status files — this page is a target,
+    not a screenshot. The amber bar shows how an <code>exit 3</code> run appears: a
+    snapshot exists, but it is missing files.
+  </p>
+
+</div>
+</body>
+</html>
