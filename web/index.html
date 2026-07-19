@@ -3340,6 +3340,12 @@ WantedBy=multi-user.target
 UNIT`);
       pushCmd("sudo systemctl daemon-reload && sudo systemctl enable --now rest-server");
       L.push(`# other machines back up here with repository:  rest:http://${ip}:8000/<name>`);
+      // The agent detects a vault (rest-server on PATH) once at startup and
+      // advertises it in /vitals, so standing one up only shows in the console
+      // after the agent restarts and re-detects. Without this, a box that already
+      // had restic + -backup on would host a vault that /vitals never reports —
+      // the console keeps saying "no vault detected on your fleet".
+      needRestart = true;
     }
     if(needRestart){
       if(lastCmdIdx >= 0) L[lastCmdIdx] += " && sudo systemctl restart hush-agent";
