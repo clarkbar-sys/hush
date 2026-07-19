@@ -10,11 +10,18 @@ Type=simple
 User=hush
 Group=hush
 WorkingDirectory=/etc/hush
-# The :-defaults keep tsnet mode bootable if control-tsnet.env is missing (the -
-# prefix already makes the file optional): an unset variable would otherwise
-# expand to an empty argument and override the binary's own flag default.
+# Environment= supplies the defaults; the optional EnvironmentFile= below (- prefix)
+# overrides them when control-tsnet.env is present. This keeps tsnet mode bootable
+# if the file is missing — an unset variable would otherwise expand to an empty
+# argument and override the binary's own flag default.
+#
+# NOTE: systemd does NOT support shell-style ${VAR:-default} expansion — that form
+# is passed through literally and reaches the binary verbatim, breaking startup.
+# The Environment=/EnvironmentFile= pair is the correct way to express a default.
+Environment=HUSH_CONTROL_HOSTNAME=hush
+Environment=HUSH_CONTROL_STATE_DIR=/var/lib/hush
 EnvironmentFile=-/etc/hush/control-tsnet.env
-ExecStart=/usr/local/bin/hush-control -tsnet -hostname ${HUSH_CONTROL_HOSTNAME:-hush} -state-dir ${HUSH_CONTROL_STATE_DIR:-/var/lib/hush}
+ExecStart=/usr/local/bin/hush-control -tsnet -hostname ${HUSH_CONTROL_HOSTNAME} -state-dir ${HUSH_CONTROL_STATE_DIR}
 Restart=on-failure
 RestartSec=5s
 StateDirectory=hush
