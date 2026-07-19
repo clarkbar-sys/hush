@@ -80,17 +80,20 @@ type Report struct {
 }
 
 func main() {
-	listen := flag.String("listen", ":8080", "address to serve the console on (LAN mode)")
+	listen := flag.String("listen", ":8080", "plain-HTTP LAN address for the first-run setup page only, served until the tailnet node is provisioned (then the console is tailnet-HTTPS only)")
 	configPath := flag.String("config", "fleet.json", "path to the fleet config JSON")
 	webDir := flag.String("web", "", "serve UI assets from this directory instead of the embedded ones (dev)")
 
-	// tsnet mode: join the tailnet as our own node and serve HTTPS on :443.
-	// Off by default — LAN mode is unchanged when -tsnet is unset.
-	useTsnet := flag.Bool("tsnet", false, "join the tailnet as our own node and serve HTTPS on :443")
-	hostname := flag.String("hostname", "hush", "tsnet node hostname (tsnet mode)")
-	stateDir := flag.String("state-dir", "", "directory to persist tsnet node state (tsnet mode; default: OS config dir)")
+	// hush-control serves the console only over the tailnet (tsnet): it joins the
+	// tailnet as its own node and serves HTTPS on :443, gated on Tailscale
+	// identity. The old plain-HTTP LAN mode has been removed. -tsnet is kept as an
+	// accepted no-op so units that still pass it (and older ones that don't) both
+	// keep working across a binary-only auto-update, without a flag-parse crash.
+	useTsnet := flag.Bool("tsnet", false, "deprecated and ignored: serving over the tailnet is now the only mode (kept for compatibility)")
+	hostname := flag.String("hostname", "hush", "tsnet node hostname")
+	stateDir := flag.String("state-dir", "", "directory to persist tsnet node state (default: OS config dir)")
 	var allow stringList
-	flag.Var(&allow, "allow", "allowed caller login, e.g. login@example.com; repeatable; empty = any tailnet member (tsnet mode)")
+	flag.Var(&allow, "allow", "allowed caller login, e.g. login@example.com; repeatable; empty = any tailnet member")
 	showVersion := flag.Bool("version", false, "print the hush-control version and exit")
 	selfUpdate := flag.Bool("self-update", false, "check for a newer release and replace this binary in place, then exit (run as root by hush-control-update.service)")
 	flag.Parse()
@@ -107,10 +110,11 @@ func main() {
 	log.Printf("hush-control: %d agent(s) configured", len(agents))
 	store := newAgentStore(*configPath, agents)
 
-	// disco starts empty; tsnet mode populates it with a tailnet peer lister once
-	// the node is up (LAN mode leaves it nil, so discovery reports unavailable).
-	// The discoverer polls it in the background so the console can badge newly
-	// appeared agents without re-probing the tailnet on every request.
+	// disco starts empty; it's populated with a tailnet peer lister once the tsnet
+	// node is up (before that — during first-run setup — it stays nil and
+	// discovery reports itself unavailable). The discoverer polls it in the
+	// background so the console can badge newly appeared agents without re-probing
+	// the tailnet on every request.
 	disco := &discoverySource{}
 	discoClient := &http.Client{Timeout: 2 * time.Second}
 	probe := func(addr string) testAgentResult { return testAgent(discoClient, addr) }
@@ -120,18 +124,19 @@ func main() {
 	mux, fc := buildMux(store, discoverer, *webDir)
 	go fc.run(context.Background())
 
-	if *useTsnet {
-		serveTsnet(mux, disco, *listen, *hostname, *stateDir, allow)
-		return
+	// The console is served only over the tailnet now — plain-HTTP LAN mode has
+	// been removed. -tsnet is ignored (serving over the tailnet is unconditional);
+	// note it for anyone whose old LAN unit dropped the flag after a binary update.
+	if !*useTsnet {
+		log.Printf("hush-control: plain-HTTP LAN mode has been removed — serving over the tailnet (tsnet). See the README to provision the node.")
 	}
-
-	log.Printf("hush-control serving on %s (LAN mode)", *listen)
-	log.Fatal(http.ListenAndServe(*listen, mux))
+	serveTsnet(mux, disco, *listen, *hostname, *stateDir, allow)
 }
 
 // buildMux wires the console routes: live fleet JSON, fleet membership, and
-// the static UI. It is transport-agnostic, so the same handler serves both
-// LAN and tsnet modes. The UI is served from the embedded assets unless
+// the static UI. It is transport-agnostic — the same handler is served over the
+// tsnet HTTPS listener (and the plain-HTTP first-run setup page reuses the same
+// wiring only until the node is provisioned). The UI is served from the embedded assets unless
 // webDir is set (dev override). It also returns the fleetCache it built, so
 // the caller can start its background polling loop (main() does; tests that
 // don't care about fleet polling can discard it — /api/fleet still works,

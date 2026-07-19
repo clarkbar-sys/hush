@@ -139,9 +139,10 @@ func defaultTsnetDir() string {
 // callerCtxKey carries the resolved caller login on the request context.
 type callerCtxKey struct{}
 
-// callerFrom returns the Tailscale login identityGate attached to ctx, or "" in
-// LAN mode where requests carry no per-request identity. Handlers use it to
-// audit mutating actions (who ran what).
+// callerFrom returns the Tailscale login identityGate attached to ctx, or "" for
+// a request that carries no per-request identity (e.g. the plain-HTTP first-run
+// setup page, before the node is up). Handlers use it to audit mutating actions
+// (who ran what).
 func callerFrom(ctx context.Context) string {
 	s, _ := ctx.Value(callerCtxKey{}).(string)
 	return s

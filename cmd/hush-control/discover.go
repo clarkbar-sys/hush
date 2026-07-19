@@ -4,9 +4,10 @@
 // operator then adds the ones they want with a single tap, rather than hunting
 // for IPs.
 //
-// Discovery is a tsnet-mode feature: it needs the tsnet LocalClient to read the
-// tailnet's peers. In LAN mode there is no tailnet handle, so /api/discover
-// reports itself unavailable and the console hides the scan affordance.
+// Discovery needs the tsnet LocalClient to read the tailnet's peers. Until the
+// node is provisioned (during the first-run setup page) there is no tailnet
+// handle yet, so /api/discover reports itself unavailable and the console hides
+// the scan affordance until the node comes up.
 package main
 
 import (
@@ -42,9 +43,9 @@ type discoveredPeer struct {
 	Online bool
 }
 
-// peerLister enumerates the tailnet's nodes. In tsnet mode it is backed by the
-// tsnet LocalClient; in LAN mode there is none, and discovery reports itself
-// unavailable.
+// peerLister enumerates the tailnet's nodes. It is backed by the tsnet
+// LocalClient; until the node is provisioned there is none, and discovery
+// reports itself unavailable.
 type peerLister interface {
 	Peers(ctx context.Context) ([]discoveredPeer, error)
 }
@@ -199,8 +200,8 @@ func discoverCandidates(ctx context.Context, lister peerLister, probe agentProbe
 // discoverer runs discovery on a timer and caches the latest result, so the
 // console can show a passive "new agents found" badge without every request
 // re-probing the whole tailnet. It reads the active lister through the shared
-// discoverySource, so it comes alive as soon as tsnet mode sets one; in LAN mode
-// each scan short-circuits to "unavailable" at negligible cost.
+// discoverySource, so it comes alive as soon as the tsnet node sets one; before
+// that each scan short-circuits to "unavailable" at negligible cost.
 type discoverer struct {
 	disco *discoverySource
 	probe agentProbe

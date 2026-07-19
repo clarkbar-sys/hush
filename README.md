@@ -42,9 +42,11 @@ curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh |
 That installs `hush-agent` alone, enabled and started — the same one-liner
 is correct on every machine you want to watch, which is most of your fleet.
 `hush-control` is a single, deliberate install on one box (e.g. the NAS), so
-it's opt-in: pass `control` for LAN mode or `control-tsnet` for the
-[tsnet HTTPS mode](#serve-over-the-tailnet-https), e.g.
-`... | sudo sh -s -- control-tsnet`. Pass `all` to install both on one box.
+it's opt-in: pass `control-tsnet` to serve the console over the tailnet (see
+[Serve over the tailnet](#serve-over-the-tailnet-https)), e.g.
+`... | sudo sh -s -- control-tsnet`. `control` is an alias for the same thing —
+the old plain-HTTP LAN mode has been removed, so `hush-control` only ever serves
+over the tailnet now. Pass `all` to install both on one box.
 It's systemd-only (Linux) — see [`scripts/install.sh`](./scripts/install.sh)
 below for the same install from a local clone, and "Prefer building from
 source" below for running the binary yourself without a service (e.g. on
@@ -79,26 +81,34 @@ For any other `GOOS`/`GOARCH`, cross-compile directly:
 
 ## Getting started
 
+`hush-control` serves the console **only over the tailnet** — it joins the
+tailnet as its own node and serves HTTPS with a real cert at
+`https://<hostname>.<tailnet>.ts.net`, gated on Tailscale identity. (There is no
+plain-HTTP LAN mode; the only plain-HTTP surface is the one-time first-run setup
+page, below.)
+
 ```bash
-# 1. run an agent on a machine you want to watch
-hush-agent -listen 127.0.0.1:8765
+# 1. run an agent on each machine you want to watch (binds this box's tailnet IP)
+hush-agent -listen tailnet
 
-# 2. run the control plane serving the UI (defaults to one local agent)
-hush-control -listen 127.0.0.1:8080
+# 2. run the control plane, joining the tailnet as a node named "hush"
+TS_AUTHKEY=tskey-auth-… hush-control -tsnet -hostname hush -state-dir ./tsstate
 
-# 3. open the console
-open http://127.0.0.1:8080
+# 3. open the console at the tailnet URL it prints
+open https://hush.<your-tailnet>.ts.net
 ```
 
+Each `hush-agent` binds the tailnet interface — no public, no LAN exposure.
+`-listen tailnet` (or `HUSH_AGENT_LISTEN=tailnet`) resolves this machine's
+Tailscale IP automatically, waiting for `tailscaled` to come up on boot rather
+than hardcoding a `100.x` address. This is the default for `install.sh`, so a
+freshly installed agent is discoverable over the tailnet with no post-install
+edit. Use `tailnet:PORT` for a non-default port, or a literal `host:port` (e.g.
+`127.0.0.1:8765`) to pin a specific interface for local testing.
+
 To watch a real fleet, copy [`fleet.example.json`](./fleet.example.json) to
-`fleet.json`, list your agents' tailnet addresses, and start `hush-control`. In
-production each `hush-agent` binds to the tailnet interface — no public exposure.
-Pass `-listen tailnet` (or set `HUSH_AGENT_LISTEN=tailnet`) and the agent binds
-this machine's Tailscale IP automatically, waiting for `tailscaled` to come up on
-boot rather than hardcoding a `100.x` address. This is the default for
-`install.sh`, so a freshly installed agent is discoverable over the tailnet with
-no post-install edit. Use `tailnet:PORT` for a non-default port, or a literal
-`host:port` (e.g. `127.0.0.1:8765`) to pin a specific interface.
+`fleet.json` and list your agents' tailnet addresses — or just add them from the
+console's **＋ Build → Machine** sheet once it's up.
 
 Working from a clone instead? Swap `hush-control` for `go run ./cmd/hush-control`
 (and likewise for the agent). Add `-web web` to serve the UI from the on-disk
@@ -106,10 +116,8 @@ Working from a clone instead? Swap `hush-control` for `go run ./cmd/hush-control
 
 ### Serve over the tailnet (HTTPS)
 
-The steps above run **LAN mode**: plain HTTP, unauthenticated — trusted
-networks only. For the secure, reach-from-anywhere console, run `hush-control`
-in **tsnet mode**: it joins the tailnet as its own node and serves HTTPS on
-`:443` with a real cert at `https://<hostname>.<tailnet>.ts.net`.
+`hush-control` joins the tailnet as its own node and serves HTTPS on `:443` with
+a real cert at `https://<hostname>.<tailnet>.ts.net`:
 
 ```bash
 # provision the node with an auth key; persist its state in -state-dir
@@ -120,15 +128,18 @@ TS_AUTHKEY=tskey-auth-… hush-control -tsnet -allow you@example.com
 ```
 
 **First run from your phone (no auth key on the command line).** Starting
-`hush-control -tsnet` with no `TS_AUTHKEY` and no saved node state serves a
-one-time **setup page** on the LAN (`-listen`, default `:8080`) — no SSH, no
-editing env files. Open `http://<box-ip>:8080` in a browser, paste a
+`hush-control` with no `TS_AUTHKEY` and no saved node state serves a one-time
+**setup page** on the LAN (`-listen`, default `:8080`) — no SSH, no editing env
+files. Open `http://<box-ip>:8080` in a browser, paste a
 [Tailscale auth key](https://login.tailscale.com/admin/settings/keys) and the
 hostname, and the same process joins the tailnet and bounces you to the HTTPS
-URL. This page is plain HTTP and unauthenticated — it wears a warning banner and
-exists **only until the node is provisioned**, after which it never reappears.
-The `install.sh` `control-tsnet` install ships with an empty `TS_AUTHKEY`, so
-this is the default first-run experience.
+URL. This setup page is the **only** plain-HTTP surface hush ever exposes — it
+wears a warning banner and exists **only until the node is provisioned**, after
+which it never reappears. The `install.sh` `control-tsnet` install ships with an
+empty `TS_AUTHKEY`, so this is the default first-run experience.
+
+(`-tsnet` is now implied — it's kept only as an accepted, ignored flag so units
+that still pass it keep working. Serving over the tailnet is unconditional.)
 
 Every request is gated by Tailscale identity (`WhoIs`). **Prerequisites:**
 [MagicDNS](https://tailscale.com/kb/1081/magicdns) and
@@ -143,12 +154,12 @@ sheet takes a tailnet address, probes it to confirm a `hush-agent` is answering,
 and persists it to `fleet.json` — the new machine shows up on the next poll, no
 restart needed.
 
-In **tsnet mode** the sheet can also find agents for you: **Scan tailnet** reads
-your tailnet's device list (the same table Tailscale keeps, much like DHCP
-leases), probes each online node on the agent port, and lists the ones running
-`hush-agent` that aren't in your fleet yet. Tap one to add it — no IP hunting.
-Discovery needs the tailnet handle tsnet provides, so the scan button falls back
-to manual entry in LAN mode.
+The sheet can also find agents for you: **Scan tailnet** reads your tailnet's
+device list (the same table Tailscale keeps, much like DHCP leases), probes each
+online node on the agent port, and lists the ones running `hush-agent` that
+aren't in your fleet yet. Tap one to add it — no IP hunting. Discovery uses the
+tailnet handle the tsnet node provides, so it's available as soon as the console
+is up.
 
 `hush-control` also rescans the tailnet in the background, so the **＋ Build**
 button carries a count badge when new agents appear that you haven't
@@ -297,9 +308,9 @@ git clone https://github.com/clarkbar-sys/hush && cd hush
 go build ./cmd/hush-agent ./cmd/hush-control
 
 sudo ./scripts/install.sh agent            # hush-agent, systemd-managed
-sudo ./scripts/install.sh control          # hush-control, LAN mode
-sudo ./scripts/install.sh control-tsnet    # — or — hush-control, tsnet mode
-sudo ./scripts/install.sh all              # agent + control (LAN mode), one box
+sudo ./scripts/install.sh control-tsnet    # hush-control, over the tailnet (HTTPS)
+sudo ./scripts/install.sh control          # alias for control-tsnet
+sudo ./scripts/install.sh all              # agent + control, one box
 ```
 
 ## Staying up to date

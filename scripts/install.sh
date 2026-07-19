@@ -8,9 +8,12 @@
 #
 # Usage:
 #   sudo ./scripts/install.sh agent           # hush-agent only
-#   sudo ./scripts/install.sh control         # hush-control only, LAN mode
-#   sudo ./scripts/install.sh control-tsnet   # hush-control only, tsnet mode
-#   sudo ./scripts/install.sh all             # agent + control (LAN mode)
+#   sudo ./scripts/install.sh control-tsnet   # hush-control only (tailnet/tsnet)
+#   sudo ./scripts/install.sh control         # alias for control-tsnet
+#   sudo ./scripts/install.sh all             # agent + control, one box
+#
+# hush-control serves the console only over the tailnet (tsnet); the old
+# plain-HTTP LAN mode has been removed, so "control" == "control-tsnet".
 #
 # Binaries must already be built (see README's "Install" section: either
 # `go install ./cmd/...` with $GOBIN on $PATH, or `go build ./cmd/...`).
@@ -189,8 +192,8 @@ install_agent() {
   install_binary hush-agent "${HUSH_AGENT_BIN:-hush-agent}"
   install_unit hush-agent.service
   # Owned by the service user, not root: this dir is shared with
-  # hush-control (see install_control), which persists fleet.json here and
-  # needs write access to its own state directory.
+  # hush-control (see install_control_tsnet), which persists fleet.json here
+  # and needs write access to its own state directory.
   install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 "$CONFIG_DIR"
   install_env_file agent.env \
     "# hush-agent environment — edit, then: systemctl restart hush-agent" \
@@ -203,26 +206,6 @@ install_agent() {
     "# HUSH_AGENT_JOBS=1"
   enable_service hush-agent.service
   install_agent_updater
-}
-
-install_control() {
-  install_binary hush-control "${HUSH_CONTROL_BIN:-hush-control}"
-  # Owned by the service user, not root: hush-control runs as this user and
-  # persists fleet.json here (the web console can add/remove machines), so
-  # it needs write access to its own state directory.
-  install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 "$CONFIG_DIR"
-  install_unit hush-control.service
-  install_env_file control.env \
-    "# hush-control environment — edit, then: systemctl restart hush-control" \
-    "HUSH_CONTROL_LISTEN=127.0.0.1:8080" \
-    "HUSH_CONTROL_CONFIG=$CONFIG_DIR/fleet.json"
-  if [[ ! -f "$CONFIG_DIR/fleet.example.json" ]]; then
-    install -o root -g "$SERVICE_GROUP" -m 0640 \
-      "$REPO_ROOT/fleet.example.json" "$CONFIG_DIR/fleet.example.json"
-  fi
-  disable_control_mode hush-control-tsnet.service
-  enable_service hush-control.service
-  install_updater
 }
 
 install_control_tsnet() {
@@ -240,6 +223,11 @@ install_control_tsnet() {
     "HUSH_CONTROL_HOSTNAME=hush" \
     "HUSH_CONTROL_STATE_DIR=/var/lib/hush" \
     "# To restrict callers, add -allow flags with: systemctl edit --full hush-control-tsnet"
+  if [[ ! -f "$CONFIG_DIR/fleet.example.json" ]]; then
+    install -o root -g "$SERVICE_GROUP" -m 0640 \
+      "$REPO_ROOT/fleet.example.json" "$CONFIG_DIR/fleet.example.json"
+  fi
+  # Turn off any control unit left over from the removed plain-HTTP LAN mode.
   disable_control_mode hush-control.service
   enable_service hush-control-tsnet.service
   install_updater
@@ -251,11 +239,16 @@ main() {
   create_user
   case "${1:-}" in
     agent) install_agent ;;
-    control) install_control ;;
+    # Plain-HTTP LAN mode has been removed; "control" is an alias for
+    # "control-tsnet" (tailnet mode) so existing usage keeps working.
+    control)
+      echo "note: LAN mode was removed — installing hush-control in tailnet (tsnet) mode" >&2
+      install_control_tsnet
+      ;;
     control-tsnet) install_control_tsnet ;;
     all)
       install_agent
-      install_control
+      install_control_tsnet
       ;;
     *)
       echo "usage: $0 {agent|control|control-tsnet|all}" >&2
