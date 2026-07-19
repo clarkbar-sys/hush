@@ -5,6 +5,8 @@
 [![CI (Go)](https://github.com/clarkbar-sys/hush/actions/workflows/ci-go.yml/badge.svg)](https://github.com/clarkbar-sys/hush/actions/workflows/ci-go.yml)
 [![License](https://img.shields.io/badge/license-GPL--2.0-blue.svg)](./LICENSE)
 
+**[Latest release &rarr;](https://clarkbar-sys.github.io/hush/)**
+
 ## Overview
 
 `hush` gives a homelab of [Tailscale](https://tailscale.com) machines a place

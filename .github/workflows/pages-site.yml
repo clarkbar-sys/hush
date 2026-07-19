@@ -1,0 +1,38 @@
+name: Deploy release site (GitHub Pages)
+
+# Publishes site/ — a small static page that shows the latest GitHub Release
+# (fetched client-side from the Releases API, so it never goes stale) — to the
+# root of the gh-pages branch. The PR-preview workflow (pr-preview.yml) already
+# owns gh-pages/pr-preview/pr-<N>/ for per-PR console previews; this job only
+# touches the root, so the two coexist. Requires GitHub Pages to be enabled
+# (Settings -> Pages -> Deploy from a branch -> gh-pages / root), same as the
+# preview workflow.
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**"]
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-site
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Deploy to gh-pages root
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          destination_dir: .
+          keep_files: true
