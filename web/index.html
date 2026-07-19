@@ -627,6 +627,33 @@
   .bk-path { font-family:var(--mono); font-size:10px; padding:2px 7px;
     border-radius:5px; background:var(--panel); border:1px solid var(--border-soft);
     color:var(--muted); }
+  /* A backup card is a button into its watch modal. Only the affordance
+     changes here — the layout above is untouched — so a tap target reads the
+     same as the read-only card it replaced. */
+  .bk-card.tap { cursor:pointer; text-align:left; width:100%; font:inherit;
+    color:inherit; display:block; transition:border-color .15s, transform .1s; }
+  .bk-card.tap:hover { border-color:var(--border); }
+  .bk-card.tap:active { transform:scale(.995); }
+  .bk-card.tap:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* ---- backup watch modal ---- */
+  /* A run in flight has no percentage to show: the runner records the final
+     summary, not live restic progress, so an honest bar is indeterminate — a
+     shuttle that says "moving" without inventing a number the console can't
+     know. Elapsed time, which we CAN know from the start timestamp, ticks
+     live beside it as the real progress signal. */
+  .wt-prog { height:8px; border-radius:999px; overflow:hidden; position:relative;
+    background:var(--accent-soft); margin:2px 0 10px; }
+  .wt-prog::before { content:""; position:absolute; top:0; bottom:0; width:38%;
+    border-radius:999px; background:var(--accent);
+    animation: wt-shuttle 1.5s ease-in-out infinite; }
+  @keyframes wt-shuttle { 0%{ left:-40%; } 100%{ left:102%; } }
+  .wt-elapsed { font-variant-numeric:tabular-nums; }
+  .wt-note { font-family:var(--mono); font-size:10px; color:var(--faint);
+    margin:0 0 14px; line-height:1.5; }
+  @media (prefers-reduced-motion: reduce){
+    .wt-prog::before { animation:none; left:0; width:100%; opacity:.5; }
+  }
 </style>
 </head>
 <body>
@@ -679,6 +706,13 @@
   <div class="sheet" role="dialog" aria-label="Configure a backup">
     <div class="grab"></div>
     <div id="backupSheetBody"></div>
+  </div>
+</div>
+
+<div class="scrim" id="watchScrim">
+  <div class="sheet" role="dialog" aria-label="Backup details">
+    <div class="grab"></div>
+    <div id="watchSheetBody"></div>
   </div>
 </div>
 
@@ -787,6 +821,10 @@
     else if(state.view==="machine") renderMachine();
     else renderConstruct();
     renderAlertBell();
+    // The watch modal lives outside `app`, so the re-render above leaves it
+    // untouched — repaint it here so a run finishing mid-watch flips the open
+    // modal from "backing up…" to its outcome on the very next poll.
+    if(watchOpen) renderBackupWatch();
   }
 
   function renderFleet(){
@@ -860,6 +898,9 @@
     if(summEl) summEl.addEventListener("toggle", ()=>{ state.summLegendOpen = summEl.open; });
     app.querySelectorAll(".node[data-id]").forEach(el=>{
       el.addEventListener("click", ()=>enterMachine(el.dataset.id));
+    });
+    app.querySelectorAll(".bk-card[data-bkhost]").forEach(el=>{
+      el.addEventListener("click", ()=>openBackupWatch(el.dataset.bkhost, el.dataset.bkname));
     });
     JUST_ARRIVED.clear(); // the pop animation above only needs to play once
   }
@@ -1113,7 +1154,12 @@
     const paths = Array.isArray(b.paths) && b.paths.length
       ? `<div class="bk-paths">${b.paths.map(p=>`<span class="bk-path">${esc(p)}</span>`).join("")}</div>` : "";
 
-    return `<div class="bk-card${sev==="good"?"":" "+sev}">
+    // Rendered as a button: tapping it opens the watch modal, which is the
+    // whole point of a run in flight — you want to sit and watch it move.
+    // host+name is the stable identity the modal re-looks-up on every poll, so
+    // a running run's card and its open modal stay in lockstep as it finishes.
+    return `<button type="button" class="bk-card tap${sev==="good"?"":" "+sev}"
+        data-bkhost="${esc(host)}" data-bkname="${esc(b.name||"")}">
       <div class="bk-hd">
         <div class="bk-route">${esc(host)}${target?` <span class="ar">→</span> ${esc(target)}`:""}
           <span class="bk-state ${sev}"><span class="d"></span>${esc(label)}</span></div>
@@ -1122,7 +1168,161 @@
       <div class="bk-metrics">${metrics}</div>
       ${histBlock}
       ${paths}
-    </div>`;
+    </button>`;
+  }
+
+  /* ---------- backup watch modal ----------
+     Tapping a backup card opens this: the same card's facts, room to breathe,
+     and — the reason it exists — a live watch for a run in flight. It keys off
+     host+name and re-looks-up its backup on every poll (see render()), so a run
+     that finishes while you're watching flips from "backing up…" to its outcome
+     in place, without you closing and reopening. */
+  const watchScrim = $("#watchScrim");
+  const watchBody = $("#watchSheetBody");
+  let watchOpen = false;         // whether the modal is up — render() repaints it when true
+  let watchKey = null;           // {host, name} the modal is bound to
+  let watchTimer = null;         // 1s interval that ticks the live "running for" counter
+
+  // watchBackup resolves the modal's {host, name} to the current backup object,
+  // freshly each call so a poll's newer data (a run finishing) is what's drawn.
+  function watchBackup(){
+    if(!watchKey) return null;
+    const h = CONV_BACKUPS.find(x=>x.host===watchKey.host);
+    if(!h) return null;
+    return (h.backups||[]).find(b=>(b.name||"")===watchKey.name) || null;
+  }
+
+  // fmtElapsed renders a live run's age as H:MM:SS (or M:SS under an hour) —
+  // tabular so the seconds column doesn't jitter as it ticks.
+  function fmtElapsed(ms){
+    if(!(ms >= 0)) return "—";
+    const t = Math.floor(ms/1000), s = t%60, m = Math.floor(t/60)%60, h = Math.floor(t/3600);
+    const pad = n => String(n).padStart(2,"0");
+    return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  }
+
+  function openBackupWatch(host, name){
+    watchKey = { host, name };
+    watchOpen = true;
+    renderBackupWatch();
+    watchScrim.classList.add("open");
+    // Tick the elapsed counter every second while a run is in flight. The
+    // interval only touches the one span, so it's cheap and never fights the
+    // slow backup poll that repaints the rest of the modal.
+    if(watchTimer) clearInterval(watchTimer);
+    watchTimer = setInterval(tickWatchElapsed, 1000);
+  }
+
+  function closeBackupWatch(){
+    watchOpen = false;
+    watchKey = null;
+    if(watchTimer){ clearInterval(watchTimer); watchTimer = null; }
+    watchScrim.classList.remove("open");
+  }
+  watchScrim.addEventListener("click", e=>{ if(e.target===watchScrim) closeBackupWatch(); });
+
+  function tickWatchElapsed(){
+    if(!watchOpen) return;
+    const el = $("#wtElapsed");
+    if(!el) return;
+    const b = watchBackup();
+    if(!b || !bkRunning(b)) return;   // finished between paints — the repaint will re-label it
+    const started = Date.parse(b.started || "");
+    if(!isNaN(started)) el.textContent = fmtElapsed(Date.now() - started);
+  }
+
+  // renderBackupWatch (re)paints the modal body from the current backup object.
+  // Kept idempotent so render() can call it on every poll: it never wires the
+  // ticker (open does) and only ever swaps innerHTML.
+  function renderBackupWatch(){
+    if(!watchOpen) return;
+    const b = watchBackup();
+    if(!b){
+      // The backup stopped reporting (removed, or its box went unreachable)
+      // while the modal was open — say so rather than freeze on stale facts.
+      watchBody.innerHTML = `<h3>Backup</h3>
+        <p class="sd">${esc(watchKey ? watchKey.host : "")}</p>
+        <div class="empty">this backup is no longer reporting</div>
+        <div class="sheet-actions"><button class="btn primary" id="wtClose" style="flex:1">Close</button></div>`;
+      $("#wtClose").addEventListener("click", closeBackupWatch);
+      return;
+    }
+    const host = watchKey.host;
+    const sev = bkSeverity(b);
+    const running = bkRunning(b), stalled = bkStalled(b);
+    const target = backupTarget(b.repository);
+    const s = b.summary || {};
+    const label = running ? (stalled ? "stalled" : "backing up…")
+      : b.ok ? "complete"
+      : b.incomplete ? `incomplete · exit ${b.exit_code}`
+      : `failed · exit ${b.exit_code}`;
+
+    // The live watch — an indeterminate shuttle (no fabricated %) over a
+    // ticking elapsed clock — for a healthy run in flight. A stalled run gets a
+    // plain warning instead: it isn't moving, so a "moving" bar would lie.
+    const started = Date.parse(b.started || "");
+    let watch = "";
+    if(running && !stalled){
+      const elapsed = isNaN(started) ? "—" : fmtElapsed(Date.now() - started);
+      watch = `<div class="wt-prog" role="progressbar" aria-label="backing up"></div>
+        <p class="wt-note">running for <span class="wt-elapsed" id="wtElapsed">${esc(elapsed)}</span>
+          · live byte progress isn't reported — the runner records the summary once restic finishes</p>`;
+    } else if(running && stalled){
+      watch = `<p class="wt-note">this run has overrun its schedule with no snapshot yet — it may have
+        been killed mid-flight (a reboot or OOM leaves the "running" marker behind)</p>`;
+    }
+
+    const metric = (k, v) => v
+      ? `<div class="bk-m"><div class="bk-mk">${k}</div><div class="bk-mv">${esc(v)}</div></div>` : "";
+    const startedRel = relTimeISO(b.started || "");
+    const finishedRel = relTimeISO(b.finished || "");
+    const next = b.next_run ? relTimeISO(b.next_run) : "";
+    // fmtElapsed, not fmtDur: a backup runs for minutes-to-hours, and fmtDur's
+    // bare-seconds ("21600s") is unreadable at that scale — H:MM:SS isn't.
+    const dur = (!running && !isNaN(started) && b.finished)
+      ? fmtElapsed(Date.parse(b.finished) - started) : "";
+    const protectedSize = (typeof s.total_bytes_processed === "number") ? fmtBytes(s.total_bytes_processed) : "";
+    const added = (typeof s.data_added === "number") ? fmtBytes(s.data_added) : "";
+    const snap = typeof s.snapshot_id === "string" ? s.snapshot_id.slice(0,8) : "";
+    const metrics = [
+      metric("started", startedRel),
+      running ? "" : metric("finished", finishedRel),
+      running ? "" : metric("took", dur),
+      metric("next run", next),
+      metric("protected", protectedSize),
+      metric("added", added),
+      metric("snapshot", snap),
+    ].join("");
+
+    // History strip — identical shape to the card's, so the modal reads as the
+    // same object opened up rather than a different screen.
+    const hist = Array.isArray(b.history) ? b.history : [];
+    const peak = hist.reduce((m,h)=>Math.max(m, (h.summary&&h.summary.data_added)||0), 0);
+    const bars = hist.map(h=>{
+      const hv = (h.summary && h.summary.data_added) || 0;
+      const pct = peak > 0 ? Math.max(18, Math.round(hv/peak*100)) : 40;
+      const hs = h.ok ? "" : (h.incomplete ? " warn" : " crit");
+      return `<div class="bk-bar${hs}" style="height:${pct}%"></div>`;
+    }).join("");
+    const bad = hist.filter(h=>!h.ok).length;
+    const histBlock = hist.length ? `<div class="bk-hist" style="border-top:none;padding:0;margin-top:4px">
+        <div class="bk-histk">last ${hist.length} run${hist.length>1?"s":""}${bad?` · ${bad} not complete`:""}</div>
+        <div class="bk-bars">${bars}</div>
+      </div>` : "";
+
+    const paths = Array.isArray(b.paths) && b.paths.length
+      ? `<div class="bk-paths" style="padding:0;margin-top:10px">${b.paths.map(p=>`<span class="bk-path">${esc(p)}</span>`).join("")}</div>` : "";
+
+    watchBody.innerHTML = `
+      <div class="bk-route" style="margin-bottom:8px">${esc(host)}${target?` <span class="ar">→</span> ${esc(target)}`:""}
+        <span class="bk-state ${sev}"><span class="d"></span>${esc(label)}</span></div>
+      ${b.repository?`<p class="sd" style="overflow-wrap:anywhere">${esc(b.repository)}</p>`:""}
+      ${watch}
+      <div class="bk-metrics" style="border-radius:8px;overflow:hidden">${metrics || `<div class="bk-m"><div class="bk-mk">status</div><div class="bk-mv">${esc(label)}</div></div>`}</div>
+      ${histBlock}
+      ${paths}
+      <div class="sheet-actions" style="margin-top:16px"><button class="btn primary" id="wtClose" style="flex:1">Close</button></div>`;
+    $("#wtClose").addEventListener("click", closeBackupWatch);
   }
 
   // A machine just added through "Add machine", shown until its first real
