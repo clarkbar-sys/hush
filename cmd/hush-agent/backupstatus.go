@@ -51,6 +51,16 @@ type conventionBackupStatus struct {
 	Incomplete bool            `json:"incomplete"`
 	Summary    json.RawMessage `json:"summary,omitempty"`
 
+	// State is "running" while a run is in flight — the runner writes it at
+	// start and overwrites it with the outcome fields above when restic exits.
+	// It is declared here, rather than left to the raw-passthrough treatment
+	// Summary and History get, precisely because the agent unmarshals and
+	// re-marshals this struct: an unknown field is dropped on the way through,
+	// so a "state" the runner set would never reach the console unless it is a
+	// field the agent knows. Empty for a finished run, so omitempty keeps the
+	// wire shape identical to before for every box that isn't mid-run.
+	State string `json:"state,omitempty"`
+
 	// History and NextRun are assembled by the agent rather than read from the
 	// status file: history lives in its own append-only log, and the next fire
 	// is systemd's to answer, not something a finished run can know.

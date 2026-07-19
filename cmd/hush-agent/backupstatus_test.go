@@ -119,6 +119,56 @@ func TestHandleBackupStatusPreservesIncompleteAndSummary(t *testing.T) {
 	}
 }
 
+func TestHandleBackupStatusPreservesRunningState(t *testing.T) {
+	dir := t.TempDir()
+	// The runner writes this at the start of a run, before restic produces any
+	// outcome — no finished, no ok, no summary. The whole point of the field is
+	// that the console can tell "a run is in flight" from "no backup here" (an
+	// empty status dir), so it must survive the agent's unmarshal/re-marshal. A
+	// field the struct does not declare is silently dropped in that round trip,
+	// which is exactly what an unstructured passthrough would have done here.
+	writeStatus(t, dir, "jaassh-nas.json", `{
+	  "name":"jaassh-nas",
+	  "repository":"rest:http://nas:8000/jaassh/",
+	  "paths":["/srv"],
+	  "started":"2026-07-19T16:00:00Z",
+	  "state":"running"
+	}`)
+
+	rr := httptest.NewRecorder()
+	handleConventionBackupStatus(dir)(rr, httptest.NewRequest(http.MethodGet, "/backup-status", nil))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var got []conventionBackupStatus
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(got) != 1 || got[0].State != "running" {
+		t.Fatalf("running state lost in passthrough: %+v", got)
+	}
+}
+
+func TestHandleBackupStatusOmitsStateForFinishedRun(t *testing.T) {
+	dir := t.TempDir()
+	// A finished run carries no state, and the field is omitempty, so the wire
+	// shape is byte-for-byte what it was before this field existed — an older
+	// console never sees a key it doesn't understand.
+	writeStatus(t, dir, "done.json", `{"name":"done","ok":true,"exit_code":0}`)
+
+	rr := httptest.NewRecorder()
+	handleConventionBackupStatus(dir)(rr, httptest.NewRequest(http.MethodGet, "/backup-status", nil))
+
+	var raw []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, present := raw[0]["state"]; present {
+		t.Fatalf("finished run must not carry a state key: %v", raw[0])
+	}
+}
+
 func TestHandleBackupStatusNeverEncodesNull(t *testing.T) {
 	// The console renders the response directly; a null would need a nil check
 	// at every call site, and one missed check is an empty screen.
