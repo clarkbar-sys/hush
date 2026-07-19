@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.0.0](https://github.com/clarkbar-sys/hush/compare/v1.29.0...v2.0.0) (2026-07-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* the agent no longer serves /backups (create/run/snapshots/ restore) and hush-control no longer proxies /api/machines/{host}/backups*; the -backup, -export-keys, and -state-dir agent flags and the HUSH_AGENT_BACKUP env toggle are gone; /vitals no longer carries the `backup` capability field. Set up and restore backups on the box over SSH (see docs/BACKUP-CONVENTION.md).
+* **web:** build button adds a machine directly ([#158](https://github.com/clarkbar-sys/hush/issues/158))
+* the agent no longer serves /exec or /jobs; hush-control no longer serves /api/machines/{host}/exec, /api/machines/{host}/jobs, /api/tasks, or /api/workflows; and /vitals and /api/fleet no longer carry runAs/runAsGranted. The -exec, -jobs, and -run-as agent flags (and the matching HUSH_AGENT_* env toggles) are gone.
+
+### Features
+
+* drop the in-agent Backup construct for the read-only convention ([#161](https://github.com/clarkbar-sys/hush/issues/161)) ([face789](https://github.com/clarkbar-sys/hush/commit/face789042e717081ad6a896d12547ab4a92516c))
+* remove the Tasks, Jobs, and Workflows constructs ([#156](https://github.com/clarkbar-sys/hush/issues/156)) ([1b57b7f](https://github.com/clarkbar-sys/hush/commit/1b57b7fd9f0a200eb2776a831c4878293a5d34d9))
+* **site:** lead the landing page with the live console demo ([#157](https://github.com/clarkbar-sys/hush/issues/157)) ([171faf2](https://github.com/clarkbar-sys/hush/commit/171faf2629253f73e16569f910a1149e97ba57c2))
+* **web:** build button adds a machine directly ([#158](https://github.com/clarkbar-sys/hush/issues/158)) ([a62ed11](https://github.com/clarkbar-sys/hush/commit/a62ed11a71857b5c040d06aa170a9673bce3e45c))
+* **web:** open a backup in a live watch modal ([#159](https://github.com/clarkbar-sys/hush/issues/159)) ([4a6ee67](https://github.com/clarkbar-sys/hush/commit/4a6ee679e60bc58dfaeac5f6a3bd8dbbd3062935))
+
+
+### Bug Fixes
+
+* **web:** stop the fleet status legend from wrapping mid-word ([#152](https://github.com/clarkbar-sys/hush/issues/152)) ([00e3c90](https://github.com/clarkbar-sys/hush/commit/00e3c90004a276299dcff4b55ec465a1e80a689f))
+* **web:** wrap the fleet summary row instead of overflowing ([#151](https://github.com/clarkbar-sys/hush/issues/151)) ([4d2a4cf](https://github.com/clarkbar-sys/hush/commit/4d2a4cf6848566c780314d75a275af8f1334bc72))
+
 ## [1.29.0](https://github.com/clarkbar-sys/hush/compare/v1.28.0...v1.29.0) (2026-07-19)
 
 
