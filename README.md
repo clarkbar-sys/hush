@@ -1,6 +1,6 @@
 # hush
 
-> A tailnet fleet console — see and run your homelab from your phone.
+> Know your fleet is backed up — from your phone.
 
 [![CI (Go)](https://github.com/clarkbar-sys/hush/actions/workflows/ci-go.yml/badge.svg)](https://github.com/clarkbar-sys/hush/actions/workflows/ci-go.yml)
 [![License](https://img.shields.io/badge/license-GPL--2.0-blue.svg)](./LICENSE)
@@ -9,24 +9,29 @@
 
 ## Overview
 
-`hush` gives a homelab of [Tailscale](https://tailscale.com) machines a place
-and a face: a phone-first web console where you see every machine at a glance
-and act on them by pointing, not typing. The mental model is *Factorio for your
-homelab* — a legible map of what's running, with everything expressed as one of
-eight constructs (Machine, Service, Job, Task, Workflow, Store, Backup, Link).
+`hush` is a phone-first **backup console** for a homelab of
+[Tailscale](https://tailscale.com) machines. It answers the question a homelab
+usually can't at a glance — *is everything backed up, and could I get it back?* —
+on a legible map where every machine is coloured by its **backup posture**
+(protected, at risk, unprotected, failed), so the box that isn't safe is the one
+that stands out. It grew out of a general "see and run your fleet" console
+(*Factorio for your homelab* — Machine, Service, Job, Task, Workflow, Store,
+Backup, Link), and that substrate is still here; backups are just the spine now.
 
 See [`docs/DESIGN.md`](./docs/DESIGN.md) for the design and
 [issue #6](https://github.com/clarkbar-sys/hush/issues/6) for the full
 initiative.
 
-**Status:** well past Phase 0's read-only proof of life. Tasks, Jobs, and
-Workflows are live, and the restic-backed **Backup** construct closes the
-loop end to end — on-demand or unattended-scheduled backups, paths picked
-from the disk-usage treemap, and snapshot restore — alongside a live
-htop-style CPU/network panel per machine. Still pending: dedicated Service
-start/stop/restart controls and a live journal tail. See
-[`docs/DESIGN.md#roadmap`](./docs/DESIGN.md#roadmap) for the phase-by-phase
-picture.
+**Status:** the restic-backed **Backup** construct closes the loop end to end —
+on-demand or unattended-scheduled backups, paths picked from the disk-usage
+treemap, snapshot restore, and off-box key escrow — and the console is now built
+around it: the fleet map leads with backup posture, a header **alert bell** ranks
+the backups that need attention, and you can **browse inside a snapshot** from
+your phone to confirm your data is really there before a restore. The general
+substrate is live too — Tasks, run-as, Jobs, Workflows, file browsing, and a live
+htop-style CPU/network panel per machine. Next up: push/email alert delivery,
+cross-site replication, and retention policy. See
+[`docs/DESIGN.md#roadmap`](./docs/DESIGN.md#roadmap) for the full picture.
 
 ## Install
 

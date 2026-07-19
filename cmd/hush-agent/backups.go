@@ -368,6 +368,17 @@ func (m *backupManager) Snapshots(ctx context.Context, id string) ([]restic.Snap
 	return restic.Snapshots(ctx, def.repo(), def.ID)
 }
 
+// LS lists one directory level inside a snapshot of a backup — the browse-inside-
+// a-snapshot read path. It only reads (a snapshot is immutable), so confirming
+// what a snapshot holds before a restore can never harm the backup history.
+func (m *backupManager) LS(ctx context.Context, id, snapshot, dir string) ([]restic.Node, bool, error) {
+	def, ok := m.store.Find(id)
+	if !ok {
+		return nil, false, errBackupNotFound
+	}
+	return restic.List(ctx, def.repo(), snapshot, dir, restic.DefaultListLimit)
+}
+
 // Restore streams a `restic restore` of one snapshot into target, optionally
 // narrowed to includes. It reads from the repository and writes into target
 // only — the snapshots are never touched — so a restore can't harm the backup
@@ -662,6 +673,47 @@ func (m *backupManager) handleBackupSnapshots(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeJSON(w, snaps)
+}
+
+// handleBackupSnapshotLS lists one directory level inside a snapshot, so the
+// console can walk a snapshot's tree and confirm the data is really there before
+// trusting a restore — restore confidence without writing anything. The snapshot
+// id is validated (hex or "latest") and any path must be absolute, both before
+// restic is invoked. It is read-only: `restic ls` never touches the repository.
+func (m *backupManager) handleBackupSnapshotLS(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	snap := strings.TrimSpace(r.PathValue("snap"))
+	if !snapshotIDRE.MatchString(snap) {
+		http.Error(w, "snapshot must be a restic snapshot id or \"latest\"", http.StatusBadRequest)
+		return
+	}
+	dir := r.URL.Query().Get("path")
+	if dir != "" && !filepath.IsAbs(dir) {
+		http.Error(w, "path must be absolute", http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), snapshotsDeadline)
+	defer cancel()
+	entries, truncated, err := m.LS(ctx, r.PathValue("id"), snap, dir)
+	if err != nil {
+		if errors.Is(err, errBackupNotFound) {
+			http.Error(w, "no such backup", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	shown := "/"
+	if dir != "" {
+		shown = filepath.Clean(dir)
+	}
+	if entries == nil {
+		entries = []restic.Node{}
+	}
+	writeJSON(w, map[string]any{"path": shown, "entries": entries, "truncated": truncated})
 }
 
 // writeJSON is the small encode-and-log helper the backup handlers share.

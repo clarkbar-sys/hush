@@ -299,6 +299,14 @@ func buildMux(store *agentStore, discoverer *discoverer, dialer *agentDialer, we
 		}
 		proxyBackupSnapshots(w, r, backupClient, a, r.PathValue("id"))
 	})
+	mux.HandleFunc("/api/machines/{host}/backups/{id}/snapshots/{snap}/ls", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyBackupSnapshotLS(w, r, backupClient, a, r.PathValue("id"), r.PathValue("snap"))
+	})
 	mux.HandleFunc("/api/machines/{host}/backups/{id}/restore", func(w http.ResponseWriter, r *http.Request) {
 		a, ok := store.find(r.PathValue("host"))
 		if !ok {

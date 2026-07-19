@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,6 +33,7 @@ func stubResticAgent(t *testing.T, withSnapshot bool) {
 		"snapshots) echo '" + snaps + "'; exit 0;;\n" +
 		"backup) echo 'files new 1'; exit 0;;\n" +
 		"restore) echo 'restoring'; exit 0;;\n" +
+		"ls) cat <<'LSJSON'\n" + lsStubNDJSON + "\nLSJSON\nexit 0;;\n" +
 		"*) echo \"unknown $1\" >&2; exit 2;;\nesac\n"
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -39,6 +42,13 @@ func stubResticAgent(t *testing.T, withSnapshot bool) {
 	restic.Binary = path
 	t.Cleanup(func() { restic.Binary = old })
 }
+
+// lsStubNDJSON is what the stub restic emits for `ls`: a snapshot header line
+// then a small /etc tree, so the LS handler's single-level filtering is exercised.
+const lsStubNDJSON = `{"time":"2026-07-18T03:00:00Z","paths":["/etc"],"hostname":"debian","struct_type":"snapshot"}
+{"name":"hostname","type":"file","path":"/etc/hostname","size":7,"struct_type":"node"}
+{"name":"ssh","type":"dir","path":"/etc/ssh","struct_type":"node"}
+{"name":"sshd_config","type":"file","path":"/etc/ssh/sshd_config","size":3200,"struct_type":"node"}`
 
 func newTestManager(t *testing.T) *backupManager {
 	t.Helper()
@@ -217,6 +227,67 @@ func TestBackupRestoreUnknownID(t *testing.T) {
 	err := m.Restore(context.Background(), "nope", "latest", "/var/tmp/x", nil, func(restic.Event) {})
 	if !errors.Is(err, errBackupNotFound) {
 		t.Fatalf("want errBackupNotFound, got %v", err)
+	}
+}
+
+func TestBackupSnapshotLS(t *testing.T) {
+	stubResticAgent(t, true)
+	m := newTestManager(t)
+	def, _ := validateBackup(validReq())
+	if _, err := m.Add(context.Background(), def); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/backups/{id}/snapshots/{snap}/ls", m.handleBackupSnapshotLS)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	// Valid listing: immediate children of /etc only (not /etc/ssh/sshd_config).
+	resp, err := http.Get(srv.URL + "/backups/" + def.ID + "/snapshots/aaaa1111/ls?path=/etc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var out struct {
+		Path      string        `json:"path"`
+		Entries   []restic.Node `json:"entries"`
+		Truncated bool          `json:"truncated"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Path != "/etc" {
+		t.Fatalf("path = %q, want /etc", out.Path)
+	}
+	if len(out.Entries) != 2 {
+		t.Fatalf("want 2 immediate children of /etc, got %d: %+v", len(out.Entries), out.Entries)
+	}
+	if out.Entries[0].Name != "ssh" || out.Entries[0].Type != "dir" {
+		t.Fatalf("dirs should sort first, got %+v", out.Entries[0])
+	}
+
+	// A bad snapshot id is rejected before restic runs.
+	bad, err := http.Get(srv.URL + "/backups/" + def.ID + "/snapshots/not$valid/ls")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad.Body.Close()
+	if bad.StatusCode != http.StatusBadRequest {
+		t.Fatalf("bad snapshot id status = %d, want 400", bad.StatusCode)
+	}
+
+	// A relative path is rejected.
+	rel, err := http.Get(srv.URL + "/backups/" + def.ID + "/snapshots/aaaa1111/ls?path=etc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel.Body.Close()
+	if rel.StatusCode != http.StatusBadRequest {
+		t.Fatalf("relative path status = %d, want 400", rel.StatusCode)
 	}
 }
 

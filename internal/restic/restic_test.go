@@ -128,6 +128,66 @@ func TestSnapshotsError(t *testing.T) {
 	}
 }
 
+// resticLsNDJSON is the newline-delimited JSON `restic ls --json` emits: a
+// leading snapshot-header line, then one node per entry. The stub echoes a small
+// tree rooted at /etc so List's single-level filtering can be exercised.
+const resticLsNDJSON = `{"time":"2026-07-18T03:00:00Z","tree":"abc","paths":["/etc"],"hostname":"debian","struct_type":"snapshot"}
+{"name":"etc","type":"dir","path":"/etc","size":0,"mtime":"2026-07-18T02:00:00Z","struct_type":"node"}
+{"name":"hostname","type":"file","path":"/etc/hostname","size":7,"mtime":"2026-07-10T00:00:00Z","struct_type":"node"}
+{"name":"ssh","type":"dir","path":"/etc/ssh","size":0,"mtime":"2026-07-11T00:00:00Z","struct_type":"node"}
+{"name":"sshd_config","type":"file","path":"/etc/ssh/sshd_config","size":3200,"struct_type":"node"}
+{"name":"resolv.conf","type":"symlink","path":"/etc/resolv.conf","linktarget":"../run/systemd/resolve/stub-resolv.conf","struct_type":"node"}`
+
+func TestListSingleLevel(t *testing.T) {
+	stubRestic(t, "cat <<'JSON'\n"+resticLsNDJSON+"\nJSON")
+	nodes, truncated, err := List(context.Background(), Repo{Backend: "rest:http://nas/", Password: "pw"}, "aaaa1111", "/etc", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if truncated {
+		t.Fatalf("did not expect truncation")
+	}
+	// Only immediate children of /etc — not /etc itself, not /etc/ssh/sshd_config.
+	var got []string
+	for _, n := range nodes {
+		got = append(got, n.Name+":"+n.Type)
+	}
+	want := []string{"ssh:dir", "hostname:file", "resolv.conf:symlink"} // dirs first, then files by name
+	if len(got) != len(want) {
+		t.Fatalf("wrong entries: %v (want %v)", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("entry %d = %q, want %q (full: %v)", i, got[i], want[i], got)
+		}
+	}
+	if nodes[2].Target != "../run/systemd/resolve/stub-resolv.conf" {
+		t.Fatalf("symlink target not carried: %q", nodes[2].Target)
+	}
+}
+
+func TestListTruncates(t *testing.T) {
+	stubRestic(t, "cat <<'JSON'\n"+resticLsNDJSON+"\nJSON")
+	nodes, truncated, err := List(context.Background(), Repo{Backend: "rest:http://nas/", Password: "pw"}, "aaaa1111", "/etc", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !truncated {
+		t.Fatalf("expected truncated with limit=1")
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("expected exactly 1 entry at limit=1, got %d", len(nodes))
+	}
+}
+
+func TestListError(t *testing.T) {
+	stubRestic(t, `echo "Fatal: no matching ID found for prefix" >&2; exit 1`)
+	_, _, err := List(context.Background(), Repo{Backend: "rest:http://nas/", Password: "pw"}, "deadbeef", "/etc", 0)
+	if err == nil || !strings.Contains(err.Error(), "restic ls") {
+		t.Fatalf("expected an ls error to surface, got %v", err)
+	}
+}
+
 func TestBackupStreamsLifecycle(t *testing.T) {
 	stubRestic(t, `
 echo "scan finished"

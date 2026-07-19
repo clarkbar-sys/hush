@@ -21,6 +21,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	pathpkg "path"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -168,6 +170,138 @@ func Snapshots(ctx context.Context, repo Repo, tags ...string) ([]Snapshot, erro
 		return nil, fmt.Errorf("parse restic snapshots: %w", err)
 	}
 	return snaps, nil
+}
+
+// Node is one entry from `restic ls --json` — a file, directory, or symlink
+// inside a snapshot, trimmed to what the console's snapshot browser shows. It is
+// the restore-confidence read path: walk a snapshot's tree to confirm the data
+// is really in there before trusting it, without writing anything.
+type Node struct {
+	Name   string `json:"name"`
+	Type   string `json:"type"` // "dir" | "file" | "symlink"
+	Path   string `json:"path"`
+	Size   int64  `json:"size,omitempty"`
+	MTime  string `json:"mtime,omitempty"`
+	Target string `json:"linktarget,omitempty"` // symlink destination
+}
+
+const (
+	// DefaultListLimit caps how many immediate children List returns for one
+	// directory, so browsing a snapshot of a directory holding a million files
+	// stays a bounded request — the same "partial, marked truncated" contract the
+	// /du treemap walk uses, rather than streaming forever.
+	DefaultListLimit = 2000
+	// listScanCap bounds how many ls lines List reads before giving up, so a
+	// pathological subtree can't make it walk the whole snapshot to find one
+	// level's children.
+	listScanCap = 500_000
+)
+
+// List returns the immediate children of dir within a snapshot by streaming
+// `restic ls <snapshot> [dir] --json` and keeping only the nodes exactly one
+// level deep. restic's ls is recursive; List filters to a single level so the
+// console can walk a snapshot the same lazy, one-directory-at-a-time way it
+// walks a live filesystem. It stops once limit children are collected (reporting
+// truncated=true) so a huge directory returns a partial answer instead of
+// hanging. dir is an absolute path inside the snapshot; "" or "/" lists the
+// snapshot's roots. It only ever reads — a snapshot is immutable — so browsing
+// can never harm the backup.
+func List(ctx context.Context, repo Repo, snapshot, dir string, limit int) ([]Node, bool, error) {
+	if limit <= 0 {
+		limit = DefaultListLimit
+	}
+	d := "/"
+	if s := strings.TrimSpace(dir); s != "" {
+		d = pathpkg.Clean(s)
+	}
+	args := []string{"ls", snapshot}
+	if d != "/" {
+		args = append(args, d)
+	}
+	args = append(args, "--json")
+
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	c := exec.CommandContext(runCtx, Binary, args...)
+	c.Env = repo.env()
+	// Own process group so cancelling (we stop early once we have a level's worth
+	// of children) kills the whole restic tree, the same containment stream uses.
+	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	c.Cancel = func() error {
+		if c.Process != nil {
+			return syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
+		}
+		return nil
+	}
+	c.WaitDelay = 2 * time.Second
+
+	stdout, err := c.StdoutPipe()
+	if err != nil {
+		return nil, false, err
+	}
+	var stderr strings.Builder
+	c.Stderr = &stderr
+	if err := c.Start(); err != nil {
+		return nil, false, err
+	}
+
+	var out []Node
+	truncated := false
+	sc := bufio.NewScanner(stdout)
+	// Deep paths make long lines; give the scanner room past the 64 KiB default.
+	sc.Buffer(make([]byte, 0, 64*1024), 4<<20)
+	scanned := 0
+	for sc.Scan() {
+		if scanned++; scanned > listScanCap {
+			truncated = true
+			break
+		}
+		var n Node
+		if err := json.Unmarshal(sc.Bytes(), &n); err != nil {
+			continue // the leading snapshot-header line, or a shape we don't model
+		}
+		if n.Name == "" || n.Path == "" {
+			continue // header line carries paths[] but no single name/path
+		}
+		if pathpkg.Dir(n.Path) != d {
+			continue // not an immediate child of the directory we're listing
+		}
+		out = append(out, n)
+		if len(out) >= limit {
+			truncated = true
+			break
+		}
+	}
+	// If we stopped early, cancel kills restic and its non-zero exit is expected;
+	// only a failure on a full read (bad snapshot id, wrong password) is a real
+	// error. When we read to the end, we must NOT cancel before Wait, or a clean
+	// run would come back looking canceled — the defer'd cancel cleans up instead.
+	stopped := truncated
+	if stopped {
+		cancel()
+	}
+	werr := c.Wait()
+	if !stopped && werr != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = werr.Error()
+		}
+		return nil, false, fmt.Errorf("restic ls: %s", msg)
+	}
+	sortNodes(out)
+	return out, truncated, nil
+}
+
+// sortNodes orders a directory listing the way a file browser reads: directories
+// first, then files and symlinks, each group alphabetical by name.
+func sortNodes(ns []Node) {
+	sort.SliceStable(ns, func(i, j int) bool {
+		di, dj := ns[i].Type == "dir", ns[j].Type == "dir"
+		if di != dj {
+			return di
+		}
+		return ns[i].Name < ns[j].Name
+	})
 }
 
 // Backup runs `restic backup` for spec against repo, streaming its lifecycle to
