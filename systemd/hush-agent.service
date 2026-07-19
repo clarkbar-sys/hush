@@ -8,8 +8,14 @@ Wants=network-online.target
 Type=simple
 User=hush
 Group=hush
+# EnvironmentFile is optional (- prefix): if /etc/hush/agent.env is missing —
+# e.g. an immutable-distro OS update wiped /etc/hush (SteamOS resets /etc on
+# updates) — HUSH_AGENT_LISTEN is simply unset. The :-tailnet default below then
+# supplies the same value the installer writes, instead of expanding to an empty
+# -listen argument. Without it the agent would bind Go's net default of :80, fail
+# with "permission denied" as the unprivileged hush user, and crash-loop.
 EnvironmentFile=-/etc/hush/agent.env
-ExecStart=/usr/local/bin/hush-agent -listen ${HUSH_AGENT_LISTEN}
+ExecStart=/usr/local/bin/hush-agent -listen ${HUSH_AGENT_LISTEN:-tailnet}
 Restart=on-failure
 RestartSec=5s
 
