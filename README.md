@@ -22,15 +22,15 @@ See [`docs/DESIGN.md`](./docs/DESIGN.md) for the design and
 [issue #6](https://github.com/clarkbar-sys/hush/issues/6) for the full
 initiative.
 
-**Status:** the restic-backed **Backup** construct closes the loop end to end —
-on-demand or unattended-scheduled backups, paths picked from the disk-usage
-treemap, snapshot restore, and off-box key escrow — and the console is now built
-around it: the fleet map leads with backup posture, a header **alert bell** ranks
-the backups that need attention, and you can **browse inside a snapshot** from
-your phone to confirm your data is really there before a restore. The read-only
-substrate is live too — service vitals, file browsing, and a live htop-style
-CPU/network panel per machine. Next up: push/email alert delivery,
-cross-site replication, and retention policy. See
+**Status:** hush is a **read-only backup monitor** for the fleet. Backups are
+restic runs set up on each box over SSH (the
+[backup convention](./docs/BACKUP-CONVENTION.md)); the console reads their status
+and makes it legible — the fleet map leads with backup posture, and a header
+**alert bell** ranks the backups that need attention, so the box that isn't safe
+is the one that stands out. The read-only substrate is live too — service vitals,
+file browsing, a windirstat-style disk-usage treemap, and a live htop-style
+CPU/network panel per machine. Next up: push/email alert delivery, cross-site
+replication, and retention policy. See
 [`docs/DESIGN.md#roadmap`](./docs/DESIGN.md#roadmap) for the full picture.
 
 ## Install
@@ -173,78 +173,52 @@ deliberate tap; discovery only ever suggests.
 
 ### Back up a machine (Backups)
 
-The **Backup** construct sends a machine's paths into a
-[restic](https://restic.net) repository — dedup'd, encrypted, snapshotted —
-from **＋ Build → Backup** or the **Backups** section of any Machine view. Point
-it at a restic backend (a [rest-server](https://github.com/restic/rest-server)
-URL on the NAS is the blessed target, reachable over the tailnet and
-append-only; `sftp:` and local paths work too), name the paths (or **pick them
-from the disk-usage treemap**), and optionally tick **whole machine**
-(`--one-file-system`). Give it a **cron schedule** and the agent fires it
-unattended — nightly, on the box; leave the schedule blank to run it only by
-hand. Creating a backup initialises the repo and verifies the password against
-it, so a bad address or key fails then and not at 3am; a run streams restic's
-output to a live terminal in the console.
+hush **watches** your backups; it doesn't run them. A backup needs root and holds
+a repository credential — and `hush-agent` runs unprivileged and must never hold
+that — so backups are set up **on the box, over SSH**, and the console reports
+their status read-only. Every Machine view's **Backups** section shows that box's
+scheduled [restic](https://restic.net) backups: posture (protected / at risk /
+failed), the last run and where it ships to, and a strip of recent runs. The
+Fleet view rolls them all up and floats the box that isn't safe to the top, with
+a header **alert bell** for anything that needs attention.
 
-It's **off by default** — a backup reads whatever paths you point it at — so a
-box serves it only when `hush-agent` is started with `-backup` (or
-`HUSH_AGENT_BACKUP=1` in its env file); until then `/backups` returns `403`,
-surfaced as "backups disabled". The repository password is stored on the agent's
-own `0700` state dir and handed to restic through the environment — it never
-passes through hush-control or the phone, and the API never returns it. Needs the
-`restic` binary on the box. See
-[`docs/DESIGN.md`](./docs/DESIGN.md#backups--restic-the-first-slice).
+#### Setting up a backup
 
-Restore from the **Snapshots** view (the `⋯` on a backup): pick a snapshot, hit
-`⤓`, and restic writes its files into a target folder — defaulting to a scratch
-dir (`/var/tmp/hush-restore/<id>`) so you can inspect a restore before pointing
-it at a live path.
+`scripts/install-backup.sh` writes the whole convention in one go — repo
+credentials, the paths, a schedule, and a `restic-backup@<name>` systemd timer.
+Download and read it first: it takes a credential and runs as root, so it's
+deliberately **not** a `curl | sudo sh` one-liner.
 
-#### Setting up backups end to end
+```bash
+sudo sh scripts/install-backup.sh --name deck-nas \
+    --repo 'rest:http://nas:8000/deck/' --repo-user deck \
+    --paths '/home/deck' --schedule 04:00
+```
 
-You don't have to memorise any of this — the Machine view's **Set up backups**
-button detects what a box is missing (`restic`, `-backup`, a vault) and generates
-the exact idempotent command to paste over SSH, picking the right package manager
-for the box's OS. The steps below are what that command does, for when you'd
-rather do it by hand.
+Run it with no flags to be prompted for each. The box you back up *to* is
+typically a [rest-server](https://github.com/restic/rest-server) on the NAS in
+**append-only** mode, so a compromised source can add snapshots but never delete
+old ones:
 
-A backup needs three things in place; once they are, the console does the rest.
+```bash
+# on the NAS — one repo host for the whole fleet, reached over the tailnet
+rest-server --path /srv/restic --listen :8000 --append-only \
+  --htpasswd-file /srv/restic/.htpasswd
+```
 
-1. **`restic` on every box you back up** — your distro's package (`apt install
-   restic`, `pacman -S restic`, …) or restic's static binary. The agent reports
-   "restic is not installed" at create time if it's missing.
-2. **A repository to back up *to*.** The durable, self-hosted choice is a
-   [rest-server](https://github.com/restic/rest-server) on the box that holds the
-   disks (the NAS). Run it in **append-only** mode so a compromised source can add
-   snapshots but never delete old ones, behind a password:
+`sftp:` and local/mounted paths work too, without the append-only guarantee. The
+exact files, the secret-free status-file contract, and how the agent reads it are
+in [`docs/BACKUP-CONVENTION.md`](./docs/BACKUP-CONVENTION.md).
 
-   ```bash
-   # on the NAS — one repo host for the whole fleet, reached over the tailnet
-   rest-server --path /srv/restic --listen :8000 --append-only \
-     --htpasswd-file /srv/restic/.htpasswd
-   ```
+**The key lives on the box.** restic encrypts with a password that
+`install-backup.sh` generates once and stores in `/etc/restic/<name>.env` (root,
+`0600`) — the same box the backup exists to survive, so its disk holds the *only*
+copy. The script prints it once so you can escrow it off-box (a password manager,
+not a box you back up). Lose it and the snapshots are unrecoverable by design.
 
-   Then a backup's **Repository** is `rest:http://<nas-tailnet-ip>:8000/<name>`
-   (each machine can use its own `<name>` sub-repo, or share one — restic dedups
-   across them). `sftp:` to the NAS or a local/mounted path work too, without the
-   append-only guarantee.
-3. **`-backup` on the agents.** Set `HUSH_AGENT_BACKUP=1` in the box's
-   `/etc/hush/*.env` and `systemctl restart hush-agent` (backups are off by
-   default). To fire them unattended, give the backup a cron schedule when you
-   create it.
-
-Then, from the console: **Build → Backup**, pick the machine, the repo, the paths
-(or the treemap), a schedule — and verify it with a **Run**, then a **Restore**
-of the snapshot it wrote into a scratch dir.
-
-**Escrow the repo keys.** The encryption password is stored only in the agent's
-`0700` state dir on the box it backs up — the same box the backup exists to
-survive, so its disk holds the *only* copy of the key. Save a copy off-box: run
-`hush-agent -export-keys` over SSH to print the box's repo keys as JSON and stash
-them in a password manager (not on a box you back up). Lose the key and its
-snapshots are unrecoverable by design. The console's **Backups → Escrow repo
-keys** row generates that command and tracks (browser-locally) which boxes you've
-saved — the key itself never passes through hush-control.
+**Restore** the same way you set up — on the box, over SSH, where the key already
+is: `restic -r <repo> restore <snapshot> --target <dir>`. The console tells you
+which snapshot ran clean; the recovery happens where the credential lives.
 
 ## Run as a service
 

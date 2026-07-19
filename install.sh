@@ -292,10 +292,8 @@ install_agent() {
     "# local-only agent, or host:port to pin a specific interface." \
     "HUSH_AGENT_LISTEN=tailnet" \
     "" \
-    "# Uncomment to enable restic backups: the agent reads the paths you name and" \
-    "# stores a repository key on the box, so it's off by default. State persists" \
-    "# to /var/lib/hush/backups.json." \
-    "# HUSH_AGENT_BACKUP=1"
+    "# Backups are set up on the box over SSH (docs/BACKUP-CONVENTION.md); the" \
+    "# agent only reports their status, so there is nothing to enable here."
   enable_service hush-agent.service
   install_agent_updater
 }

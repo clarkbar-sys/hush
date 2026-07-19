@@ -200,10 +200,8 @@ install_agent() {
     "# Bind to the tailnet interface in production, not 127.0.0.1." \
     "HUSH_AGENT_LISTEN=127.0.0.1:8765" \
     "" \
-    "# Uncomment to enable restic backups (the agent reads the paths you name and" \
-    "# stores a repository key on the box, persisted to /var/lib/hush/backups.json)." \
-    "# Off by default." \
-    "# HUSH_AGENT_BACKUP=1"
+    "# Backups are set up on the box over SSH (docs/BACKUP-CONVENTION.md); the" \
+    "# agent only reports their status, so there is nothing to enable here."
   enable_service hush-agent.service
   install_agent_updater
 }

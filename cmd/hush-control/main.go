@@ -38,29 +38,28 @@ type Agent struct {
 
 // Machine is the shape the web UI consumes (one entry of /api/fleet).
 type Machine struct {
-	ID                   string                   `json:"id"`
-	AgentVersion         string                   `json:"agentVersion,omitempty"`
-	LatestVersion        string                   `json:"latestVersion,omitempty"`        // latest published release, when known
-	AgentUpdateAvailable bool                     `json:"agentUpdateAvailable,omitempty"` // true when AgentVersion is older than LatestVersion
-	OS                   string                   `json:"os"`
-	IP                   string                   `json:"ip"`
-	Role                 string                   `json:"role"`
-	Status               string                   `json:"status"`
-	CPU                  int                      `json:"cpu"`
-	Mem                  int                      `json:"mem"`
-	Disk                 int                      `json:"disk"`
-	GPU                  *int                     `json:"gpu"`
-	VRAM                 *int                     `json:"vram"`
-	GPUName              string                   `json:"gpuName,omitempty"`
-	VRAMText             string                   `json:"vramText,omitempty"`
-	Up                   string                   `json:"up"`
-	Load                 string                   `json:"load"`
-	NetRx                int                      `json:"netRx"` // inbound bytes/sec
-	NetTx                int                      `json:"netTx"` // outbound bytes/sec
-	Services             []vitals.Service         `json:"services"`
-	Backup               *vitals.BackupCapability `json:"backup,omitempty"` // backup readiness (restic/-backup/vault) so the console can generate setup commands
-	Online               bool                     `json:"online"`
-	Alert                string                   `json:"alert,omitempty"`
+	ID                   string           `json:"id"`
+	AgentVersion         string           `json:"agentVersion,omitempty"`
+	LatestVersion        string           `json:"latestVersion,omitempty"`        // latest published release, when known
+	AgentUpdateAvailable bool             `json:"agentUpdateAvailable,omitempty"` // true when AgentVersion is older than LatestVersion
+	OS                   string           `json:"os"`
+	IP                   string           `json:"ip"`
+	Role                 string           `json:"role"`
+	Status               string           `json:"status"`
+	CPU                  int              `json:"cpu"`
+	Mem                  int              `json:"mem"`
+	Disk                 int              `json:"disk"`
+	GPU                  *int             `json:"gpu"`
+	VRAM                 *int             `json:"vram"`
+	GPUName              string           `json:"gpuName,omitempty"`
+	VRAMText             string           `json:"vramText,omitempty"`
+	Up                   string           `json:"up"`
+	Load                 string           `json:"load"`
+	NetRx                int              `json:"netRx"` // inbound bytes/sec
+	NetTx                int              `json:"netTx"` // outbound bytes/sec
+	Services             []vitals.Service `json:"services"`
+	Online               bool             `json:"online"`
+	Alert                string           `json:"alert,omitempty"`
 }
 
 // Report is the downloadable fleet snapshot served by /api/report: the same
@@ -224,61 +223,6 @@ func buildMux(store *agentStore, discoverer *discoverer, dialer *agentDialer, we
 			return
 		}
 		proxyFile(w, r, streamClient, a)
-	})
-	// Backups: restic definitions live on the agent (the box holds its own repo
-	// key), so these are pass-through proxies. List/create/delete and a
-	// snapshots listing ride a client with a longer timeout than the 2s fleet
-	// poll, since a create runs `restic init` and a snapshots probe across the
-	// tailnet to the rest-server; a run streams for as long as the backup takes,
-	// so it rides the no-timeout streamClient like /file.
-	backupClient := dialer.client(60 * time.Second)
-	mux.HandleFunc("/api/machines/{host}/backups", func(w http.ResponseWriter, r *http.Request) {
-		a, ok := store.find(r.PathValue("host"))
-		if !ok {
-			http.Error(w, "unknown machine", http.StatusNotFound)
-			return
-		}
-		proxyBackups(w, r, backupClient, a)
-	})
-	mux.HandleFunc("/api/machines/{host}/backups/{id}", func(w http.ResponseWriter, r *http.Request) {
-		a, ok := store.find(r.PathValue("host"))
-		if !ok {
-			http.Error(w, "unknown machine", http.StatusNotFound)
-			return
-		}
-		proxyBackup(w, r, backupClient, a, r.PathValue("id"))
-	})
-	mux.HandleFunc("/api/machines/{host}/backups/{id}/run", func(w http.ResponseWriter, r *http.Request) {
-		a, ok := store.find(r.PathValue("host"))
-		if !ok {
-			http.Error(w, "unknown machine", http.StatusNotFound)
-			return
-		}
-		proxyBackupRun(w, r, streamClient, a, r.PathValue("id"))
-	})
-	mux.HandleFunc("/api/machines/{host}/backups/{id}/snapshots", func(w http.ResponseWriter, r *http.Request) {
-		a, ok := store.find(r.PathValue("host"))
-		if !ok {
-			http.Error(w, "unknown machine", http.StatusNotFound)
-			return
-		}
-		proxyBackupSnapshots(w, r, backupClient, a, r.PathValue("id"))
-	})
-	mux.HandleFunc("/api/machines/{host}/backups/{id}/snapshots/{snap}/ls", func(w http.ResponseWriter, r *http.Request) {
-		a, ok := store.find(r.PathValue("host"))
-		if !ok {
-			http.Error(w, "unknown machine", http.StatusNotFound)
-			return
-		}
-		proxyBackupSnapshotLS(w, r, backupClient, a, r.PathValue("id"), r.PathValue("snap"))
-	})
-	mux.HandleFunc("/api/machines/{host}/backups/{id}/restore", func(w http.ResponseWriter, r *http.Request) {
-		a, ok := store.find(r.PathValue("host"))
-		if !ok {
-			http.Error(w, "unknown machine", http.StatusNotFound)
-			return
-		}
-		proxyBackupRestore(w, r, streamClient, a, r.PathValue("id"))
 	})
 	mux.HandleFunc("/api/agents", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -649,27 +593,6 @@ func proxyFile(w http.ResponseWriter, r *http.Request, client *http.Client, a Ag
 	}
 }
 
-// flushCopy streams src to w, flushing after every chunk so SSE frames reach the
-// client as they arrive instead of buffering until the body closes.
-func flushCopy(w http.ResponseWriter, src io.Reader) {
-	flusher, _ := w.(http.Flusher)
-	buf := make([]byte, 4096)
-	for {
-		n, err := src.Read(buf)
-		if n > 0 {
-			if _, werr := w.Write(buf[:n]); werr != nil {
-				return
-			}
-			if flusher != nil {
-				flusher.Flush()
-			}
-		}
-		if err != nil {
-			return
-		}
-	}
-}
-
 // collectFleet fans out to every agent's /vitals. latest is the latest
 // published release tag (empty when unknown), used to flag agents running an
 // older version — the same tag covers both binaries, since hush-agent and
@@ -726,7 +649,6 @@ func fetchOne(client *http.Client, a Agent, latest string) Machine {
 	m.CPU, m.Mem, m.Disk = s.CPU, s.Mem, s.Disk
 	m.NetRx, m.NetTx = s.NetRx, s.NetTx
 	m.GPU, m.VRAM, m.GPUName, m.VRAMText = s.GPU, s.VRAM, s.GPUName, s.VRAMText
-	m.Backup = s.Backup
 	if len(s.Services) > 0 {
 		m.Services = s.Services
 	}
