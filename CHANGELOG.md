@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.0](https://github.com/clarkbar-sys/hush/compare/v1.28.0...v1.29.0) (2026-07-19)
+
+
+### Features
+
+* **backups:** detect a run in flight from systemd, not just the marker ([#148](https://github.com/clarkbar-sys/hush/issues/148)) ([fa8eb89](https://github.com/clarkbar-sys/hush/commit/fa8eb89d6e33f4a5934aea23a8aef65c343e4bcf))
+
 ## [1.28.0](https://github.com/clarkbar-sys/hush/compare/v1.27.0...v1.28.0) (2026-07-19)
 
 
