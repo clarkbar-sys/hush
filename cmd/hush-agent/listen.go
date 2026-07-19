@@ -94,6 +94,15 @@ func waitForTailnetIPv4(interfaceAddrs func() ([]net.Addr, error), interval time
 // address passes through unchanged; the "tailnet" sentinel resolves to this
 // machine's Tailscale IPv4, waiting for it if tailscale is still coming up.
 func resolveListen(listen string) (string, error) {
+	// An empty value means -listen was supplied but blank — most often a systemd
+	// unit expanding ${HUSH_AGENT_LISTEN} when /etc/hush/agent.env is missing. The
+	// flag's own default never applies there because the flag *was* provided, so
+	// without this guard the empty string reaches net.Listen, which reads it as
+	// ":80" and crash-loops with "permission denied" under the unprivileged hush
+	// user. Fall back to the same default port the flag documents.
+	if listen == "" {
+		listen = ":" + defaultAgentPort
+	}
 	port, ok := tailnetPort(listen)
 	if !ok {
 		return listen, nil

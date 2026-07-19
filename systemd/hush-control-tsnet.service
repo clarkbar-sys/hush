@@ -10,8 +10,11 @@ Type=simple
 User=hush
 Group=hush
 WorkingDirectory=/etc/hush
+# The :-defaults keep tsnet mode bootable if control-tsnet.env is missing (the -
+# prefix already makes the file optional): an unset variable would otherwise
+# expand to an empty argument and override the binary's own flag default.
 EnvironmentFile=-/etc/hush/control-tsnet.env
-ExecStart=/usr/local/bin/hush-control -tsnet -hostname ${HUSH_CONTROL_HOSTNAME} -state-dir ${HUSH_CONTROL_STATE_DIR}
+ExecStart=/usr/local/bin/hush-control -tsnet -hostname ${HUSH_CONTROL_HOSTNAME:-hush} -state-dir ${HUSH_CONTROL_STATE_DIR:-/var/lib/hush}
 Restart=on-failure
 RestartSec=5s
 StateDirectory=hush
