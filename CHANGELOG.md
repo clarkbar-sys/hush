@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.26.0](https://github.com/clarkbar-sys/hush/compare/v1.25.0...v1.26.0) (2026-07-19)
+
+
+### Features
+
+* **control:** serve only over the tailnet; remove plain-HTTP LAN mode ([#133](https://github.com/clarkbar-sys/hush/issues/133)) ([84f0f66](https://github.com/clarkbar-sys/hush/commit/84f0f667c5b5277849ed6e0c5cc93a6050f5faa3))
+
+
+### Bug Fixes
+
+* **systemd:** use Environment= for defaults; ${VAR:-default} isn't valid ([#131](https://github.com/clarkbar-sys/hush/issues/131)) ([e83a2fc](https://github.com/clarkbar-sys/hush/commit/e83a2fc4ed7ae74675f9e7772c42b45166301218))
+
 ## [1.25.0](https://github.com/clarkbar-sys/hush/compare/v1.24.0...v1.25.0) (2026-07-19)
 
 
