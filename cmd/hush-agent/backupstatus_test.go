@@ -10,6 +10,34 @@ import (
 	"time"
 )
 
+// TestMain neutralises the systemd probe for the whole package.
+//
+// readConventionBackupStatuses now enumerates the machine's restic-backup@
+// units, so without this a developer box that happens to be mid-backup injects
+// a real, unrelated backup into every test that reads a status directory —
+// failing assertions that have nothing to do with this feature. Tests that care
+// about the probe stub it themselves via stubRunningBackups.
+func TestMain(m *testing.M) {
+	runningBackups = func() map[string]string { return nil }
+	os.Exit(m.Run())
+}
+
+// stubRunningBackups makes the systemd probe answer with a fixed set for one
+// test. A fresh copy is handed out per call, so a test cannot be affected by
+// what the code under test does with the map it receives.
+func stubRunningBackups(t *testing.T, running map[string]string) {
+	t.Helper()
+	prev := runningBackups
+	runningBackups = func() map[string]string {
+		out := make(map[string]string, len(running))
+		for k, v := range running {
+			out[k] = v
+		}
+		return out
+	}
+	t.Cleanup(func() { runningBackups = prev })
+}
+
 func writeStatus(t *testing.T, dir, name, body string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
@@ -304,5 +332,197 @@ func TestParseNextElapseTolerantOfOldSystemd(t *testing.T) {
 func TestBackupTimerUnitNaming(t *testing.T) {
 	if got := backupTimerUnit("jaassh-nas"); got != "restic-backup@jaassh-nas.timer" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// listUnitsFixture is real `systemctl list-units restic-backup@*.service --all
+// --no-pager --output=json` output, captured from a box mid-backup. Held
+// verbatim so the parser is tested against what systemd actually emits.
+const listUnitsFixture = `[{"unit":"restic-backup@jaassh-nas.service","load":"loaded","active":"activating","sub":"start","job":"start","description":"restic backup: jaassh-nas"}]`
+
+func TestParseRunningBackupUnitsAcceptsActivatingOneshot(t *testing.T) {
+	// The trap this whole function exists to avoid: these are Type=oneshot
+	// units, and a oneshot that is *executing* reports "activating"/"start",
+	// never "active". A check for "active" — the one you write without looking —
+	// is false for the entire life of every run, so the feature would appear to
+	// work, ship, and never once fire.
+	got := parseRunningBackupUnits([]byte(listUnitsFixture))
+	if len(got) != 1 || got[0] != "jaassh-nas" {
+		t.Fatalf("parseRunningBackupUnits = %v, want [jaassh-nas]", got)
+	}
+}
+
+func TestParseRunningBackupUnitsIgnoresUnitsNotInFlight(t *testing.T) {
+	// "active"/"exited" is a finished RemainAfterExit run, not a live one, and
+	// is the case most likely to be waved through by a looser check.
+	in := `[
+	  {"unit":"restic-backup@dead.service","active":"inactive","sub":"dead"},
+	  {"unit":"restic-backup@failed.service","active":"failed","sub":"failed"},
+	  {"unit":"restic-backup@done.service","active":"active","sub":"exited"},
+	  {"unit":"restic-backup@live.service","active":"active","sub":"running"}
+	]`
+	got := parseRunningBackupUnits([]byte(in))
+	if len(got) != 1 || got[0] != "live" {
+		t.Fatalf("parseRunningBackupUnits = %v, want [live]", got)
+	}
+}
+
+func TestParseRunningBackupUnitsIgnoresForeignAndUnparseable(t *testing.T) {
+	in := `[{"unit":"nginx.service","active":"active","sub":"running"}]`
+	if got := parseRunningBackupUnits([]byte(in)); len(got) != 0 {
+		t.Fatalf("foreign unit leaked in: %v", got)
+	}
+	// A systemd too old for --output=json prints a table, not JSON. That must
+	// read as "nothing running", not panic or half-parse.
+	if got := parseRunningBackupUnits([]byte("UNIT LOAD ACTIVE SUB\n")); len(got) != 0 {
+		t.Fatalf("non-JSON output should yield nothing, got %v", got)
+	}
+}
+
+func TestParseUnixTimestampProperty(t *testing.T) {
+	// The formatted case is the real trap: it is what systemd prints WITHOUT
+	// --timestamp=unix, and it must read as unknown rather than as some number
+	// scraped out of the date. Silently accepting it would put a wrong start
+	// time on the card.
+	cases := []struct {
+		name, in, want string
+	}{
+		{"unix form", "ExecMainStartTimestamp=@1784476487\n", "2026-07-19T11:54:47-04:00"},
+		{"formatted form is refused", "ExecMainStartTimestamp=Sun 2026-07-19 11:54:47 EDT\n", ""},
+		{"unset is @0", "ExecMainStartTimestamp=@0\n", ""},
+		{"empty value", "ExecMainStartTimestamp=\n", ""},
+		{"absent property", "OtherProperty=@1784476487\n", ""},
+	}
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skipf("tzdata unavailable: %v", err)
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := parseUnixTimestampProperty([]byte(c.in), "ExecMainStartTimestamp")
+			want := c.want
+			if want != "" {
+				// Compare as instants; the formatted zone depends on where the
+				// test runs, and asserting a literal string would make this pass
+				// only in one timezone.
+				wantT, err := time.Parse(time.RFC3339, want)
+				if err != nil {
+					t.Fatalf("bad want: %v", err)
+				}
+				gotT, err := time.Parse(time.RFC3339, got)
+				if err != nil {
+					t.Fatalf("parse got %q: %v", got, err)
+				}
+				if !gotT.Equal(wantT) {
+					t.Fatalf("got %s, want %s", gotT.In(loc), wantT.In(loc))
+				}
+				return
+			}
+			if got != "" {
+				t.Fatalf("got %q, want empty", got)
+			}
+		})
+	}
+}
+
+func TestReadBackupStatusesSynthesizesRunningWithoutStatusFile(t *testing.T) {
+	// The bug this feature was built for. A box's first backup has never
+	// finished, so it has written no status file, so the directory is empty —
+	// which already means "no backups configured, this box is unprotected".
+	// The longest run the box will ever do was indistinguishable from a box
+	// nobody set up, for its entire duration.
+	dir := t.TempDir()
+	stubRunningBackups(t, map[string]string{"first-ever": "2026-07-19T11:54:47-04:00"})
+
+	got, err := readConventionBackupStatuses(dir)
+	if err != nil {
+		t.Fatalf("readConventionBackupStatuses: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1 synthesized entry", len(got))
+	}
+	if got[0].Name != "first-ever" || got[0].State != "running" {
+		t.Fatalf("got %+v, want name=first-ever state=running", got[0])
+	}
+	if got[0].Started != "2026-07-19T11:54:47-04:00" {
+		t.Fatalf("Started = %q, want systemd's start time", got[0].Started)
+	}
+}
+
+func TestReadBackupStatusesMarksRunningAndClearsPreviousOutcome(t *testing.T) {
+	// A status file describing a FINISHED run, while systemd says a new run is
+	// under way. Every outcome field on disk belongs to the previous run, and
+	// the console reads a run in flight as carrying no outcome yet — so leaving
+	// them would show the last run's verdict against this run's clock.
+	dir := t.TempDir()
+	writeStatus(t, dir, "nightly.json", `{
+	  "name":"nightly","repository":"rest:http://nas/repo","paths":["/data"],
+	  "started":"2026-07-18T03:00:00-04:00","finished":"2026-07-18T03:40:00-04:00",
+	  "exit_code":3,"ok":false,"incomplete":true,"summary":{"files_new":7}
+	}`)
+	stubRunningBackups(t, map[string]string{"nightly": "2026-07-19T11:54:47-04:00"})
+
+	got, err := readConventionBackupStatuses(dir)
+	if err != nil {
+		t.Fatalf("readConventionBackupStatuses: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1 (enriched, not duplicated)", len(got))
+	}
+	s := got[0]
+	if s.State != "running" {
+		t.Fatalf("State = %q, want running", s.State)
+	}
+	if s.Started != "2026-07-19T11:54:47-04:00" {
+		t.Fatalf("Started = %q, want this run's start, not the previous run's", s.Started)
+	}
+	if s.Finished != "" || s.ExitCode != 0 || s.OK || s.Incomplete || s.Summary != nil {
+		t.Fatalf("previous run's outcome survived onto a running status: %+v", s)
+	}
+	// What is still true about the backup is kept.
+	if s.Repository != "rest:http://nas/repo" || len(s.Paths) != 1 {
+		t.Fatalf("repository/paths should survive: %+v", s)
+	}
+}
+
+func TestReadBackupStatusesLeavesFinishedRunsAloneWhenNothingRunning(t *testing.T) {
+	// systemd only ever ADDS "running" here. A hand-run backup — the restore
+	// drill the runner explicitly supports — has no unit, so "no active unit"
+	// must never be read as "not running" and used to clear a marker.
+	dir := t.TempDir()
+	writeStatus(t, dir, "done.json", `{"name":"done","ok":true,"exit_code":0,"finished":"2026-07-18T03:40:00-04:00"}`)
+	writeStatus(t, dir, "handrun.json", `{"name":"handrun","state":"running","started":"2026-07-19T09:00:00-04:00"}`)
+	stubRunningBackups(t, nil)
+
+	got, err := readConventionBackupStatuses(dir)
+	if err != nil {
+		t.Fatalf("readConventionBackupStatuses: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+	if got[0].Name != "done" || !got[0].OK || got[0].State != "" {
+		t.Fatalf("finished run was disturbed: %+v", got[0])
+	}
+	if got[1].Name != "handrun" || got[1].State != "running" {
+		t.Fatalf("hand-run marker was cleared: %+v", got[1])
+	}
+}
+
+func TestMarkRunningKeepsOwnStartWhenSystemdWillNotSay(t *testing.T) {
+	// systemd knows the unit is up but not when it started. A file already
+	// describing THIS run still has the right answer, so keep it...
+	s := conventionBackupStatus{Name: "x", State: "running", Started: "2026-07-19T09:00:00-04:00"}
+	markRunning(&s, "")
+	if s.Started != "2026-07-19T09:00:00-04:00" {
+		t.Fatalf("Started = %q, want the running file's own start time", s.Started)
+	}
+
+	// ...but a file describing a run that already ENDED does not, and a wrong
+	// start time is worse than none: it is what the stalled check measures.
+	prev := conventionBackupStatus{Name: "x", OK: true, Started: "2026-07-18T03:00:00-04:00"}
+	markRunning(&prev, "")
+	if prev.Started != "" {
+		t.Fatalf("Started = %q, want empty rather than the previous run's", prev.Started)
 	}
 }

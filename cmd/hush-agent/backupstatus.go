@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -135,6 +136,172 @@ func nextRun(name string) string {
 
 func backupTimerUnit(name string) string { return "restic-backup@" + name + ".timer" }
 
+// backupServiceUnit is the convention's service unit, the companion to
+// backupTimerUnit. docs/BACKUP-CONVENTION.md already fixes both names, so
+// reading them here adds no coupling the convention did not have.
+func backupServiceUnit(name string) string { return "restic-backup@" + name + ".service" }
+
+// runningBackups reports which convention backups are executing right now, as
+// name -> start time (RFC 3339, empty when systemd will not say).
+//
+// Indirected through a variable so tests can stub it. Without that, the probe
+// enumerates whatever restic-backup@ units the *test machine* is running, and
+// a test asserting "two statuses" fails on a developer box that is mid-backup.
+var runningBackups = systemdRunningBackups
+
+// systemdRunningBackups asks systemd which convention backups are in flight.
+//
+// The status file cannot answer this on its own. The runner writes a
+// "state":"running" marker at start, but that only helps once the *runner* is
+// current: a box whose /usr/local/bin/restic-backup-run predates that change
+// reports nothing while it works, and the agent self-updates its own binary
+// without ever refreshing that script — so the two drift, silently, and the
+// console goes blind exactly when it has something to say. systemd is the box's
+// own record of what is executing. It needs no cooperation from the runner, it
+// is right about a run that started before the agent did, and it is there for a
+// backup that has never once completed and so has no status file to enrich.
+//
+// Everything degrades to an empty map: no systemd, no such units, a systemctl
+// too old for --output=json, or one that takes too long. The caller then
+// behaves exactly as it did before this existed.
+func systemdRunningBackups() map[string]string {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, "systemctl", "list-units",
+		"restic-backup@*.service", "--all", "--no-pager", "--output=json").Output()
+	if err != nil {
+		return nil
+	}
+	names := parseRunningBackupUnits(out)
+	if len(names) == 0 {
+		return nil
+	}
+	running := make(map[string]string, len(names))
+	for _, name := range names {
+		running[name] = systemdRunStart(backupServiceUnit(name))
+	}
+	return running
+}
+
+// parseRunningBackupUnits pulls the in-flight backup names out of `systemctl
+// list-units --output=json`. Split from the exec call so this is tested against
+// captured systemd output rather than whatever the machine happens to be doing.
+//
+// The trap: these are Type=oneshot units, and a oneshot that is *executing*
+// reports ActiveState "activating" with SubState "start" — NOT "active". The
+// obvious check, `active == "active"`, is false for the entire life of every
+// run, on every box, forever. "active"/"running" is accepted as well so a unit
+// that is not oneshot still reads correctly; "active"/"exited" deliberately is
+// not, since that is a finished RemainAfterExit run rather than a live one.
+func parseRunningBackupUnits(out []byte) []string {
+	var units []struct {
+		Unit   string `json:"unit"`
+		Active string `json:"active"`
+		Sub    string `json:"sub"`
+	}
+	if err := json.Unmarshal(out, &units); err != nil {
+		return nil
+	}
+	var names []string
+	for _, u := range units {
+		inFlight := u.Active == "activating" || (u.Active == "active" && u.Sub == "running")
+		if !inFlight {
+			continue
+		}
+		if name := backupNameFromUnit(u.Unit); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// backupNameFromUnit is the inverse of backupServiceUnit, and returns "" for
+// anything that is not one of the convention's service units.
+func backupNameFromUnit(unit string) string {
+	const prefix, suffix = "restic-backup@", ".service"
+	if !strings.HasPrefix(unit, prefix) || !strings.HasSuffix(unit, suffix) {
+		return ""
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(unit, prefix), suffix)
+}
+
+// systemdRunStart returns when the current run of unit began, as RFC 3339.
+//
+// --timestamp=unix is load-bearing, and it is the same trap parseNextElapse
+// documents one screen up: by default systemd renders ExecMainStartTimestamp as
+// a locale- and timezone-formatted string ("Sun 2026-07-19 11:54:47 EDT"), which
+// no numeric parse recovers. --timestamp=unix asks for "@1784476487" instead.
+// Empty on any failure — a running backup whose start time is unknown is still
+// worth reporting as running.
+func systemdRunStart(unit string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, "systemctl", "show", unit,
+		"--property=ExecMainStartTimestamp", "--timestamp=unix", "--no-pager").Output()
+	if err != nil {
+		return ""
+	}
+	return parseUnixTimestampProperty(out, "ExecMainStartTimestamp")
+}
+
+// parseUnixTimestampProperty reads a `Property=@1784476487` line as RFC 3339.
+// A property systemd cannot answer comes back empty or absent, and an unset
+// timestamp is "@0"; all of those are reported as unknown.
+func parseUnixTimestampProperty(out []byte, prop string) string {
+	for _, line := range strings.Split(string(out), "\n") {
+		val, ok := strings.CutPrefix(strings.TrimSpace(line), prop+"=")
+		if !ok {
+			continue
+		}
+		val, ok = strings.CutPrefix(strings.TrimSpace(val), "@")
+		if !ok {
+			return ""
+		}
+		secs, err := strconv.ParseInt(val, 10, 64)
+		if err != nil || secs <= 0 {
+			return ""
+		}
+		return time.Unix(secs, 0).Format(time.RFC3339)
+	}
+	return ""
+}
+
+// markRunning rewrites a status to describe the run happening now.
+//
+// The outcome fields are cleared rather than kept: when a status file records a
+// *finished* run and systemd says a new one is under way, every one of
+// finished/exit_code/ok/incomplete/summary belongs to the previous run, and the
+// console reads a run in flight as carrying no outcome yet. Leaving them would
+// show the last run's verdict against the current run's clock. What survives is
+// what is still true — the name, the repository, and the paths it covers.
+//
+// The result is byte-for-byte the shape the runner's own start marker writes,
+// so a box detected this way and a box that announced itself render identically.
+func markRunning(s *conventionBackupStatus, started string) {
+	// Read the file's own state before overwriting it.
+	describesThisRun := s.State == "running"
+
+	s.State = "running"
+	s.Finished = ""
+	s.ExitCode = 0
+	s.OK = false
+	s.Incomplete = false
+	s.Summary = nil
+
+	switch {
+	case started != "":
+		// systemd is authoritative for the run in flight; the file may still be
+		// describing the previous one.
+		s.Started = started
+	case !describesThisRun:
+		// systemd would not say when, and the file's start time belongs to a run
+		// that has already ended. Report none rather than one that is wrong.
+		s.Started = ""
+	}
+}
+
 // parseNextElapse pulls one unit's next fire out of `systemctl list-timers
 // --output=json`, as RFC 3339. Split from the exec call so the parsing is
 // testable without depending on which timers happen to exist on the machine.
@@ -174,6 +341,13 @@ func readConventionBackupStatuses(dir string) ([]conventionBackupStatus, error) 
 		return nil, err
 	}
 
+	// Asked once, before the loop. Names matched to a status file are recorded
+	// rather than deleted, because the map belongs to the caller: mutating it
+	// would quietly corrupt any implementation that returns a cached or shared
+	// map instead of building a fresh one per call.
+	running := runningBackups()
+	matched := make(map[string]bool, len(running))
+
 	out := make([]conventionBackupStatus, 0, len(entries))
 	for _, e := range entries {
 		// The .history.jsonl logs sit in this directory too, but end in
@@ -198,10 +372,34 @@ func readConventionBackupStatuses(dir string) ([]conventionBackupStatus, error) 
 			// field still identifies itself in the console.
 			s.Name = strings.TrimSuffix(e.Name(), ".json")
 		}
+		// systemd only ever adds "running" here, never removes it. A hand-run
+		// backup — the restore drill the runner explicitly supports — has no unit
+		// at all, so "no active unit" does not mean "not running", and clearing a
+		// marker on that basis would report a live run as finished. Deciding a
+		// marker is orphaned stays with the console, which has bkStalled for it.
+		if started, ok := running[s.Name]; ok {
+			markRunning(&s, started)
+			matched[s.Name] = true
+		}
 		s.History = readHistory(dir, strings.TrimSuffix(e.Name(), ".json"))
 		s.NextRun = nextRun(s.Name)
 		out = append(out, s)
 	}
+
+	// A backup that has never finished has no status file, so the loop above
+	// cannot see it — and that is the case this probe exists for. A box's first
+	// backup is the longest one it will ever run, and it was invisible for its
+	// entire duration, indistinguishable from a box nobody ever set up.
+	for name, started := range running {
+		if matched[name] {
+			continue
+		}
+		s := conventionBackupStatus{Name: name, State: "running", Started: started}
+		s.History = readHistory(dir, name)
+		s.NextRun = nextRun(name)
+		out = append(out, s)
+	}
+
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
 }

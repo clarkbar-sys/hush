@@ -162,6 +162,34 @@ and behind a silent fallback that means the field is simply never populated.
 It is queried live rather than recorded at write time, because a recorded value
 goes stale the moment the schedule changes.
 
+The agent also asks systemd **which backups are running right now**, with
+`systemctl list-units 'restic-backup@*.service' --output=json`, and marks those
+`"state":"running"` regardless of what the status file says.
+
+This is deliberately not left to the runner's own start marker. That marker only
+works once the *runner* is current, and the agent self-updates its binary
+without ever refreshing `/usr/local/bin/restic-backup-run` — so a box can carry
+a new agent and an old runner and report nothing at all while it works. It also
+cannot help the case that matters most: a backup that has never finished has
+written no status file, so the directory is empty, and an empty directory
+already means "no backups configured, this box is unprotected". A box's first
+backup is the longest it will ever run, and it was invisible for all of it.
+systemd needs no cooperation from the runner and is right about a run that began
+before the agent did. A run it finds with no status file is reported from the
+unit alone.
+
+The same trap applies here: the start time comes from
+`systemctl show --property=ExecMainStartTimestamp --timestamp=unix`, and
+**`--timestamp=unix` is required** — the default rendering is the same
+locale-formatted string. Note too that these are `Type=oneshot` units, so a run
+in flight reports `ActiveState=activating`, *not* `active`; a check for `active`
+is false for the entire life of every run.
+
+systemd only ever **adds** `running` here, never clears it. A backup run by hand
+— the restore drill above — has no unit at all, so "no active unit" does not
+mean "not running". Deciding that a `running` marker has been orphaned stays
+with the console, which ages it out against `next_run`.
+
 The console shows them in a **Backups** rollup on the fleet view, which opens
 itself when something is wrong. Each card reads `source → target`, the target
 being pulled from the redacted repository URL, with the last fortnight of runs
