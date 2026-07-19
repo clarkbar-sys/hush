@@ -16,7 +16,7 @@ on a legible map where every machine is coloured by its **backup posture**
 (protected, at risk, unprotected, failed), so the box that isn't safe is the one
 that stands out. It grew out of a general "see and run your fleet" console
 (*Factorio for your homelab*), and the read-only spine of that — machines,
-services, stores, and links — is still here; backups are the point now.
+stores, and links — is still here; backups are the point now.
 
 See [`docs/DESIGN.md`](./docs/DESIGN.md) for the design and
 [issue #6](https://github.com/clarkbar-sys/hush/issues/6) for the full
@@ -27,10 +27,10 @@ restic runs set up on each box over SSH (the
 [backup convention](./docs/BACKUP-CONVENTION.md)); the console reads their status
 and makes it legible — the fleet map leads with backup posture, and a header
 **alert bell** ranks the backups that need attention, so the box that isn't safe
-is the one that stands out. The read-only substrate is live too — service vitals,
-file browsing, a windirstat-style disk-usage treemap, and a live htop-style
-CPU/network panel per machine. Next up: push/email alert delivery, cross-site
-replication, and retention policy. See
+is the one that stands out. The read-only substrate is live too — machine
+vitals, file browsing, a windirstat-style disk-usage treemap, and a live
+htop-style CPU/network panel per machine. Next up: push/email alert delivery,
+cross-site replication, and retention policy. See
 [`docs/DESIGN.md#roadmap`](./docs/DESIGN.md#roadmap) for the full picture.
 
 ## Install

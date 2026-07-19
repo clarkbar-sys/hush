@@ -75,9 +75,9 @@ func main() {
 	})
 	// /top is read-only host telemetry, the live-detail companion to /vitals
 	// (per-core load + the busiest processes). Like /vitals it's ungated — it
-	// exposes the same tier of information as the services list /vitals already
-	// carries — so the console's CPU/network drill-down works on every agent
-	// without a new flag or restart.
+	// exposes the same tier of information /vitals already carries — so the
+	// console's CPU/network drill-down works on every agent without a new
+	// flag or restart.
 	mux.HandleFunc("/top", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(vitals.CollectTop(topProcLimit)); err != nil {

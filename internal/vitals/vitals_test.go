@@ -47,18 +47,15 @@ func TestDeriveStatus(t *testing.T) {
 		name           string
 		cpu, mem, disk int
 		vram           *int
-		svcs           []Service
 		want           string
 	}{
-		{"idle", 5, 10, 20, nil, nil, "good"},
-		{"failed service is critical", 5, 10, 20, nil, []Service{{State: "failed"}}, "crit"},
-		{"full disk is critical", 5, 10, 95, nil, nil, "crit"},
-		{"busy cpu is a warning", 90, 10, 20, nil, nil, "warn"},
-		{"vram pressure is a warning", 5, 10, 20, vram(95), nil, "warn"},
-		{"running service stays good", 5, 10, 20, nil, []Service{{State: "running"}}, "good"},
+		{"idle", 5, 10, 20, nil, "good"},
+		{"full disk is critical", 5, 10, 95, nil, "crit"},
+		{"busy cpu is a warning", 90, 10, 20, nil, "warn"},
+		{"vram pressure is a warning", 5, 10, 20, vram(95), "warn"},
 	}
 	for _, tc := range tests {
-		if got := deriveStatus(tc.cpu, tc.mem, tc.disk, tc.vram, tc.svcs); got != tc.want {
+		if got := deriveStatus(tc.cpu, tc.mem, tc.disk, tc.vram); got != tc.want {
 			t.Errorf("%s: deriveStatus = %q, want %q", tc.name, got, tc.want)
 		}
 	}

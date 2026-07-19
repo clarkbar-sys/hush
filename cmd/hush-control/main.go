@@ -38,28 +38,27 @@ type Agent struct {
 
 // Machine is the shape the web UI consumes (one entry of /api/fleet).
 type Machine struct {
-	ID                   string           `json:"id"`
-	AgentVersion         string           `json:"agentVersion,omitempty"`
-	LatestVersion        string           `json:"latestVersion,omitempty"`        // latest published release, when known
-	AgentUpdateAvailable bool             `json:"agentUpdateAvailable,omitempty"` // true when AgentVersion is older than LatestVersion
-	OS                   string           `json:"os"`
-	IP                   string           `json:"ip"`
-	Role                 string           `json:"role"`
-	Status               string           `json:"status"`
-	CPU                  int              `json:"cpu"`
-	Mem                  int              `json:"mem"`
-	Disk                 int              `json:"disk"`
-	GPU                  *int             `json:"gpu"`
-	VRAM                 *int             `json:"vram"`
-	GPUName              string           `json:"gpuName,omitempty"`
-	VRAMText             string           `json:"vramText,omitempty"`
-	Up                   string           `json:"up"`
-	Load                 string           `json:"load"`
-	NetRx                int              `json:"netRx"` // inbound bytes/sec
-	NetTx                int              `json:"netTx"` // outbound bytes/sec
-	Services             []vitals.Service `json:"services"`
-	Online               bool             `json:"online"`
-	Alert                string           `json:"alert,omitempty"`
+	ID                   string `json:"id"`
+	AgentVersion         string `json:"agentVersion,omitempty"`
+	LatestVersion        string `json:"latestVersion,omitempty"`        // latest published release, when known
+	AgentUpdateAvailable bool   `json:"agentUpdateAvailable,omitempty"` // true when AgentVersion is older than LatestVersion
+	OS                   string `json:"os"`
+	IP                   string `json:"ip"`
+	Role                 string `json:"role"`
+	Status               string `json:"status"`
+	CPU                  int    `json:"cpu"`
+	Mem                  int    `json:"mem"`
+	Disk                 int    `json:"disk"`
+	GPU                  *int   `json:"gpu"`
+	VRAM                 *int   `json:"vram"`
+	GPUName              string `json:"gpuName,omitempty"`
+	VRAMText             string `json:"vramText,omitempty"`
+	Up                   string `json:"up"`
+	Load                 string `json:"load"`
+	NetRx                int    `json:"netRx"` // inbound bytes/sec
+	NetTx                int    `json:"netTx"` // outbound bytes/sec
+	Online               bool   `json:"online"`
+	Alert                string `json:"alert,omitempty"`
 }
 
 // Report is the downloadable fleet snapshot served by /api/report: the same
@@ -614,12 +613,11 @@ func collectFleet(client *http.Client, agents []Agent, latest string) []Machine 
 func fetchOne(client *http.Client, a Agent, latest string) Machine {
 	// Default to the "unreachable" state; a successful fetch overwrites it.
 	m := Machine{
-		ID:       a.Name,
-		IP:       a.IP,
-		Role:     a.Role,
-		Status:   "crit",
-		Alert:    "unreachable",
-		Services: []vitals.Service{},
+		ID:     a.Name,
+		IP:     a.IP,
+		Role:   a.Role,
+		Status: "crit",
+		Alert:  "unreachable",
 	}
 	if m.ID == "" {
 		m.ID = a.Addr
@@ -649,15 +647,6 @@ func fetchOne(client *http.Client, a Agent, latest string) Machine {
 	m.CPU, m.Mem, m.Disk = s.CPU, s.Mem, s.Disk
 	m.NetRx, m.NetTx = s.NetRx, s.NetTx
 	m.GPU, m.VRAM, m.GPUName, m.VRAMText = s.GPU, s.VRAM, s.GPUName, s.VRAMText
-	if len(s.Services) > 0 {
-		m.Services = s.Services
-	}
-	for _, sv := range s.Services {
-		if sv.State == "failed" {
-			m.Alert = sv.Name + ".service failed"
-			break
-		}
-	}
 	return m
 }
 
