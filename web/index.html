@@ -351,6 +351,19 @@
   .ducell .dopen { position:absolute; top:2px; left:4px; font-size:11px; line-height:1;
     color:#f2f0ff; opacity:.7; padding:2px 3px; border-radius:4px; background:rgba(4,2,14,.4); }
   .ducell .dopen:hover { opacity:1; background:rgba(4,2,14,.7); }
+  /* Backup coverage badge — shown per treemap cell when the host has at least
+     one configured backup, so the same "✓ protected / ○ none" glyph vocabulary
+     used on fleet cards (POSTURE, above) marks which paths are actually
+     covered. A cell too small to hold the 15px disc (same size threshold the
+     ⤢ open-folder badge already uses) falls back to a plain outline ring. */
+  .dubadge { position:absolute; top:3px; right:4px; font-size:10px; font-weight:700;
+    width:15px; height:15px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 1px 3px rgba(0,0,0,.5); line-height:1; }
+  .dubadge.full { background:var(--good); color:#04140d; }
+  .dubadge.partial { background:var(--warn); color:#241a00; }
+  .dubadge.none { background:transparent; border:1px solid var(--faint); color:var(--faint); }
+  .ducell.ring-full { outline:2px solid var(--good); outline-offset:-2px; }
+  .ducell.ring-partial { outline:2px solid var(--warn); outline-offset:-2px; }
   .dufoot { display:flex; align-items:center; gap:10px; padding:2px; }
   .dufoot .duselcount { font-family:var(--mono); font-size:12px; color:var(--ink); flex:1; }
   .row {
@@ -986,6 +999,28 @@
   // surfacing so someone watching a run can find it without hunting.
   const postureRank = { failed:5, none:4, risk:3, unknown:2, running:1, protected:0 };
 
+  // backupPathsFor: every path any of a host's configured backups covers —
+  // flattened across all its backup jobs, since a treemap cell's coverage
+  // doesn't care which job backs it up. Feeds the disk-usage treemap's
+  // per-cell coverage badge (openDu, below).
+  function backupPathsFor(id){
+    const h = hostBackupEntry(id);
+    if(!h) return [];
+    return (h.backups||[]).flatMap(b => b.paths||[]);
+  }
+  // duCoverage: how a treemap cell's absolute path relates to a host's backup
+  // paths. "full" when a backup path is the cell itself or an ancestor of it
+  // (the whole cell is inside a covered subtree, including a repo backing up
+  // "/"); "partial" when a backup path is nested inside the cell without the
+  // cell itself being covered (only part of this subtree is backed up);
+  // "none" otherwise.
+  function duCoverage(path, backupPaths){
+    const covers = p => p === "/" || p === path || path.startsWith(p + "/");
+    if(backupPaths.some(p => covers(p))) return "full";
+    if(backupPaths.some(p => p.startsWith(path === "/" ? "/" : path + "/"))) return "partial";
+    return "none";
+  }
+
   // bkRank picks the backup that *defines* a host's posture so the node-card
   // line leads with the run that matters, not just the first. A stalled run is
   // the loudest; then failed, then incomplete. A healthy in-flight run ranks
@@ -1508,6 +1543,11 @@
     const selecting = !!opts.select;
     const selected = new Map();            // absolute path -> size (0 when unknown, e.g. a pre-filled path)
     (opts.initial || []).forEach(p => selected.set(p, 0));
+    // Coverage badges only make sense on the read-only treemap (select mode's
+    // corner is already spoken for by the ✓ selection badge) and only when
+    // this host actually has a backup configured — otherwise every cell would
+    // show a hollow "○ not backed up" badge for no reason.
+    const backupPaths = selecting ? [] : backupPathsFor(id);
     const ov = document.createElement("div");
     ov.className = "vov";
     ov.innerHTML = `<div class="vsheet">
@@ -1518,7 +1558,8 @@
         </div>
         <div class="dubody">
           <div class="browsebar" id="duBar"></div>
-          ${selecting ? `<div class="dulegend" style="margin:-2px 0 0">tap a box to include it · tap ⤢ to open a folder</div>` : ""}
+          ${selecting ? `<div class="dulegend" style="margin:-2px 0 0">tap a box to include it · tap ⤢ to open a folder</div>`
+            : backupPaths.length ? `<div class="dulegend" style="margin:-2px 0 0">✓ backed up · ◐ partially backed up · ○ not backed up</div>` : ""}
           <div class="dumap" id="duMap"><div class="empty">sizing…</div></div>
           <div class="dulegend" id="duLegend"></div>
           ${selecting ? `<div class="dufoot" id="duFoot">
@@ -1577,13 +1618,23 @@
         const r = rects[i];
         const path = entryPath(l, e);
         const isSel = selecting && selected.has(path);
+        const cov = backupPaths.length ? duCoverage(path, backupPaths) : null;
+        const fitsBadge = r.w>26 && r.h>20;
         const cell = document.createElement("div");
-        cell.className = "ducell" + (e.isDir ? " dir" : "") + (selecting ? " selectable" : "") + (isSel ? " sel" : "");
+        cell.className = "ducell" + (e.isDir ? " dir" : "") + (selecting ? " selectable" : "") + (isSel ? " sel" : "")
+          + (cov && cov!=="none" && !fitsBadge ? ` ring-${cov}` : "");
         cell.style.cssText = `left:${r.x}px;top:${r.y}px;width:${Math.max(r.w-1,0)}px;height:${Math.max(r.h-1,0)}px;background:${duColor(i, e.isDir)}`;
-        cell.title = `${e.name} — ${fmtBytes(e.size)}`;
+        const covLabel = cov === "full" ? "backed up" : cov === "partial" ? "partially backed up" : cov === "none" ? "not backed up" : "";
+        cell.title = `${e.name} — ${fmtBytes(e.size)}` + (covLabel ? ` — ${covLabel}` : "");
         const showText = r.w>34 && r.h>16;
         if(showText){
           cell.innerHTML = `<span class="dn">${esc(e.name)}</span>` + (r.h>30 ? `<span class="ds">${fmtBytes(e.size)}</span>` : "");
+        }
+        if(cov && fitsBadge){
+          const badge = document.createElement("span");
+          badge.className = "dubadge " + cov;
+          badge.textContent = cov==="full" ? "✓" : cov==="partial" ? "◐" : "○";
+          cell.appendChild(badge);
         }
         if(selecting){
           if(isSel){ const badge = document.createElement("span"); badge.className = "duselbadge"; badge.textContent = "✓"; cell.appendChild(badge); }
