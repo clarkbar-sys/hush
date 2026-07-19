@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.1](https://github.com/clarkbar-sys/hush/compare/v1.26.0...v1.26.1) (2026-07-19)
+
+
+### Bug Fixes
+
+* **control:** dial agents through the tsnet node so the fleet is visible ([#134](https://github.com/clarkbar-sys/hush/issues/134)) ([d019af7](https://github.com/clarkbar-sys/hush/commit/d019af75aeb72118a26debf8367df66cc9b2b450))
+
 ## [1.26.0](https://github.com/clarkbar-sys/hush/compare/v1.25.0...v1.26.0) (2026-07-19)
 
 
