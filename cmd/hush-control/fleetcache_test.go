@@ -21,7 +21,7 @@ func TestAPIFleetColdCacheFallsBackToLiveScan(t *testing.T) {
 	defer agent.Close()
 
 	store := newTestStore(t, []Agent{{Name: "beacon", Addr: agent.URL}})
-	mux, _ := buildMux(store, muxDiscoverer(store), "")
+	mux, _ := buildMux(store, muxDiscoverer(store), nil, "")
 
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/fleet", nil))
@@ -51,7 +51,7 @@ func TestAPIFleetServesCacheWithoutReprobing(t *testing.T) {
 	defer agent.Close()
 
 	store := newTestStore(t, []Agent{{Name: "beacon", Addr: agent.URL}})
-	mux, fc := buildMux(store, muxDiscoverer(store), "")
+	mux, fc := buildMux(store, muxDiscoverer(store), nil, "")
 
 	// Warm the cache with one scan (what run() does at startup).
 	if got := fc.scan(context.Background()); len(got) != 1 {

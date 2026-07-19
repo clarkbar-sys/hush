@@ -118,7 +118,7 @@ func TestAPIDiscoverEndpoint(t *testing.T) {
 	probe := probeFunc(map[string]testAgentResult{
 		"http://" + host + ":" + discoverPort: {OK: true, Host: "beacon", OS: "Debian 12"},
 	})
-	mux, _ := buildMux(store, newDiscoverer(disco, probe, store.Snapshot), "")
+	mux, _ := buildMux(store, newDiscoverer(disco, probe, store.Snapshot), nil, "")
 
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/discover", nil))
@@ -148,7 +148,7 @@ func muxDiscoverer(store *agentStore) *discoverer {
 
 func TestAPIDiscoverRejectsPOST(t *testing.T) {
 	store := newTestStore(t, nil)
-	mux, _ := buildMux(store, muxDiscoverer(store), "")
+	mux, _ := buildMux(store, muxDiscoverer(store), nil, "")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/discover", nil))
 	if rr.Code != http.StatusMethodNotAllowed {
@@ -160,7 +160,7 @@ func TestAPIDiscoverUnavailableWithoutLister(t *testing.T) {
 	// No lister set (e.g. before the tsnet node is provisioned): the endpoint
 	// responds, but reports discovery unavailable rather than erroring.
 	store := newTestStore(t, nil)
-	mux, _ := buildMux(store, muxDiscoverer(store), "")
+	mux, _ := buildMux(store, muxDiscoverer(store), nil, "")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/discover", nil))
 	if rr.Code != http.StatusOK {
@@ -194,7 +194,7 @@ func TestDiscovererCachesAndRescans(t *testing.T) {
 	if got := d.scan(context.Background()); len(got.Candidates) != 1 {
 		t.Fatalf("first scan: %d candidates, want 1", len(got.Candidates))
 	}
-	mux, _ := buildMux(store, d, "")
+	mux, _ := buildMux(store, d, nil, "")
 
 	// A new agent appears, but a plain GET still serves the cached single result.
 	lister.set([]discoveredPeer{

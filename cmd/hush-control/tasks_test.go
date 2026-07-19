@@ -112,7 +112,7 @@ func TestSavedTaskForwardsRunAsUser(t *testing.T) {
 
 	dir := t.TempDir()
 	store := newAgentStore(filepath.Join(dir, "fleet.json"), []Agent{{Name: "box", Addr: agent.URL}})
-	mux, _ := buildMux(store, muxDiscoverer(store), "")
+	mux, _ := buildMux(store, muxDiscoverer(store), nil, "")
 
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(`{"name":"asMedia","host":"box","cmd":"whoami","user":"media"}`)))
@@ -150,7 +150,7 @@ func TestTasksHTTPCreateListRunUpdateDelete(t *testing.T) {
 
 	dir := t.TempDir()
 	store := newAgentStore(filepath.Join(dir, "fleet.json"), []Agent{{Name: "box", Addr: agent.URL}})
-	mux, _ := buildMux(store, muxDiscoverer(store), "")
+	mux, _ := buildMux(store, muxDiscoverer(store), nil, "")
 
 	// Create.
 	body := `{"name":"Ping","host":"box","cmd":"echo ok"}`

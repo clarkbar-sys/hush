@@ -109,7 +109,7 @@ func TestTestAgentEmptyAddr(t *testing.T) {
 
 func TestAPIAgentsAddAndReject(t *testing.T) {
 	store := newTestStore(t, nil)
-	mux, _ := buildMux(store, muxDiscoverer(store), "")
+	mux, _ := buildMux(store, muxDiscoverer(store), nil, "")
 
 	post := func(body string) *httptest.ResponseRecorder {
 		rr := httptest.NewRecorder()
@@ -155,7 +155,7 @@ func TestAPIAgentsAddAndReject(t *testing.T) {
 // permission checks the test might run past as root.
 func TestAPIAgentsSaveFailureReturns500(t *testing.T) {
 	store := newAgentStore(filepath.Join(t.TempDir(), "nonexistent", "fleet.json"), nil)
-	mux, _ := buildMux(store, muxDiscoverer(store), "")
+	mux, _ := buildMux(store, muxDiscoverer(store), nil, "")
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/agents", bytes.NewBufferString(`{"addr":"100.71.6.4:8765"}`))
@@ -171,7 +171,7 @@ func TestAPIAgentsSaveFailureReturns500(t *testing.T) {
 
 func TestAPIAgentsRejectsGET(t *testing.T) {
 	store := newTestStore(t, nil)
-	mux, _ := buildMux(store, muxDiscoverer(store), "")
+	mux, _ := buildMux(store, muxDiscoverer(store), nil, "")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/agents", nil))
 	if rr.Code != http.StatusMethodNotAllowed {
@@ -187,7 +187,7 @@ func TestAPIReport(t *testing.T) {
 
 	u, _ := url.Parse(agent.URL)
 	store := newTestStore(t, []Agent{{Name: "beacon", Addr: agent.URL, IP: u.Host}})
-	mux, _ := buildMux(store, muxDiscoverer(store), "")
+	mux, _ := buildMux(store, muxDiscoverer(store), nil, "")
 
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/report", nil))
@@ -224,7 +224,7 @@ func TestAPIAgentsTestEndpoint(t *testing.T) {
 	defer agent.Close()
 
 	store := newTestStore(t, nil)
-	mux, _ := buildMux(store, muxDiscoverer(store), "")
+	mux, _ := buildMux(store, muxDiscoverer(store), nil, "")
 
 	u, _ := url.Parse(agent.URL)
 	body, _ := json.Marshal(map[string]string{"addr": u.Host})
