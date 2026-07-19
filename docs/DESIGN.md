@@ -198,6 +198,17 @@ bounded — a 25-second walk deadline and a cap on files stated — so pointing 
 at something enormous (a whole root filesystem, a NAS's media pool) returns a
 partial, `truncated` answer instead of hanging the request.
 
+Because a walk is expensive, the agent memoizes each directory's sizing in an
+in-memory cache (`-du-cache-ttl`, default 1h): reopening the treemap or drilling
+back to a directory already sized returns instantly, and each listing carries
+`computedAt` so the console shows the number's age ("as of 14:03") rather than
+implying it's live. A background refresher (`-du-refresh`, default hourly)
+re-sizes recently-viewed paths so even the first open of a session tends to land
+on a warm number instead of a cold walk — it only re-walks paths someone
+actually browsed to, so an idle agent does no work and no root walk ever runs
+that a user didn't ask for. The console's **Re-size** button bypasses the cache
+(`/du?refresh=1`) to force a fresh walk on demand.
+
 ## Backups — restic, set up on the box
 
 A **Backup** is a scheduled [restic](https://restic.net) run that hauls a
