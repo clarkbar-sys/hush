@@ -1601,6 +1601,7 @@
     ov.innerHTML = `<div class="vsheet">
         <div class="vbar">
           <div class="vname">${selecting ? "Pick paths" : "Disk usage"} · ${esc(id)}</div>
+          ${selecting ? "" : `<button class="vbtn duresize" aria-label="Re-size" title="Re-size now, ignoring cached sizes">↻ Re-size</button>`}
           <button class="vbtn vclose" aria-label="Close">✕</button>
         </div>
         <div class="dubody">
@@ -1644,8 +1645,13 @@
     document.addEventListener("keydown", onkey);
     ov.querySelector(".vclose").addEventListener("click", close);
     ov.addEventListener("click", e => { if(e.target===ov) close(); });
+    // "Re-size" forces a fresh walk of whatever directory is on screen, ignoring
+    // the agent's cached sizing; ordinary drill-in/up navigation uses the cache.
+    const resizeBtn = ov.querySelector(".duresize");
+    if(resizeBtn) resizeBtn.addEventListener("click", ()=> load(curPath, {refresh:true}));
 
     let lastListing = null;
+    let curPath = startPath || "/";
     function drawMap(l){
       lastListing = l;
       const map = ov.querySelector("#duMap");
@@ -1707,22 +1713,36 @@
 
       const legend = ov.querySelector("#duLegend");
       const total = l.entries.reduce((s,e)=>s+e.size, 0);
+      // l.computedAt (set by the agent's du cache) is when this sizing actually
+      // ran — surfaced so a cached number reads as "as of 14:03", not live.
+      let fresh = "";
+      if(l.computedAt){
+        const d = new Date(l.computedAt);
+        if(!isNaN(d)){
+          const hh = String(d.getHours()).padStart(2,"0"), mm = String(d.getMinutes()).padStart(2,"0");
+          fresh = `as of ${hh}:${mm}`;
+        }
+      }
       legend.textContent = l.entries.length
         ? `${l.entries.length} item${l.entries.length===1?"":"s"} · ${fmtBytes(total)} total`
           + (l.truncated ? " · truncated — some subtrees were too large to fully size" : "")
-        : "";
+          + (fresh ? " · " + fresh : "")
+        : (fresh || "");
       drawMap(l);
     }
 
     let seq = 0;
-    function load(p){
+    function load(p, o){
+      o = o || {};
+      curPath = p;
       const my = ++seq;
       const stale = () => !alive() || my !== seq;
       const map = ov.querySelector("#duMap");
       map.innerHTML = `<div class="empty">sizing…</div>`;
+      const refreshQ = o.refresh ? "&refresh=1" : "";
       const req = MODE === "demo"
         ? Promise.resolve(demoDu(id, p))
-        : fetch(`api/machines/${encodeURIComponent(id)}/du?path=${encodeURIComponent(p)}`, {cache:"no-store"}).then(r=>{
+        : fetch(`api/machines/${encodeURIComponent(id)}/du?path=${encodeURIComponent(p)}${refreshQ}`, {cache:"no-store"}).then(r=>{
             if(!r.ok){
               const msg = r.status===403 ? "permission denied — the hush user can't read this"
                 : r.status===404 ? "no such directory"
@@ -1831,6 +1851,7 @@
       parent: clean === "/" ? "" : (parts.length<=1 ? "/" : "/"+parts.slice(0,-1).join("/")),
       entries,
       truncated: false,
+      computedAt: new Date().toISOString(),
     };
   }
 
