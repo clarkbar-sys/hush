@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.25.0](https://github.com/clarkbar-sys/hush/compare/v1.24.0...v1.25.0) (2026-07-19)
+
+
+### Features
+
+* **backups:** filesystem convention for privileged backups hush can read ([#128](https://github.com/clarkbar-sys/hush/issues/128)) ([55660d7](https://github.com/clarkbar-sys/hush/commit/55660d797bae4d77d7b6bad00b4374591e6a8cc5))
+* **backups:** record history and paths, show backups as cards ([#130](https://github.com/clarkbar-sys/hush/issues/130)) ([6dec851](https://github.com/clarkbar-sys/hush/commit/6dec851220dc341d6bf0721a2d86b3011e68f3af))
+* **backups:** show root-run backups in the console ([#129](https://github.com/clarkbar-sys/hush/issues/129)) ([4c34418](https://github.com/clarkbar-sys/hush/commit/4c3441899a6b867a8c1a319355e1d6742279c13e))
+
+
+### Bug Fixes
+
+* **install:** distinguish DNS/network failures from a missing release ([#125](https://github.com/clarkbar-sys/hush/issues/125)) ([d8dffee](https://github.com/clarkbar-sys/hush/commit/d8dffee41098c2848734464af1da90c4b3a67c2e))
+* **systemd:** default -listen so a missing env file doesn't crash-loop ([#127](https://github.com/clarkbar-sys/hush/issues/127)) ([4470263](https://github.com/clarkbar-sys/hush/commit/4470263a002513b589ea5fb3a1c60e4dc1c870ca))
+
 ## [1.24.0](https://github.com/clarkbar-sys/hush/compare/v1.23.1...v1.24.0) (2026-07-19)
 
 
