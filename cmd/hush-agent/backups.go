@@ -20,13 +20,12 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-// Backup is the design's "a Job that hauls a Machine into a Store, dedup'd": a
-// saved set of paths this box sends into a restic repository, encrypted and
-// dedup'd. Unlike a Job it isn't a shell line — it's a typed restic invocation,
-// which is why it has its own construct rather than being one more saved command.
+// Backup is the design's "a scheduled restic run that hauls a Machine into a
+// Store, dedup'd": a saved set of paths this box sends into a restic repository,
+// encrypted and dedup'd. It's a typed restic invocation, not a shell line.
 //
 // The Password is the repo's encryption key. It is persisted here, in the
-// agent's 0700 state dir alongside jobs.json — the same box that holds the data
+// agent's 0700 state dir — the same box that holds the data
 // holds the key — and is deliberately the one field the API never hands back
 // (see backupView): hush-control and the phone drive backups without the key
 // ever passing through them, so the control plane can never become the thing
@@ -93,9 +92,8 @@ func newBackupStore(path string) *backupStore {
 }
 
 // backupManager owns the persisted backup definitions, their runtime status, and
-// a cron engine that fires the scheduled ones unattended — the same robfig/cron
-// the Job scheduler uses, so a nightly backup and a nightly Job are the same
-// clockwork. A backup with an empty Schedule is manual-only; it just never gets a
+// a robfig/cron engine that fires the scheduled ones unattended, on the box. A
+// backup with an empty Schedule is manual-only; it just never gets a
 // cron entry. running guards a definition against two overlapping runs (a
 // scheduled fire while a manual run is in flight, say), which would race on the
 // repo lock. A run streams to the console when triggered there, and to nowhere
@@ -451,8 +449,8 @@ func validateBackup(name, repo, password string, paths, excludes []string, oneFS
 		cleanEx = append(cleanEx, e)
 	}
 	// A schedule is optional (empty = manual-only); when present it must parse as
-	// the same 5-field cron spec the Job scheduler accepts, so an invalid one is
-	// rejected here rather than silently never firing.
+	// a 5-field cron spec, so an invalid one is rejected here rather than silently
+	// never firing.
 	if schedule != "" {
 		if _, err := cron.ParseStandard(schedule); err != nil {
 			return Backup{}, fmt.Errorf(`invalid schedule (want a 5-field cron spec like "0 3 * * *", or @daily): %w`, err)
@@ -477,7 +475,7 @@ func newBackupID() string {
 	return hex.EncodeToString(b[:])
 }
 
-// backupStatePath places backups.json beside jobs.json in the agent's state dir.
+// backupStatePath places backups.json in the agent's state dir.
 func backupStatePath(dir string) string { return filepath.Join(dir, "backups.json") }
 
 // handleBackups serves the collection: GET lists (without passwords), POST

@@ -1,13 +1,7 @@
 // Command hush-agent runs on every machine in the fleet. It exposes the host's
-// vitals as JSON over the tailnet, and serves /exec — the Task construct's
-// one-shot command runner — on by default. A box can opt out with -exec=false
-// (or HUSH_AGENT_EXEC=0), after which /exec returns 403 and everything else
-// stays read-only.
-//
-// It can also serve /jobs — the Job construct's cron scheduler, which fires
-// saved commands as the hush user on a schedule. Unlike /exec it is OFF by
-// default (a Job runs unattended), enabled with -jobs or HUSH_AGENT_JOBS=1;
-// definitions persist to jobs.json under the agent's state directory.
+// vitals as JSON over the tailnet and serves a read-only view of the box —
+// /vitals, /top, /browse, /du, and /file — plus, when enabled, the Backup
+// construct's restic backups on /backups.
 //
 // The one-shot -export-keys mode prints this box's backup repository keys as JSON
 // to stdout and exits, for an operator to escrow them off-box over SSH — the key
@@ -30,13 +24,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/clarkbar-sys/hush/internal/browse"
-	hexec "github.com/clarkbar-sys/hush/internal/exec"
 	"github.com/clarkbar-sys/hush/internal/restic"
 	"github.com/clarkbar-sys/hush/internal/updater"
 	"github.com/clarkbar-sys/hush/internal/version"
@@ -48,51 +40,19 @@ func main() {
 	showVersion := flag.Bool("version", false, "print the hush-agent version and exit")
 	selfUpdate := flag.Bool("self-update", false, "check for a newer release and replace this binary in place, then exit (run as root by hush-agent-update.service)")
 	exportKeysFlag := flag.Bool("export-keys", false, "print this box's backup repository keys as JSON to stdout and exit — run it over SSH to escrow the keys off-box; the key never passes through hush-control")
-	allowExec := flag.Bool("exec", true, "serve /exec, the Task construct's one-shot command runner (on by default; -exec=false disables). Commands run as the unprivileged hush user")
-	allowJobs := flag.Bool("jobs", false, "serve /jobs, the Job construct's cron scheduler (off by default; -jobs enables). Jobs fire unattended as the unprivileged hush user")
 	allowBackup := flag.Bool("backup", false, "serve /backups, the Backup construct's restic backups (off by default; -backup enables). Reads the paths you name and needs the restic binary")
-	runAsFlag := flag.String("run-as", "", "comma-separated OS users a Task may run as via `sudo -u` (e.g. media,deploy). Empty = off. Needs a matching sudoers grant; never list root or a sudo-capable user")
-	stateDir := flag.String("state-dir", "", "directory for persisted state such as jobs.json and backups.json (default: $STATE_DIRECTORY from systemd, else /var/lib/hush)")
+	stateDir := flag.String("state-dir", "", "directory for persisted state such as backups.json (default: $STATE_DIRECTORY from systemd, else /var/lib/hush)")
 	backupStatusDir := flag.String("backup-status-dir", defaultBackupStatusDir, "directory of status files written by root-run convention backups (see docs/BACKUP-CONVENTION.md). Read-only; served on /backup-status")
 	flag.Parse()
 
-	// Exec is on by default; a box can opt out with -exec=false or, so the
-	// systemd unit's env file can toggle it without editing ExecStart, by setting
-	// HUSH_AGENT_EXEC to a falsey value. A present env var always wins over the
-	// flag default.
-	execEnabled := *allowExec
-	if v, ok := os.LookupEnv("HUSH_AGENT_EXEC"); ok {
-		execEnabled = v != "0" && v != "false" && v != "no"
-	}
-
-	// Jobs is OFF by default — unlike /exec, a Job fires unattended, so gaining a
-	// scheduled command runner should be a deliberate choice, not a side effect of
-	// installing the agent. The same env-over-flag toggle lets the unit's env file
-	// flip it (HUSH_AGENT_JOBS=1) without editing ExecStart.
-	jobsEnabled := *allowJobs
-	if v, ok := os.LookupEnv("HUSH_AGENT_JOBS"); ok {
-		jobsEnabled = v == "1" || v == "true" || v == "yes"
-	}
-
-	// Backups are OFF by default too — the feature reads whatever paths you point
+	// Backups are OFF by default — the feature reads whatever paths you point
 	// it at and stores a repository key on the box, so enabling it is a deliberate
-	// choice. The same env-over-flag toggle (HUSH_AGENT_BACKUP=1) lets the unit's
+	// choice. An env-over-flag toggle (HUSH_AGENT_BACKUP=1) lets the unit's
 	// env file flip it without editing ExecStart.
 	backupEnabled := *allowBackup
 	if v, ok := os.LookupEnv("HUSH_AGENT_BACKUP"); ok {
 		backupEnabled = v == "1" || v == "true" || v == "yes"
 	}
-
-	// The run-as allowlist: users a Task may become via `sudo -u`. The env var
-	// wins over the flag so the systemd unit's env file can set it without
-	// editing ExecStart, mirroring HUSH_AGENT_EXEC/JOBS. Malformed names are
-	// dropped with a warning rather than aborting the agent — one typo in the
-	// list shouldn't keep the box's agent from booting.
-	runAsSpec := *runAsFlag
-	if v, ok := os.LookupEnv("HUSH_AGENT_RUNAS"); ok {
-		runAsSpec = v
-	}
-	runAs := parseRunAs(runAsSpec)
 
 	if *showVersion {
 		fmt.Printf("hush-agent %s\n", version.Current())
@@ -117,50 +77,27 @@ func main() {
 
 	vitals.StartSampler()
 
-	// The Job scheduler and Backup manager persist to the agent's state dir, so it
-	// is resolved (and created 0700) only when one of them is enabled — a default
-	// agent touches no disk. resolveStateDir prefers systemd's $STATE_DIRECTORY
-	// (set by StateDirectory=hush) and falls back to /var/lib/hush; the stores
-	// tolerate a missing file, so a first run simply starts empty.
+	// The Backup manager persists to the agent's state dir, so it is resolved
+	// (and created 0700) only when backups are enabled — a default agent touches
+	// no disk. resolveStateDir prefers systemd's $STATE_DIRECTORY (set by
+	// StateDirectory=hush) and falls back to /var/lib/hush; the store tolerates a
+	// missing file, so a first run simply starts empty.
 	var stateDirPath string
-	if jobsEnabled || backupEnabled {
+	if backupEnabled {
 		stateDirPath = resolveStateDir(*stateDir)
 		if err := os.MkdirAll(stateDirPath, 0o700); err != nil {
 			log.Printf("hush-agent: state dir %s not writable: %v — creation will fail until it is", stateDirPath, err)
 		}
 	}
 
-	var sched *scheduler
-	if jobsEnabled {
-		sched = newScheduler(filepath.Join(stateDirPath, "jobs.json"))
-		sched.Start()
-		defer sched.Stop()
-	}
-
 	// The Backup manager holds the restic definitions (and their repo keys) in
-	// backups.json beside jobs.json, and its own cron engine fires the scheduled
-	// ones unattended — the same clockwork the Job scheduler uses.
+	// backups.json under the state dir, and its own cron engine fires the
+	// scheduled ones unattended.
 	var backups *backupManager
 	if backupEnabled {
 		backups = newBackupManager(backupStatePath(stateDirPath))
 		backups.Start()
 		defer backups.Stop()
-	}
-
-	// advertisedRunAs is the run-as allowlist as reported in /vitals, so the
-	// console can offer a per-machine picker. It's only meaningful with exec on,
-	// so a box with exec disabled advertises none even if -run-as was set.
-	var advertisedRunAs []string
-	// runAsCheck verifies the advertised users against the box's real sudoers
-	// grant so /vitals can report which are actually runnable. It's only built
-	// when the feature is on (exec enabled with a non-empty list); otherwise the
-	// snapshot leaves RunAsGranted nil and the console makes no claim.
-	var runAsCheck *runAsChecker
-	if execEnabled {
-		advertisedRunAs = sortedKeys(runAs)
-		if len(advertisedRunAs) > 0 {
-			runAsCheck = newRunAsChecker(advertisedRunAs)
-		}
 	}
 
 	// Backup readiness is detected once at startup — restic's version (empty if
@@ -179,11 +116,6 @@ func main() {
 	mux.HandleFunc("/vitals", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		snap := vitals.Collect()
-		snap.RunAs = advertisedRunAs
-		if runAsCheck != nil {
-			g := runAsCheck.granted()
-			snap.RunAsGranted = &g
-		}
 		snap.Backup = backupCap
 		if err := json.NewEncoder(w).Encode(snap); err != nil {
 			log.Printf("encode vitals: %v", err)
@@ -207,31 +139,9 @@ func main() {
 	// secret, it just reads status files a root-run backup left behind. See
 	// backupstatus.go.
 	mux.HandleFunc("/backup-status", handleConventionBackupStatus(*backupStatusDir))
-	// /exec is always routed so a box that opted out returns a clear "disabled"
-	// rather than a bare 404 (which would be indistinguishable from an old agent).
-	execHandle := execHandler(runAs)
-	mux.HandleFunc("/exec", func(w http.ResponseWriter, r *http.Request) {
-		if !execEnabled {
-			http.Error(w, "exec is disabled on this agent (started with -exec=false)", http.StatusForbidden)
-			return
-		}
-		execHandle(w, r)
-	})
-	// /jobs is always routed so a box with jobs off returns a clear "disabled"
-	// rather than a bare 404 (indistinguishable from an agent too old to have it).
-	jobsDisabled := func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "jobs are disabled on this agent (start with -jobs to enable)", http.StatusForbidden)
-	}
-	if jobsEnabled {
-		mux.HandleFunc("/jobs", sched.handleJobs)
-		mux.HandleFunc("/jobs/{id}", sched.handleJob)
-	} else {
-		mux.HandleFunc("/jobs", jobsDisabled)
-		mux.HandleFunc("/jobs/{id}", jobsDisabled)
-	}
 	// /backups is always routed so a box with backups off returns a clear
 	// "disabled" (403) rather than a bare 404, indistinguishable from an agent too
-	// old to have it — the same shape /jobs uses.
+	// old to have it.
 	backupDisabled := func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "backups are disabled on this agent (start with -backup to enable)", http.StatusForbidden)
 	}
@@ -254,19 +164,6 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 
-	if execEnabled {
-		log.Printf("hush-agent: /exec enabled — one-shot commands run as uid %d", os.Geteuid())
-		if len(runAs) > 0 {
-			log.Printf("hush-agent: run-as users allowed via sudo -u: %s", strings.Join(sortedKeys(runAs), ", "))
-		}
-	} else {
-		log.Printf("hush-agent: /exec disabled (-exec=false)")
-	}
-	if jobsEnabled {
-		log.Printf("hush-agent: /jobs enabled — scheduled commands run as uid %d", os.Geteuid())
-	} else {
-		log.Printf("hush-agent: /jobs disabled (start with -jobs to enable)")
-	}
 	if backupEnabled {
 		if resticVersion != "" {
 			log.Printf("hush-agent: /backups enabled — %s", resticVersion)
@@ -280,26 +177,23 @@ func main() {
 	log.Fatal(http.ListenAndServe(listenAddr, mux))
 }
 
-// parseRunAs turns the comma-separated -run-as / HUSH_AGENT_RUNAS value into the
-// set of users /exec will honour. Entries are trimmed and de-duplicated; a name
-// that isn't a syntactically valid username is dropped with a warning rather
-// than aborting the agent, so one typo can't keep the box's agent from booting.
-// It deliberately does not check whether each user exists on the box — a name
-// may be allowed before it's created (sudo reports "unknown user" at run time).
-func parseRunAs(spec string) map[string]bool {
-	set := make(map[string]bool)
-	for _, raw := range strings.Split(spec, ",") {
-		name := strings.TrimSpace(raw)
-		if name == "" {
-			continue
-		}
-		if !hexec.ValidUserName(name) {
-			log.Printf("hush-agent: ignoring invalid -run-as user %q", name)
-			continue
-		}
-		set[name] = true
+// resolveStateDir picks where persisted agent state lives. An explicit -state-dir
+// wins; otherwise systemd's $STATE_DIRECTORY (populated by StateDirectory=hush,
+// which also creates it 0700 hush:hush and keeps it writable under
+// ProtectSystem=strict) is used; failing both — e.g. a manual run outside
+// systemd — it falls back to /var/lib/hush. $STATE_DIRECTORY may list several
+// paths colon-separated; the first is ours.
+func resolveStateDir(flagDir string) string {
+	if flagDir != "" {
+		return flagDir
 	}
-	return set
+	if sd := os.Getenv("STATE_DIRECTORY"); sd != "" {
+		if i := strings.IndexByte(sd, ':'); i >= 0 {
+			return sd[:i]
+		}
+		return sd
+	}
+	return "/var/lib/hush"
 }
 
 // hasRestServer reports whether a rest-server binary is on this box's PATH, so
@@ -309,16 +203,6 @@ func parseRunAs(spec string) map[string]bool {
 func hasRestServer() bool {
 	_, err := exec.LookPath("rest-server")
 	return err == nil
-}
-
-// sortedKeys returns a set's keys in a stable order, only for tidy log output.
-func sortedKeys(set map[string]bool) []string {
-	out := make([]string, 0, len(set))
-	for k := range set {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }
 
 // handleBrowse serves a read-only directory listing for the Store construct.

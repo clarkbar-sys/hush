@@ -2,9 +2,9 @@
 // T mirrored to a JSON file, rewritten wholesale and atomically on every change.
 // It factors out the persistence dance the fleet's constructs repeat — a
 // tolerant load, a snapshot taken under a lock, and a crash-safe temp-then-rename
-// write. hush-control persists Workflows and saved Tasks through it today; the
-// agent-side Job scheduler is meant to persist jobs.json the same way, which is
-// why this lives in internal/ rather than beside either binary.
+// write. The agent persists its restic backup definitions (backups.json) through
+// it, and hush-control leans on the same atomic write for its fleet config, which
+// is why this lives in internal/ rather than beside either binary.
 package store
 
 import (

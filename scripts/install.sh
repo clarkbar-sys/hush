@@ -200,10 +200,10 @@ install_agent() {
     "# Bind to the tailnet interface in production, not 127.0.0.1." \
     "HUSH_AGENT_LISTEN=127.0.0.1:8765" \
     "" \
-    "# Uncomment to enable the Job scheduler (cron-scheduled commands run as the" \
-    "# hush user, persisted to /var/lib/hush/jobs.json). Off by default; Jobs run" \
-    "# unattended." \
-    "# HUSH_AGENT_JOBS=1"
+    "# Uncomment to enable restic backups (the agent reads the paths you name and" \
+    "# stores a repository key on the box, persisted to /var/lib/hush/backups.json)." \
+    "# Off by default." \
+    "# HUSH_AGENT_BACKUP=1"
   enable_service hush-agent.service
   install_agent_updater
 }

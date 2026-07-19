@@ -472,7 +472,7 @@
   .term { background: var(--panel-2); border:1px solid var(--border-soft); border-radius:9px;
     padding: 14px 12px; min-height: 96px; display:grid; place-items:center; text-align:center;
     font-family: var(--mono); font-size: 12px; color: var(--faint); line-height:1.6; }
-  /* a live task log — left-aligned, scrolling, unlike the centered placeholder term */
+  /* a live run log — left-aligned, scrolling, unlike the centered placeholder term */
   .runterm { display:block; place-items:unset; text-align:left; color:var(--text);
     white-space:pre; overflow:auto; margin:0;
     width:100%; height:min(60vh,520px); max-height:60vh; }
@@ -484,30 +484,7 @@
     background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:10px 11px; }
   .field select:focus { border-color: var(--accent); }
   .nm.mono { font-family:var(--mono); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  /* ---- Workflow builder: an ordered list of {machine, command} steps ---- */
-  .wf-step { display:flex; gap:8px; align-items:flex-start; margin-bottom:9px; }
-  .wf-step .wf-idx { font-family:var(--mono); font-size:11px; color:var(--faint);
-    width:20px; flex:none; padding-top:11px; text-align:right; }
-  .wf-step .wf-fields { flex:1; min-width:0; display:grid; grid-template-columns: 1fr 1.4fr; gap:8px; }
-  .wf-step .wf-runas { grid-column:1 / -1; color:var(--accent); }
-  .wf-step select, .wf-step input { width:100%; font-family:var(--mono); font-size:13px; color:var(--text);
-    background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:9px 10px; }
-  .wf-step select:focus, .wf-step input:focus { border-color:var(--accent); outline:none; }
-  .wf-step .wf-del { flex:none; font-family:var(--mono); font-size:15px; line-height:1; color:var(--faint);
-    background:transparent; border:1px solid var(--border); border-radius:9px; padding:9px 11px; cursor:pointer; }
-  .wf-step .wf-del:hover { color:var(--crit); border-color:var(--crit-soft); }
-  .wf-add { font-family:var(--mono); font-size:12px; color:var(--accent); background:transparent;
-    border:1px dashed var(--border); border-radius:9px; padding:9px 12px; cursor:pointer; width:100%; margin-bottom:14px; }
-  .wf-add:hover { border-color:var(--accent); }
-  /* ---- Workflow builder: the saved-Task library you drop steps in from ---- */
-  .wf-tasklib { margin:-4px 0 14px; }
-  .wf-tasklib-h { font-family:var(--mono); font-size:10.5px; color:var(--faint); margin:0 0 7px 2px; }
-  .wf-tasklib-row { display:flex; flex-wrap:wrap; gap:7px; }
-  .wf-taskchip { display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:12px;
-    color:var(--text); background:var(--panel-2); border:1px solid var(--border); border-radius:999px;
-    padding:6px 11px; cursor:pointer; max-width:100%; }
-  .wf-taskchip:hover { border-color:var(--accent); color:var(--accent); }
-  .wf-taskchip span { color:var(--faint); font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* ---- base rows shared by the Fleet Backups rollup (class="wf-saved") ---- */
   .wf-saved { margin-bottom:16px; }
   .wf-saved .wf-item { display:flex; align-items:center; gap:10px; padding:10px 12px;
     background:var(--panel-2); border:1px solid var(--border); border-radius:10px; margin-bottom:8px; }
@@ -516,34 +493,6 @@
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .wf-saved .wf-sub { font-family:var(--mono); font-size:10.5px; color:var(--faint); margin-top:2px;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .as-user { font-weight:500; font-size:10px; color:var(--accent); border:1px solid var(--border);
-    border-radius:6px; padding:1px 5px; margin-left:5px; vertical-align:middle; }
-  .wf-saved .wf-run { font-family:var(--mono); font-size:12px; color:var(--accent); background:transparent;
-    border:1px solid var(--border); border-radius:8px; padding:7px 12px; cursor:pointer; flex:none; }
-  .wf-saved .wf-run:hover { border-color:var(--accent); }
-  .wf-saved .wf-edit { font-family:var(--mono); font-size:14px; color:var(--faint); background:transparent;
-    border:1px solid var(--border); border-radius:8px; padding:7px 10px; cursor:pointer; flex:none; }
-  .wf-saved .wf-edit:hover { color:var(--accent); border-color:var(--accent); }
-  .wf-saved .wf-rm { font-family:var(--mono); font-size:14px; color:var(--faint); background:transparent;
-    border:1px solid var(--border); border-radius:8px; padding:7px 10px; cursor:pointer; flex:none; }
-  .wf-saved .wf-rm:hover { color:var(--crit); border-color:var(--crit-soft); }
-  .wf-editcancel { font-family:var(--mono); font-size:10.5px; color:var(--accent); background:transparent;
-    border:none; padding:0; margin-left:6px; cursor:pointer; text-decoration:underline; }
-  /* ---- Workflow run view: each step is a rollup — command always visible in
-     the summary, output tucked behind the arrow so a long run stays scannable ---- */
-  .runterm .wf-runstep { display:block; margin:10px 0 4px; }
-  .runterm .wf-runstep:first-child { margin-top:0; }
-  .runterm .wf-runstep > summary.wf-head { display:block; padding:5px 8px 5px 4px; border-radius:6px;
-    background:var(--panel-2); color:var(--muted); border-left:2px solid var(--border); font-weight:600;
-    cursor:pointer; list-style:none; }
-  .runterm .wf-runstep > summary.wf-head::-webkit-details-marker { display:none; }
-  .runterm .wf-runstep > summary.wf-head::before { content:"▸"; display:inline-block; width:11px;
-    color:var(--faint); font-size:9px; transition: transform .15s; }
-  .runterm .wf-runstep[open] > summary.wf-head::before { transform: rotate(90deg); }
-  .runterm .wf-runstep > summary.wf-head.on { border-left-color:var(--accent); color:var(--text); }
-  .runterm .wf-runstep > summary.wf-head.ok { border-left-color:var(--good); }
-  .runterm .wf-runstep > summary.wf-head.bad { border-left-color:var(--crit); }
-  .runterm .wf-out { padding: 2px 0 6px 19px; }
 
   /* ---- bottom hotbar / build ---- */
   .dock { position: sticky; bottom: 0; z-index: 15;
@@ -562,7 +511,7 @@
     border-top-left-radius: 18px; border-top-right-radius: 18px;
     border:1px solid var(--border); border-bottom:none; padding: 8px 16px 24px;
     box-shadow: 0 -10px 40px rgba(0,0,0,.3); animation: rise .22s ease;
-    /* A tall sheet (the Backup or Workflow builder on a short screen) scrolls
+    /* A tall sheet (the Backup builder on a short screen) scrolls
        inside itself instead of pushing its actions off the bottom. */
     max-height: 92vh; overflow-y: auto; }
   @media (min-width:900px){ .scrim{ align-items:center;} .sheet{ border-radius:18px; max-width:560px;} }
@@ -743,34 +692,6 @@
   </div>
 </div>
 
-<div class="scrim" id="taskScrim">
-  <div class="sheet" role="dialog" aria-label="Run a task">
-    <div class="grab"></div>
-    <div id="taskSheetBody"></div>
-  </div>
-</div>
-
-<div class="scrim" id="wfScrim">
-  <div class="sheet" role="dialog" aria-label="Workflows">
-    <div class="grab"></div>
-    <div id="wfSheetBody"></div>
-  </div>
-</div>
-
-<div class="scrim" id="tsaveScrim">
-  <div class="sheet" role="dialog" aria-label="Save task">
-    <div class="grab"></div>
-    <div id="tsaveBody"></div>
-  </div>
-</div>
-
-<div class="scrim" id="jobScrim">
-  <div class="sheet" role="dialog" aria-label="Schedule a job">
-    <div class="grab"></div>
-    <div id="jobSheetBody"></div>
-  </div>
-</div>
-
 <div class="scrim" id="backupScrim">
   <div class="sheet" role="dialog" aria-label="Configure a backup">
     <div class="grab"></div>
@@ -791,11 +712,8 @@
   const CONSTRUCTS = [
     ["Machine","▦","a tailnet host — has vitals, holds everything else"],
     ["Service","◉","a systemd unit — persistent, running or stopped"],
-    ["Job","◷","a cron / timer — fires on a schedule"],
-    ["Task","⚡","a one-shot run of a program — ephemeral"],
-    ["Workflow","⛓","a wired sequence — reusable, stampable blueprint"],
     ["Store","▤","a disk / dataset — the NAS especially"],
-    ["Backup","⭯","a Job that hauls a machine into a Store, dedup'd"],
+    ["Backup","⭯","a scheduled restic run that hauls a machine into a Store, dedup'd"],
     ["Link","⇄","the tailnet edge between two machines"],
   ];
   const sevRank = { crit:2, warn:1, good:0 };
@@ -811,10 +729,6 @@
   const state = { view:"fleet", mid:null, cname:null, browsePath:null, summLegendOpen:false };
   const byId = id => M.find(m=>m.id===id);
   let PENDING = [];                // machines just added via the UI, awaiting first check-in
-  const RUNS = {};                 // machine id -> recent Task runs this session (ephemeral)
-  const JOBS = {};                 // machine id -> live jobs (jobView[]), cached across fleet polls
-  const JOBS_OFF = new Set();      // machine ids whose agent has jobs disabled (started without -jobs)
-  const jobsLoading = new Set();   // machine ids with an in-flight loadJobs, so a re-render can't double-fetch
   const BACKUPS = {};              // machine id -> live backups (backupView[]), cached across fleet polls
   const BACKUPS_OFF = new Set();   // machine ids whose agent has backups disabled (started without -backup)
   const backupsLoading = new Set();// machine ids with an in-flight loadBackups, so a re-render can't double-fetch
@@ -956,18 +870,6 @@
         </div>
         ${(M.length+PENDING.length) ? "" : `<p class="note">no machines reporting yet</p>`}
 
-        <details class="rollup"${taskSaved.length?" open":""}>
-          <summary class="sec-title">Tasks <span class="n">${taskSaved.length}</span></summary>
-          <div class="wf-saved">${taskSaved.length ? taskSaved.map(taskFleetRow).join("")
-            : `<div class="empty">no saved tasks — run one, then Save as Task</div>`}</div>
-        </details>
-
-        <details class="rollup"${wfSaved.length?" open":""}>
-          <summary class="sec-title">Workflows <span class="n">${wfSaved.length}</span></summary>
-          <div class="wf-saved">${wfSaved.length ? wfSaved.map(wfFleetRow).join("")
-            : `<div class="empty">no saved workflows — build one from saved Tasks in + Build</div>`}</div>
-        </details>
-
         <details class="rollup"${(bkBad||bkActive)?" open":""}>
           <summary class="sec-title">Backups <span class="n">${bkAll.length}</span></summary>
           <div class="wf-saved">${bkAll.length
@@ -983,65 +885,7 @@
     app.querySelectorAll(".node[data-id]").forEach(el=>{
       el.addEventListener("click", ()=>enterMachine(el.dataset.id));
     });
-    app.querySelectorAll("[data-wf]").forEach(el=>{
-      el.addEventListener("click", ()=>openWorkflowSheetForEdit(el.dataset.wf));
-    });
-    app.querySelectorAll("[data-run]").forEach(b=>{
-      b.addEventListener("click", e=>{ e.stopPropagation(); const w = wfSaved.find(x=>x.id===b.dataset.run); if(w) openWorkflowRunView(w); });
-    });
-    app.querySelectorAll("[data-edit]").forEach(b=>{
-      b.addEventListener("click", e=>{ e.stopPropagation(); openWorkflowSheetForEdit(b.dataset.edit); });
-    });
-    app.querySelectorAll("[data-rm]").forEach(b=>{
-      b.addEventListener("click", e=>{ e.stopPropagation(); deleteWorkflow(b.dataset.rm); });
-    });
-    // Saved-task rollup rows: same Run / Edit / Delete shape as workflows.
-    app.querySelectorAll("[data-tk]").forEach(el=>{
-      el.addEventListener("click", ()=>openTaskSaveSheetForEdit(el.dataset.tk));
-    });
-    app.querySelectorAll("[data-trun]").forEach(b=>{
-      b.addEventListener("click", e=>{ e.stopPropagation(); runSavedTask(b.dataset.trun); });
-    });
-    app.querySelectorAll("[data-tedit]").forEach(b=>{
-      b.addEventListener("click", e=>{ e.stopPropagation(); openTaskSaveSheetForEdit(b.dataset.tedit); });
-    });
-    app.querySelectorAll("[data-trm]").forEach(b=>{
-      b.addEventListener("click", e=>{ e.stopPropagation(); deleteTask(b.dataset.trm); });
-    });
     JUST_ARRIVED.clear(); // the pop animation above only needs to play once
-  }
-
-  // wfFleetRow is the Fleet-page rollup's row for one saved workflow — the
-  // list itself now lives only here (the Workflows sheet is build/edit-only),
-  // so Run/Edit/Delete live on the row rather than in a second copy of the list.
-  function wfFleetRow(w){
-    const steps = w.steps || [];
-    const hosts = [...new Set(steps.map(s=>s.host))].join(", ");
-    return `<div class="wf-item">
-      <div class="wf-meta" data-wf="${esc(w.id)}">
-        <div class="wf-nm">${esc(w.name)}</div>
-        <div class="wf-sub">${esc(hosts || "—")} · ${steps.length} step${steps.length===1?"":"s"}</div>
-      </div>
-      <button class="wf-run" data-run="${esc(w.id)}">⛓ Run</button>
-      <button class="wf-edit" data-edit="${esc(w.id)}" aria-label="Edit">✎</button>
-      <button class="wf-rm" data-rm="${esc(w.id)}" aria-label="Delete">✕</button>
-    </div>`;
-  }
-
-  // taskFleetRow renders one saved Task in the Fleet page's Tasks rollup — the
-  // reusable atom, with the same Run / Edit / Delete affordances a workflow row
-  // carries. The command rides the subtitle so what a Task does is legible at a
-  // glance, the way a workflow's hosts and step-count are.
-  function taskFleetRow(t){
-    return `<div class="wf-item">
-      <div class="wf-meta" data-tk="${esc(t.id)}">
-        <div class="wf-nm">${esc(t.name)}${t.user?` <span class="as-user">as ${esc(t.user)}</span>`:""}</div>
-        <div class="wf-sub">${esc(t.host || "—")} · ${esc(t.cmd)}</div>
-      </div>
-      <button class="wf-run" data-trun="${esc(t.id)}">⚡ Run</button>
-      <button class="wf-edit" data-tedit="${esc(t.id)}" aria-label="Edit">✎</button>
-      <button class="wf-rm" data-trm="${esc(t.id)}" aria-label="Delete">✕</button>
-    </div>`;
   }
 
   // backupTarget pulls the store's hostname out of a repository URL for the
@@ -1356,7 +1200,7 @@
         </div>
         ${backupLine(m)}
         <div class="foot">
-          <span class="cons"><b>${m.services.length}</b>&nbsp;svc <b>${m.jobs.length}</b>&nbsp;job</span>
+          <span class="cons"><b>${m.services.length}</b>&nbsp;svc</span>
           ${m.agentUpdateAvailable?`<span class="badge upd">⇧&nbsp;<span class="lbl">update</span></span>`:""}
           ${badge}
         </div>
@@ -1424,19 +1268,11 @@
             : `<div class="empty">${m.online ? "no running or failed units reported" : "machine unreachable"}</div>`}</div>
         </details>
 
-        ${(()=>{ const jobs = m.jobs||[]; const off = JOBS_OFF.has(m.id);
-          return `<div class="sec-title">Jobs${jobs.length?` <span class="n">${jobs.length}</span>`:""}</div>
-          <div class="list">
-            ${off ? `<div class="empty">jobs are disabled on this box — start its agent with <b>-jobs</b></div>`
-              : `<button class="row runrow" id="job-new"${m.online?"":` disabled style="opacity:.5;cursor:default"`}>
-                  <span class="gly">◷</span><span class="nm">Schedule a job…</span>
-                  <span class="rt">${m.online?"cron":"offline"}</span></button>`}
-            ${jobs.map(j=>jobRow(j, m.id)).join("")}</div>`; })()}
         ${(()=>{ const backups = m.backups||[]; const cap = m.backup;
           // Ready = -backup on AND restic installed. When the agent advertises a
           // capability we trust it; older agents fall back to the 403-derived
           // BACKUPS_OFF signal. Not-ready shows a "Set up" affordance that
-          // generates the paste-over-SSH command, the way run-as does.
+          // generates the paste-over-SSH command.
           const ready = cap ? (cap.enabled && !!cap.restic) : !BACKUPS_OFF.has(m.id);
           const missing = cap ? [!cap.restic?"restic":null, !cap.enabled?"-backup":null].filter(Boolean).join(" + ") : "";
           const dis = m.online?"":` disabled style="opacity:.5;cursor:default"`;
@@ -1466,28 +1302,12 @@
                   <span class="gly">⚷</span><span class="nm">Escrow repo keys…</span>
                   <span class="rt">${escrowedAt(m.id)?"saved ✓":"off-box"}</span></button>`:""}
             ${backups.map(b=>backupRow(b, m.id)).join("")}</div>`; })()}
-        ${(()=>{ const items = (RUNS[m.id]||[]).concat(m.tasks||[]);
-          return `<div class="sec-title">Tasks${items.length?` <span class="n">${items.length}</span>`:""}</div>
-          <div class="list">
-            <button class="row runrow" id="task-run"${m.online?"":` disabled style="opacity:.5;cursor:default"`}>
-              <span class="gly">⚡</span><span class="nm">Run a command…</span>
-              <span class="rt">${m.online?"one-shot":"offline"}</span></button>
-            <button class="row" id="runas-edit">
-              <span class="gly">⧉</span><span class="nm">Run-as users${(m.runAs&&m.runAs.length)?`: ${esc(m.runAs.join(", "))}`:""}${runAsUngranted(m).length?` <span style="color:var(--warn)">⚠</span>`:""}</span>
-              <span class="rt">sudo -u</span></button>
-            ${items.map(taskRow).join("")}</div>`; })()}
       </main>`;
     $("#bk").addEventListener("click", goFleet);
     const agentUpdBadge = $("#agentUpdBadge");
     if(agentUpdBadge) agentUpdBadge.addEventListener("click", ()=>openAgentUpdateSheet(m));
     app.querySelectorAll("[data-svc]").forEach(el=>{
       el.addEventListener("click", ()=>enterConstruct(el.dataset.svc));
-    });
-    { const tr = $("#task-run"); if(tr) tr.addEventListener("click", ()=>{ if(m.online) openTaskSheet(m.id); }); }
-    { const re = $("#runas-edit"); if(re) re.addEventListener("click", ()=>openRunAsSheet(m)); }
-    { const jn = $("#job-new"); if(jn) jn.addEventListener("click", ()=>{ if(m.online) openJobSheet(m.id); }); }
-    app.querySelectorAll("[data-jrm]").forEach(b=>{
-      b.addEventListener("click", ()=> deleteJob(b.dataset.jmid, b.dataset.jrm, b.dataset.jname));
     });
     { const bn = $("#backup-new"); if(bn) bn.addEventListener("click", ()=>{ if(m.online) openBackupSheet(m.id); }); }
     { const bs = $("#backup-setup"); if(bs) bs.addEventListener("click", ()=>{ if(m.online) openBackupSetupSheet(m); }); }
@@ -1506,7 +1326,7 @@
     // Jobs and backups live on the agent, so pull them lazily on entry rather
     // than dragging every box's list through the 2s fleet poll. Demo fixtures
     // bake them in, so only live mode fetches.
-    if(MODE!=="demo" && m.online){ loadJobs(m.id); loadBackups(m.id); }
+    if(MODE!=="demo" && m.online){ loadBackups(m.id); }
     const bo = $("#browse-open");
     if(bo) bo.addEventListener("click", ()=>{ if(!m.online) return; state.browsePath="/"; fillBrowse(m.id); });
     if(state.browsePath!=null) fillBrowse(m.id);
@@ -2097,38 +1917,6 @@
       <span class="state ${s.state}"><span class="sd"></span>${s.state}</span>
     </button>`;
   }
-  // jobRow renders one Job on the Machine view. It speaks two shapes: the live
-  // agent's jobView ({id, name, schedule, cmd, status:{running, runs, lastCode,
-  // lastRun}}) and the demo fleet's lighter {name, sched, next}. Status leads —
-  // whether the last fire passed is the thing worth seeing at a glance — with a
-  // quiet delete on the right. The command rides the row title so what a job
-  // does is legible on hover.
-  function jobRow(j, mid){
-    const name = esc(j.name || "");
-    const sched = esc(j.schedule || j.sched || "");
-    const st = j.status || {};
-    let cls, label;
-    if(j.next!==undefined && !st.runs && !st.running){     // demo: no run history yet
-      cls = "sched"; label = esc(j.next || "scheduled");
-    } else if(st.running){
-      cls = "running"; label = "running";
-    } else if(st.runs){
-      const ok = st.lastCode === 0;
-      cls = ok ? "ok" : "failed";
-      label = (ok ? "ok" : "fail") + (st.lastRun ? " · " + relTimeISO(st.lastRun) : "");
-    } else {
-      cls = "sched"; label = "scheduled";
-    }
-    const key = j.id || j.name || "";
-    const del = mid ? `<button class="jrm" data-jrm="${esc(key)}" data-jmid="${esc(mid)}" data-jname="${name}" aria-label="Delete job" title="Delete job">✕</button>` : "";
-    return `<div class="row" style="cursor:default" title="${esc(j.cmd||"")}">
-      <span class="gly">◷</span>
-      <span class="nm">${name}</span>
-      <span class="rt">${sched}</span>
-      <span class="state ${cls}"><span class="sd"></span>${label}</span>
-      ${del}
-    </div>`;
-  }
   // relTimeISO adapts relTime (which wants an epoch-ms) to the agent's RFC3339
   // lastRun stamps, degrading to "" on anything unparseable.
   function relTimeISO(iso){ const t = Date.parse(iso); return isNaN(t) ? "" : relTime(t); }
@@ -2166,21 +1954,6 @@
       ${snaps}${run}${del}
     </div>`;
   }
-  // taskRow renders one run — either a live session run recorded by RUNS
-  // ({cmd, ts, ok, label}) or a demo-fleet entry ({name, when, ok}).
-  function taskRow(t){
-    const name = esc(t.cmd || t.name || "");
-    const when = t.ts ? relTime(t.ts) : (t.when || "");
-    const ok = t.ok !== false;
-    const label = esc(t.label || (ok ? "ok" : "fail"));
-    return `<div class="row" style="cursor:default">
-      <span class="gly">⚡</span>
-      <span class="nm mono" title="${name}">${name}</span>
-      <span class="rt">${esc(when)}</span>
-      <span class="state ${ok?"ok":"failed"}"><span class="sd"></span>${label}</span>
-    </div>`;
-  }
-
   // relTime renders a coarse "how long ago" for ephemeral run records.
   function relTime(ts){
     // Handles both directions: "6h ago" for a past run, "in 18h" for the next
@@ -2195,125 +1968,7 @@
     return d < 0 ? "in "+say : say+" ago";
   }
 
-  /* ---------- Task: run a one-shot command, streamed live ----------
-     The Task construct — "a one-shot run of a program — ephemeral". The sheet
-     picks a machine and a command; running opens a full-screen live view that
-     streams the agent's Server-Sent Events (start → out → exit) and records the
-     outcome into RUNS so the Machine view's Tasks section reflects it. */
-  const taskScrim = $("#taskScrim");
-  const taskBody = $("#taskSheetBody");
-  let taskDraft = { id:null, cmd:"", user:"" };
-
   function machineById(id){ return M.find(m=>m.id===id); }
-
-  // runAsField builds the optional "run as" picker for a Task/Save sheet from a
-  // machine's advertised -run-as list (m.runAs). A box that advertises no users
-  // gets no field at all — the command runs as the hush user exactly as before —
-  // so the control only appears where it can actually do something.
-  // runAsUngranted returns the advertised run-as users the agent reported it
-  // can't actually sudo to yet (m.runAsGranted is the verified subset). It's
-  // empty when every user is granted, and also when the box reported no
-  // verification at all (an older agent leaves runAsGranted absent) — we only
-  // warn on a *definite* gap, never on unknowns.
-  function runAsUngranted(m){
-    const g = (m && Array.isArray(m.runAsGranted)) ? m.runAsGranted : null;
-    if(g===null) return [];
-    return (m.runAs||[]).filter(u=>!g.includes(u));
-  }
-  function runAsField(m, selected){
-    const users = (m && m.runAs) || [];
-    if(!users.length) return "";
-    const bad = runAsUngranted(m);
-    const isBad = u => bad.includes(u);
-    const opts = [`<option value="">hush user (default)</option>`]
-      .concat(users.map(u=>`<option value="${esc(u)}"${u===selected?" selected":""}>${esc(u)}${isBad(u)?" — no sudoers grant":""}</option>`)).join("");
-    const warn = bad.length
-      ? `<div class="hint" style="color:var(--warn)">⚠ no sudoers grant for <b>${esc(bad.join(", "))}</b> — a Task as ${bad.length>1?"one of those users":"that user"} will fail until the box's <b>Run-as users</b> grant is applied.</div>`
-      : "";
-    return `<div class="field">
-        <label>Run as</label>
-        <select class="runas-sel">${opts}</select>
-        <div class="hint">runs via <b>sudo -u</b> as the chosen user</div>
-        ${warn}
-      </div>`;
-  }
-
-  function openTaskSheet(preId){
-    const online = M.filter(m=>m.online);
-    taskDraft = { id: preId || (online[0] && online[0].id) || null, cmd:"", user:"" };
-    renderTaskSheet();
-    taskScrim.classList.add("open");
-  }
-  function closeTaskSheet(){ taskScrim.classList.remove("open"); }
-  taskScrim.addEventListener("click", e=>{ if(e.target===taskScrim) closeTaskSheet(); });
-
-  function renderTaskSheet(){
-    const online = M.filter(m=>m.online);
-    if(!online.length){
-      taskBody.innerHTML = `<h3>Run a task</h3>
-        <p class="sd">a one-shot command on one machine</p>
-        <div class="field-note">No machines are online to run on.</div>
-        <div class="sheet-actions"><button class="btn primary" id="tClose" style="flex:1">Close</button></div>`;
-      $("#tClose").addEventListener("click", closeTaskSheet);
-      return;
-    }
-    if(!online.some(m=>m.id===taskDraft.id)) taskDraft.id = online[0].id;
-    const opts = online.map(m=>`<option value="${esc(m.id)}"${m.id===taskDraft.id?" selected":""}>${esc(m.id)}${m.os?` · ${esc(m.os)}`:""}</option>`).join("");
-    taskBody.innerHTML = `
-      <h3>Run a task</h3>
-      <p class="sd">a one-shot command — streamed live, nothing persisted</p>
-      <div class="field">
-        <label>Machine</label>
-        <select id="tMachine">${opts}</select>
-      </div>
-      <div class="field">
-        <label>Command</label>
-        <input type="text" id="tCmd" placeholder="e.g. uptime" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(taskDraft.cmd)}">
-        <div class="hint">runs via <b>sh -c</b> as the unprivileged hush user</div>
-      </div>
-      <div id="tRunAsWrap">${runAsField(machineById(taskDraft.id), taskDraft.user)}</div>
-      <div class="field-note">
-        <b>Heads up —</b> this runs on <b>${esc(taskDraft.id)}</b> with no sandbox. It can do anything the hush user can — the OS permissions are the only fence.
-      </div>
-      <div class="sheet-actions">
-        <button class="btn ghost" id="tCancel">Cancel</button>
-        <button class="btn primary" id="tRun">⚡ Run</button>
-      </div>`;
-    const cmdEl = $("#tCmd");
-    $("#tMachine").addEventListener("change", e=>{ taskDraft.id = e.target.value; taskDraft.user = ""; renderHostNote(); renderTaskRunAs(); });
-    bindTaskRunAs();
-    cmdEl.addEventListener("input", e=>{ taskDraft.cmd = e.target.value; });
-    cmdEl.addEventListener("keydown", e=>{ if(e.key==="Enter") runTask(); });
-    $("#tCancel").addEventListener("click", closeTaskSheet);
-    $("#tRun").addEventListener("click", runTask);
-    cmdEl.focus();
-  }
-  // The run-as picker is per-machine, so switching machines rebuilds it (and
-  // clears any prior selection, which may not be valid on the new box).
-  function renderTaskRunAs(){
-    const wrap = $("#tRunAsWrap");
-    if(!wrap) return;
-    wrap.innerHTML = runAsField(machineById(taskDraft.id), taskDraft.user);
-    bindTaskRunAs();
-  }
-  function bindTaskRunAs(){
-    const sel = taskBody.querySelector(".runas-sel");
-    if(sel) sel.addEventListener("change", e=>{ taskDraft.user = e.target.value; });
-  }
-  // Keep the danger note's named host in sync when the machine select changes,
-  // without stealing focus from the command field.
-  function renderHostNote(){
-    const n = taskBody.querySelector(".field-note");
-    if(n) n.innerHTML = `<b>Heads up —</b> this runs on <b>${esc(taskDraft.id)}</b> with no sandbox. It can do anything the hush user can — the OS permissions are the only fence.`;
-  }
-  function runTask(){
-    const cmd = (taskDraft.cmd || "").trim();
-    const id = taskDraft.id;
-    if(!cmd){ $("#tCmd").focus(); return; }
-    if(!id) return;
-    closeTaskSheet();
-    openRunView(id, cmd, { user: taskDraft.user });
-  }
 
   // openRunView streams one run to a full-screen terminal overlay and records
   // the outcome. Cancel/close aborts the fetch, which drops the connection and
@@ -2321,7 +1976,6 @@
   // process group on the box.
   function openRunView(id, cmd, opts){
     opts = opts || {};
-    const canSave = opts.canSave !== false && MODE !== "demo";
     const ov = document.createElement("div");
     ov.className = "vov";
     ov.innerHTML = `<div class="vsheet">
@@ -2329,22 +1983,18 @@
           <span class="state running" id="rvState"><span class="sd"></span>running</span>
           <div class="vname" title="${esc(cmd)}">${esc(cmd)}</div>
           <div class="vmeta" id="rvMeta">${esc(id)}</div>
-          ${canSave ? `<button class="vbtn" id="rvSave">＋ Save as Task</button>` : ""}
           <button class="vbtn" id="rvStop">■ Cancel</button>
           <button class="vbtn vclose" aria-label="Close">✕</button>
         </div>
         <div class="vbody runbody"><pre class="runterm" id="rvOut"></pre></div>
       </div>`;
     document.body.appendChild(ov);
-    // The bridge from ephemeral to saved: mint a Task from exactly this run.
-    const saveBtn = ov.querySelector("#rvSave");
-    if(saveBtn) saveBtn.addEventListener("click", ()=> openTaskSaveSheet({ name:"", host:id, cmd, user: opts.user||"" }));
     const out = ov.querySelector("#rvOut");
     const stateEl = ov.querySelector("#rvState");
     const metaEl = ov.querySelector("#rvMeta");
     const stopBtn = ov.querySelector("#rvStop");
     const ac = new AbortController();
-    let finished = false, recorded = false;
+    let finished = false;
 
     const append = (text, cls) => {
       if(text == null || text === "") return;
@@ -2359,13 +2009,6 @@
       stateEl.innerHTML = `<span class="sd"></span>${esc(label)}`;
       if(meta != null) metaEl.textContent = meta;
     };
-    const record = (ok, label) => {
-      if(recorded) return; recorded = true;
-      RUNS[id] = RUNS[id] || [];
-      RUNS[id].unshift({ cmd, ts: Date.now(), ok, label });
-      RUNS[id] = RUNS[id].slice(0, 8);
-      if(state.view === "machine" && state.mid === id) render();
-    };
     const close = () => { ac.abort(); ov.remove(); document.removeEventListener("keydown", onkey); if(opts.onClose) opts.onClose(); };
     const onkey = e => { if(e.key === "Escape") close(); };
     document.addEventListener("keydown", onkey);
@@ -2377,7 +2020,6 @@
       finished = true;
       stopBtn.textContent = "✕ Close";
       setState("stopped", "canceled", id);
-      record(false, "canceled");
     });
 
     const onEvent = ev => {
@@ -2395,7 +2037,6 @@
         const bits = [label, fmtDur(ev.ms)];
         if(ev.truncated) bits.push("output truncated");
         setState(ok ? "ok" : "failed", label, `${id} · ${bits.slice(1).join(" · ")}`);
-        record(ok, label);
       }
     };
 
@@ -2404,7 +2045,7 @@
     const payload = opts.payload || { cmd, timeoutSec: 300 };
     if(opts.user && !opts.payload) payload.user = opts.user;
     const runner = MODE === "demo" ? simulateExec(cmd, onEvent, ac.signal)
-      : streamExec(opts.runUrl || `api/machines/${encodeURIComponent(id)}/exec`, payload, onEvent, ac.signal);
+      : streamExec(opts.runUrl, payload, onEvent, ac.signal);
     runner.catch(err => {
       if(ac.signal.aborted) return; // canceled path already handled
       finished = true;
@@ -2412,7 +2053,6 @@
       const msg = (err && err.message) ? err.message : "connection failed";
       append("\n" + msg + "\n", "err");
       setState("failed", err && err.status ? ("error " + err.status) : "error", id);
-      record(false, "error");
     });
   }
 
@@ -2469,252 +2109,7 @@
     return (s < 10 ? s.toFixed(1) : Math.round(s)) + "s";
   }
 
-  /* ---------- Workflow: a wired sequence of steps, saved and re-runnable ----------
-     The Workflow construct — "a wired sequence (cd X → git pull → restart) —
-     reusable, stampable". The sheet lists saved blueprints (Run / Edit / Delete)
-     and builds new ones: a name plus an ordered list of {machine, command} steps.
-     Edit reloads a blueprint into the builder and re-saves it in place (same id).
-     Running streams a combined live log, one command after another over the
-     tailnet, stopping at the first step that fails — the same /exec each Task
-     uses, with sequencing on top. In demo mode blueprints live in memory so the
-     feature is legible without a live hush-control behind it. */
-  const wfScrim = $("#wfScrim");
-  const wfBody = $("#wfSheetBody");
-  let wfDraft = { name:"", steps:[] };   // the blueprint being built
-  let wfSaved = [];                       // saved blueprints (from the server, or demo memory)
-  const wfDemo = [];                      // demo-mode store, seeded lazily on first open
-  let taskSaved = [];                     // saved Tasks (the reusable atom) from the server, or demo memory
   let CONV_BACKUPS = [];                       // /api/backup-status: root-run convention backups, per machine
-  const taskDemo = [];                    // demo-mode task store, seeded lazily on first load
-
-  function openWorkflowSheet(){
-    wfDraft = { name:"", steps:[] };
-    wfScrim.classList.add("open");
-    wfBody.innerHTML = `<h3>Workflows</h3><p class="sd">loading saved blueprints…</p>`;
-    loadWorkflows().then(list => { wfSaved = list; renderWorkflowSheet(); });
-  }
-  function closeWorkflowSheet(){ wfScrim.classList.remove("open"); }
-  wfScrim.addEventListener("click", e=>{ if(e.target===wfScrim) closeWorkflowSheet(); });
-
-  // Opens the sheet straight into editing an existing workflow, used by the
-  // Fleet page's Workflows rollup (the sheet itself no longer lists saved
-  // workflows — that list lives only on the Fleet page now).
-  function openWorkflowSheetForEdit(id){
-    wfScrim.classList.add("open");
-    editWorkflow(id);
-  }
-
-  async function loadWorkflows(){
-    if(MODE === "demo"){
-      if(!wfDemo.length){
-        // one worked example so the builder isn't a blank page in demo mode
-        wfDemo.push({ id:"deploy-api-demo", name:"Deploy API", createdAt:"",
-          steps:[{host:"citadel",cmd:"cd /srv/api && git pull"},{host:"citadel",cmd:"systemctl restart api"}] });
-      }
-      return wfDemo.slice();
-    }
-    try {
-      const r = await fetch("api/workflows", {cache:"no-store"});
-      if(!r.ok) throw new Error("bad status");
-      const list = await r.json();
-      return Array.isArray(list) ? list : [];
-    } catch(e){ return []; }
-  }
-
-  // Keeps wfSaved fresh so the Fleet page's Workflows rollup has data even
-  // if the user never opens the Workflows sheet.
-  async function pollWorkflows(){
-    wfSaved = await loadWorkflows();
-    render();
-  }
-
-  function renderWorkflowSheet(){
-    const fleet = M.slice();
-    if(!wfDraft.steps.length) wfDraft.steps = [{ host:(fleet[0]&&fleet[0].id)||"", cmd:"", user:"" }];
-
-    const stepRows = wfDraft.steps.map((st,i)=>{
-      const opts = fleet.map(m=>`<option value="${esc(m.id)}"${m.id===st.host?" selected":""}>${esc(m.id)}${m.online?"":" · offline"}</option>`).join("");
-      const users = (machineById(st.host) || {}).runAs || [];
-      const raSel = users.length ? `<select data-field="user" data-i="${i}" class="wf-runas">
-            <option value="">as hush user (default)</option>
-            ${users.map(u=>`<option value="${esc(u)}"${u===st.user?" selected":""}>as ${esc(u)}</option>`).join("")}
-          </select>` : "";
-      return `<div class="wf-step" data-i="${i}">
-        <div class="wf-idx">${i+1}</div>
-        <div class="wf-fields">
-          <select data-field="host" data-i="${i}">${opts||`<option value="">no machines</option>`}</select>
-          <input type="text" data-field="cmd" data-i="${i}" placeholder="e.g. cd /srv/api && git pull" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(st.cmd)}">
-          ${raSel}
-        </div>
-        <button class="wf-del" data-del="${i}" aria-label="Remove step"${wfDraft.steps.length>1?"":" style=\"visibility:hidden\""}>✕</button>
-      </div>`;
-    }).join("");
-
-    const editing = !!wfDraft.editId;
-    wfBody.innerHTML = `
-      <h3>Workflows</h3>
-      <p class="sd">a wired sequence — saved once, re-run any time</p>
-      <div class="field" style="margin-top:4px">
-        <label>${editing ? "Edit workflow" : "New workflow"}${editing ? ` <button class="wf-editcancel" id="wfEditCancel">new instead</button>` : ""}</label>
-        <input type="text" id="wfName" placeholder="e.g. Deploy API" value="${esc(wfDraft.name)}" autocapitalize="off" spellcheck="false">
-      </div>
-      <div id="wfSteps">${stepRows}</div>
-      <button class="wf-add" id="wfAdd">＋ Add step</button>
-      ${taskSaved.length ? `<div class="wf-tasklib">
-        <div class="wf-tasklib-h">or drop in a saved Task</div>
-        <div class="wf-tasklib-row">${taskSaved.map(t=>`<button class="wf-taskchip" data-addtask="${esc(t.id)}" title="${esc(t.cmd)}">⚡ ${esc(t.name)}<span>${esc(t.host)}</span></button>`).join("")}</div>
-      </div>` : ""}
-      <div class="field-note">
-        <b>Heads up —</b> each step runs unsandboxed on its machine and stops the run if it fails. It can do anything the hush user can.
-      </div>
-      <div class="sheet-actions">
-        <button class="btn ghost" id="wfCancel">Cancel</button>
-        <button class="btn primary" id="wfSave">${editing ? "Update workflow" : "Save workflow"}</button>
-      </div>`;
-
-    if(!fleet.length){
-      wfBody.querySelector("#wfSave").disabled = true;
-      wfBody.querySelector("#wfAdd").disabled = true;
-    }
-    $("#wfName").addEventListener("input", e=>{ wfDraft.name = e.target.value; });
-    wfBody.querySelectorAll("[data-field]").forEach(el=>{
-      el.addEventListener("input", e=>{
-        const i = +e.target.dataset.i;
-        wfDraft.steps[i][e.target.dataset.field] = e.target.value;
-      });
-    });
-    // Changing a step's machine rebuilds that step's run-as picker (each box
-    // offers its own users) and clears a choice that may not be valid on the new
-    // one — so re-render the sheet after updating the host.
-    wfBody.querySelectorAll('select[data-field="host"]').forEach(sel=>{
-      sel.addEventListener("change", e=>{
-        const i = +e.target.dataset.i;
-        wfDraft.steps[i].host = e.target.value;
-        wfDraft.steps[i].user = "";
-        renderWorkflowSheet();
-      });
-    });
-    wfBody.querySelectorAll("[data-del]").forEach(b=>{
-      b.addEventListener("click", ()=>{ wfDraft.steps.splice(+b.dataset.del,1); renderWorkflowSheet(); });
-    });
-    $("#wfAdd").addEventListener("click", ()=>{
-      wfDraft.steps.push({ host:(fleet[0]&&fleet[0].id)||"", cmd:"", user:"" });
-      renderWorkflowSheet();
-    });
-    // Drop a saved Task in as a step — this is "a Workflow is built from Tasks".
-    // A blank trailing step (the default first row) is replaced rather than kept,
-    // so adding the first Task doesn't leave an empty step above it.
-    wfBody.querySelectorAll("[data-addtask]").forEach(b=>{
-      b.addEventListener("click", ()=>{
-        const t = taskSaved.find(x=>x.id===b.dataset.addtask);
-        if(!t) return;
-        const last = wfDraft.steps[wfDraft.steps.length-1];
-        if(wfDraft.steps.length===1 && last && !(last.cmd||"").trim()) wfDraft.steps = [];
-        wfDraft.steps.push({ host:t.host, cmd:t.cmd, user:t.user||"" });
-        renderWorkflowSheet();
-      });
-    });
-    const editCancel = $("#wfEditCancel");
-    if(editCancel) editCancel.addEventListener("click", ()=>{ wfDraft = { name:"", steps:[] }; renderWorkflowSheet(); });
-    $("#wfCancel").addEventListener("click", closeWorkflowSheet);
-    $("#wfSave").addEventListener("click", saveWorkflow);
-  }
-
-  // editWorkflow loads a saved blueprint back into the builder so its name and
-  // steps can be changed and re-saved in place (same id), instead of the old
-  // delete-and-rebuild dance. A deep copy keeps edits from mutating wfSaved
-  // until the update lands.
-  function editWorkflow(id){
-    const w = wfSaved.find(x=>x.id===id);
-    if(!w) return;
-    wfDraft = { editId:id, name:w.name||"", steps:(w.steps||[]).map(s=>({ host:s.host, cmd:s.cmd, user:s.user||"" })) };
-    if(!wfDraft.steps.length) wfDraft.steps = [{ host:"", cmd:"", user:"" }];
-    renderWorkflowSheet();
-    const nm = $("#wfName"); if(nm){ nm.focus(); }
-    wfBody.scrollTop = wfBody.scrollHeight;
-  }
-
-  async function saveWorkflow(){
-    const editId = wfDraft.editId;
-    const name = (wfDraft.name||"").trim();
-    const steps = wfDraft.steps.map(s=>({ host:s.host, cmd:(s.cmd||"").trim(), user:(s.user||"").trim() })).filter(s=>s.host && s.cmd);
-    if(!name){ $("#wfName").focus(); toast("give the workflow a name"); return; }
-    if(!steps.length){ toast("add at least one step with a command"); return; }
-    if(MODE === "demo"){
-      if(editId){
-        const w = wfDemo.find(x=>x.id===editId); if(w){ w.name = name; w.steps = steps; }
-      } else {
-        wfDemo.push({ id:"wf-"+Math.random().toString(36).slice(2,8), name, steps, createdAt:"" });
-      }
-      wfSaved = wfDemo.slice(); wfDraft = { name:"", steps:[] }; renderWorkflowSheet(); render();
-      toast(editId ? "updated (demo)" : "saved (demo)"); return;
-    }
-    const savingLabel = editId ? "Updating…" : "Saving…";
-    const restoreLabel = editId ? "Update workflow" : "Save workflow";
-    const btn = $("#wfSave"); btn.disabled = true; btn.textContent = savingLabel;
-    try {
-      const url = editId ? "api/workflows/"+encodeURIComponent(editId) : "api/workflows";
-      const method = editId ? "PUT" : "POST";
-      const r = await fetch(url, { method, headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name, steps }) });
-      if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
-      wfSaved = await loadWorkflows();
-      wfDraft = { name:"", steps:[] };
-      renderWorkflowSheet(); render();
-      toast(editId ? "workflow updated" : "workflow saved");
-    } catch(err){
-      btn.disabled = false; btn.textContent = restoreLabel;
-      toast((err&&err.message) ? err.message : "couldn't save");
-    }
-  }
-
-  async function deleteWorkflow(id){
-    const w = wfSaved.find(x=>x.id===id);
-    if(!confirm(`Delete workflow "${(w&&w.name)||id}"? This can't be undone.`)) return;
-    if(MODE === "demo"){
-      const i = wfDemo.findIndex(w=>w.id===id); if(i>=0) wfDemo.splice(i,1);
-      wfSaved = wfDemo.slice(); renderWorkflowSheet(); render(); return;
-    }
-    try {
-      const r = await fetch("api/workflows/"+encodeURIComponent(id), { method:"DELETE" });
-      if(!r.ok && r.status!==204) throw new Error("error "+r.status);
-    } catch(e){ toast("couldn't delete"); }
-    wfSaved = await loadWorkflows();
-    renderWorkflowSheet(); render();
-  }
-
-  /* ---------- Saved Tasks: the reusable atom ----------
-     A saved Task is a named {host, cmd} you've decided to keep and re-run — the
-     ephemeral one-shot graduated into a building block. The Fleet page's Tasks
-     rollup lists them (Run / Edit / Delete); "Save as Task" in a run view mints
-     one; the Workflow builder drops them in as steps. In demo mode they live in
-     memory so the feature is legible without a live hush-control behind it. */
-  const tsaveScrim = $("#tsaveScrim");
-  const tsaveBody = $("#tsaveBody");
-  let tsaveDraft = { name:"", host:"", cmd:"", user:"" };
-
-  async function loadTasks(){
-    if(MODE === "demo"){
-      if(!taskDemo.length){
-        const host = (M[0] && M[0].id) || "citadel";
-        taskDemo.push({ id:"disk-check-demo", name:"Disk check", host, cmd:"df -h | sort -k5 -rh | head", createdAt:"" });
-        taskDemo.push({ id:"docker-prune-demo", name:"Docker prune", host, cmd:"docker system prune -af", createdAt:"" });
-      }
-      return taskDemo.slice();
-    }
-    try {
-      const r = await fetch("api/tasks", {cache:"no-store"});
-      if(!r.ok) throw new Error("bad status");
-      const list = await r.json();
-      return Array.isArray(list) ? list : [];
-    } catch(e){ return []; }
-  }
-
-  // Keeps taskSaved fresh so the Fleet rollup and the Workflow builder's
-  // task-library both have data even before either sheet is opened.
-  async function pollTasks(){
-    taskSaved = await loadTasks();
-    render();
-  }
 
   // Backup status is polled slowly: a nightly backup changes once a day, so
   // there is nothing to gain from riding the 2.5s fleet cadence. A failure to
@@ -2726,251 +2121,6 @@
       const data = await r.json();
       if(Array.isArray(data)) { CONV_BACKUPS = data; render(); }
     } catch(e){ /* keep the last known state */ }
-  }
-
-  function closeTaskSaveSheet(){ tsaveScrim.classList.remove("open"); }
-  tsaveScrim.addEventListener("click", e=>{ if(e.target===tsaveScrim) closeTaskSaveSheet(); });
-
-  // openTaskSaveSheet opens the create/edit form. Pass a draft to prefill it —
-  // "Save as Task" hands it {host, cmd} straight off a run so the bridge from
-  // ephemeral to saved is one tap.
-  function openTaskSaveSheet(draft){
-    tsaveDraft = Object.assign({ editId:null, name:"", host:"", cmd:"", user:"" }, draft||{});
-    tsaveScrim.classList.add("open");
-    renderTaskSaveSheet();
-  }
-  function openTaskSaveSheetForEdit(id){
-    const t = taskSaved.find(x=>x.id===id);
-    if(!t) return;
-    openTaskSaveSheet({ editId:id, name:t.name||"", host:t.host||"", cmd:t.cmd||"", user:t.user||"" });
-  }
-
-  function renderTaskSaveSheet(){
-    const fleet = M.slice();
-    if(!fleet.some(m=>m.id===tsaveDraft.host)) tsaveDraft.host = (fleet[0]&&fleet[0].id) || tsaveDraft.host || "";
-    const opts = fleet.map(m=>`<option value="${esc(m.id)}"${m.id===tsaveDraft.host?" selected":""}>${esc(m.id)}${m.online?"":" · offline"}</option>`).join("");
-    const editing = !!tsaveDraft.editId;
-    tsaveBody.innerHTML = `
-      <h3>${editing ? "Edit task" : "Save as task"}</h3>
-      <p class="sd">a named command — saved once, re-run any time, drop it into a workflow</p>
-      <div class="field" style="margin-top:4px">
-        <label>Name</label>
-        <input type="text" id="tsName" placeholder="e.g. Restart web" value="${esc(tsaveDraft.name)}" autocapitalize="off" spellcheck="false">
-      </div>
-      <div class="field">
-        <label>Machine</label>
-        <select id="tsHost">${opts||`<option value="">no machines</option>`}</select>
-      </div>
-      <div class="field">
-        <label>Command</label>
-        <input type="text" id="tsCmd" placeholder="e.g. cd /srv/web && git pull" value="${esc(tsaveDraft.cmd)}" autocapitalize="off" autocorrect="off" spellcheck="false">
-        <div class="hint">runs via <b>sh -c</b> as the unprivileged hush user</div>
-      </div>
-      <div id="tsRunAsWrap">${runAsField(machineById(tsaveDraft.host), tsaveDraft.user)}</div>
-      <div class="field-note">
-        <b>Heads up —</b> a saved task runs unsandboxed on its machine. It can do anything the hush user can.
-      </div>
-      <div class="sheet-actions">
-        <button class="btn ghost" id="tsCancel">Cancel</button>
-        <button class="btn primary" id="tsSave">${editing ? "Update task" : "Save task"}</button>
-      </div>`;
-    if(!fleet.length) tsaveBody.querySelector("#tsSave").disabled = true;
-    $("#tsName").addEventListener("input", e=>{ tsaveDraft.name = e.target.value; });
-    $("#tsHost").addEventListener("change", e=>{ tsaveDraft.host = e.target.value; tsaveDraft.user = ""; renderSaveRunAs(); });
-    bindSaveRunAs();
-    $("#tsCmd").addEventListener("input", e=>{ tsaveDraft.cmd = e.target.value; });
-    $("#tsCancel").addEventListener("click", closeTaskSaveSheet);
-    $("#tsSave").addEventListener("click", saveTask);
-  }
-  function renderSaveRunAs(){
-    const wrap = $("#tsRunAsWrap");
-    if(!wrap) return;
-    wrap.innerHTML = runAsField(machineById(tsaveDraft.host), tsaveDraft.user);
-    bindSaveRunAs();
-  }
-  function bindSaveRunAs(){
-    const sel = tsaveBody.querySelector(".runas-sel");
-    if(sel) sel.addEventListener("change", e=>{ tsaveDraft.user = e.target.value; });
-  }
-
-  async function saveTask(){
-    const editId = tsaveDraft.editId;
-    const name = (tsaveDraft.name||"").trim();
-    const host = tsaveDraft.host;
-    const cmd = (tsaveDraft.cmd||"").trim();
-    const user = (tsaveDraft.user||"").trim();
-    if(!name){ $("#tsName").focus(); toast("give the task a name"); return; }
-    if(!host){ toast("pick a machine"); return; }
-    if(!cmd){ $("#tsCmd").focus(); toast("add a command"); return; }
-    if(MODE === "demo"){
-      if(editId){ const t = taskDemo.find(x=>x.id===editId); if(t){ t.name=name; t.host=host; t.cmd=cmd; t.user=user; } }
-      else { taskDemo.push({ id:"task-"+Math.random().toString(36).slice(2,8), name, host, cmd, user, createdAt:"" }); }
-      taskSaved = taskDemo.slice(); closeTaskSaveSheet(); render();
-      toast(editId ? "updated (demo)" : "saved (demo)"); return;
-    }
-    const btn = $("#tsSave"); btn.disabled = true; btn.textContent = editId ? "Updating…" : "Saving…";
-    try {
-      const url = editId ? "api/tasks/"+encodeURIComponent(editId) : "api/tasks";
-      const method = editId ? "PUT" : "POST";
-      const r = await fetch(url, { method, headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name, host, cmd, user }) });
-      if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
-      taskSaved = await loadTasks();
-      closeTaskSaveSheet(); render();
-      toast(editId ? "task updated" : "task saved");
-    } catch(err){
-      btn.disabled = false; btn.textContent = editId ? "Update task" : "Save task";
-      toast((err&&err.message) ? err.message : "couldn't save");
-    }
-  }
-
-  async function deleteTask(id){
-    const t = taskSaved.find(x=>x.id===id);
-    if(!confirm(`Delete task "${(t&&t.name)||id}"? This can't be undone.`)) return;
-    if(MODE === "demo"){
-      const i = taskDemo.findIndex(x=>x.id===id); if(i>=0) taskDemo.splice(i,1);
-      taskSaved = taskDemo.slice(); render(); return;
-    }
-    try {
-      const r = await fetch("api/tasks/"+encodeURIComponent(id), { method:"DELETE" });
-      if(!r.ok && r.status!==204) throw new Error("error "+r.status);
-    } catch(e){ toast("couldn't delete"); }
-    taskSaved = await loadTasks(); render();
-  }
-
-  // runSavedTask streams a saved Task through /api/tasks/{id}/run — the audited
-  // path that resolves the command server-side — reusing the same run overlay an
-  // ad-hoc Task uses. In demo mode openRunView falls back to a simulated run.
-  function runSavedTask(id){
-    const t = taskSaved.find(x=>x.id===id);
-    if(!t) return;
-    openRunView(t.host, t.cmd, { runUrl:`api/tasks/${encodeURIComponent(id)}/run`, canSave:false });
-  }
-
-  // openWorkflowRunView streams a blueprint's run to the terminal overlay, using
-  // step headers to punctuate the shared log. Cancel aborts the fetch, which
-  // drops the connection and (through hush-control) cancels the in-flight step.
-  function openWorkflowRunView(wf){
-    const total = (wf.steps||[]).length;
-    const ov = document.createElement("div");
-    ov.className = "vov";
-    ov.innerHTML = `<div class="vsheet">
-        <div class="vbar">
-          <span class="state running" id="wvState"><span class="sd"></span>running</span>
-          <div class="vname" title="${esc(wf.name)}">⛓ ${esc(wf.name)}</div>
-          <div class="vmeta" id="wvMeta">${total} step${total===1?"":"s"}</div>
-          <button class="vbtn" id="wvStop">■ Cancel</button>
-          <button class="vbtn vclose" aria-label="Close">✕</button>
-        </div>
-        <div class="vbody runbody"><pre class="runterm" id="wvOut"></pre></div>
-      </div>`;
-    document.body.appendChild(ov);
-    const out = ov.querySelector("#wvOut");
-    const stateEl = ov.querySelector("#wvState");
-    const metaEl = ov.querySelector("#wvMeta");
-    const stopBtn = ov.querySelector("#wvStop");
-    const ac = new AbortController();
-    let finished = false;
-    const heads = [];   // step index -> summary element (for markHead)
-    const groups = [];  // step index -> { details, outDiv }
-    let curOut = out;   // where append() writes — the current step's output container
-
-    const append = (text, cls) => {
-      if(text == null || text === "") return;
-      const span = document.createElement("span");
-      if(cls) span.className = cls;
-      span.textContent = text;
-      curOut.appendChild(span);
-      out.scrollTop = out.scrollHeight;
-    };
-    const setState = (cls, label, meta) => {
-      stateEl.className = "state " + cls;
-      stateEl.innerHTML = `<span class="sd"></span>${esc(label)}`;
-      if(meta != null) metaEl.textContent = meta;
-    };
-    const markHead = (i, cls) => { if(heads[i]) heads[i].className = "wf-head " + cls; };
-    const close = () => { ac.abort(); ov.remove(); document.removeEventListener("keydown", onkey); };
-    const onkey = e => { if(e.key === "Escape") close(); };
-    document.addEventListener("keydown", onkey);
-    ov.querySelector(".vclose").addEventListener("click", close);
-    ov.addEventListener("click", e => { if(e.target === ov) close(); });
-    stopBtn.addEventListener("click", () => {
-      if(finished){ close(); return; }
-      ac.abort(); finished = true;
-      stopBtn.textContent = "✕ Close";
-      setState("stopped", "canceled");
-    });
-
-    const onEvent = ev => {
-      if(ev.kind === "step"){
-        const i = ev.index || 0;
-        // reaching a new step means the previous one exited clean — roll it up
-        // so a long run stays scannable; its command stays visible in the summary
-        if(i > 0){ markHead(i-1, "ok"); if(groups[i-1]) groups[i-1].details.open = false; }
-        const details = document.createElement("details");
-        details.className = "wf-runstep";
-        details.open = true;
-        const h = document.createElement("summary");
-        h.className = "wf-head on";
-        h.textContent = `▶ step ${i+1}/${ev.count||total} · ${ev.host}${ev.user?` (as ${ev.user})`:""} · ${ev.cmd}`;
-        const outDiv = document.createElement("div");
-        outDiv.className = "wf-out";
-        details.appendChild(h); details.appendChild(outDiv);
-        out.appendChild(details);
-        heads[i] = h; groups[i] = { details, outDiv }; curOut = outDiv;
-        out.scrollTop = out.scrollHeight;
-        setState("running", "running", `step ${i+1}/${ev.count||total}`);
-      } else if(ev.kind === "out"){
-        append(ev.data, ev.stream === "stderr" ? "err" : null);
-      } else if(ev.kind === "stepExit"){
-        const code = ev.code == null ? 0 : ev.code;
-        const ok = code === 0 && !ev.signal;
-        markHead(ev.index||0, ok ? "ok" : "bad");
-        if(!ok) append(`\n[step ${(ev.index||0)+1} ${ev.signal || ("exit "+code)}]\n`, "err");
-      } else if(ev.kind === "error"){
-        append("\n"+(ev.data||"error")+"\n", "err");
-        markHead(ev.index||0, "bad");
-      } else if(ev.kind === "done"){
-        finished = true;
-        stopBtn.textContent = "✕ Close";
-        if(ev.ok){
-          heads.forEach((_,i)=>markHead(i,"ok"));
-          groups.forEach(g=>{ g.details.open = false; }); // done — whole run rolls up, arrows reveal any step's command + output
-          setState("ok", "done", `${ev.ran||total} step${(ev.ran||total)===1?"":"s"} · ok`);
-        }
-        else { const fs = (ev.failedStep==null?heads.length-1:ev.failedStep); setState("failed", "failed", `stopped at step ${fs+1}`); }
-      }
-    };
-
-    const runner = MODE === "demo" ? simulateWorkflow(wf, onEvent, ac.signal)
-      : streamExec(`api/workflows/${encodeURIComponent(wf.id)}/run`, {}, onEvent, ac.signal);
-    runner.catch(err => {
-      if(ac.signal.aborted) return;
-      finished = true;
-      stopBtn.textContent = "✕ Close";
-      const msg = (err && err.message) ? err.message : "connection failed";
-      append("\n" + msg + "\n", "err");
-      setState("failed", err && err.status ? ("error " + err.status) : "error");
-    });
-  }
-
-  // simulateWorkflow fakes a run for demo/offline mode, walking the steps with a
-  // little delay so the sequencing reads the same as a live run.
-  function simulateWorkflow(wf, onEvent, signal){
-    return new Promise((resolve, reject) => {
-      if(signal.aborted) return reject(new Error("aborted"));
-      const steps = wf.steps || [];
-      const t = [];
-      const at = (ms, fn) => t.push(setTimeout(fn, ms));
-      const bail = () => { t.forEach(clearTimeout); reject(new Error("aborted")); };
-      signal.addEventListener("abort", bail, { once:true });
-      let clock = 0;
-      steps.forEach((st,i)=>{
-        at(clock += 250, ()=> onEvent({ kind:"step", index:i, count:steps.length, host:st.host, cmd:st.cmd }));
-        at(clock += 300, ()=> onEvent({ kind:"out", stream:"stdout", index:i, data:`$ ${st.cmd}\n(demo — no agent connected)\n` }));
-        at(clock += 250, ()=> onEvent({ kind:"stepExit", index:i, code:0, ms:550 }));
-      });
-      at(clock += 250, ()=> { signal.removeEventListener("abort", bail); onEvent({ kind:"done", ok:true, ran:steps.length }); resolve(); });
-    });
   }
 
   function renderConstruct(){
@@ -3019,8 +2169,6 @@
   /* ---------- data: live + demo ---------- */
   function normalize(m){
     m.services = m.services || [];
-    m.jobs = m.jobs || [];
-    m.tasks = m.tasks || [];
     m.backups = m.backups || [];
     m.netRx = m.netRx || 0;
     m.netTx = m.netTx || 0;
@@ -3031,10 +2179,6 @@
   function ingestLive(data){
     M = data.map(m=>{
       normalize(m);
-      // /api/fleet ships jobs empty (they're fetched per-machine on demand); keep
-      // showing what we've already loaded for this box so the count and the
-      // Machine-view list don't blink out on every poll.
-      if(JOBS[m.id]) m.jobs = JOBS[m.id];
       if(BACKUPS[m.id]) m.backups = BACKUPS[m.id];
       const h = cpuHist[m.id] || Array(HIST).fill(m.cpu);
       h.push(m.cpu); while(h.length>HIST) h.shift();
@@ -3131,7 +2275,7 @@
   }
   function demoFleet(){
     const mk = o => {
-      o.online=true; o.jobs=o.jobs||[]; o.tasks=o.tasks||[]; o.backups=o.backups||[];
+      o.online=true; o.backups=o.backups||[];
       o.loadHist=walk(HIST,o.cpu,12);
       o.netRx = Math.round(15000 + Math.random()*220000);
       o.netTx = Math.round(4000 + Math.random()*60000);
@@ -3143,25 +2287,19 @@
       mk({ id:"citadel", agentVersion:"v1.3.0", os:"Debian 12", ip:"100.71.8.9", role:"", status:"good", cpu:23, mem:47, disk:38, up:"41d", load:"0.9",
         gpu:18, vram:47, gpuName:"RTX 3090", vramText:"11.3 / 24 GB",
         services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"caddy",state:"running",mem:"42 MB"},{name:"postgres",state:"running",mem:"512 MB"},{name:"tailscaled",state:"running",mem:"24 MB"}],
-        jobs:[{name:"nightly-backup",next:"in 3h 12m",sched:"0 3 * * *"},{name:"cert-renew",next:"in 6d",sched:"@weekly"}],
-        backups:[{id:"citadel-root",name:"citadel-root",repo:"rest:http://nas:8000/citadel",paths:["/"],oneFileSystem:true,schedule:"0 3 * * *",status:{runs:41,lastCode:0,lastRun:"2026-07-18T03:00:00Z",lastSnapshot:"9f2ab3c1"}}],
-        tasks:[{name:"git pull · deploy/api",when:"12m ago",ok:true}] }),
+        backups:[{id:"citadel-root",name:"citadel-root",repo:"rest:http://nas:8000/citadel",paths:["/"],oneFileSystem:true,schedule:"0 3 * * *",status:{runs:41,lastCode:0,lastRun:"2026-07-18T03:00:00Z",lastSnapshot:"9f2ab3c1"}}] }),
       mk({ id:"nas", agentVersion:"v1.3.0", os:"TrueNAS · ZFS", ip:"100.71.4.2", role:"store", status:"good", cpu:11, mem:34, disk:81, up:"92d", load:"0.4", gpu:null,
         services:[{name:"hush-agent",state:"running",mem:"17 MB"},{name:"smbd",state:"running",mem:"88 MB"},{name:"zfs-scrub",state:"running",mem:"6 MB"}],
-        backup:{enabled:true,restic:"restic 0.16.0",vault:true},
-        jobs:[{name:"pull-backups",next:"in 3h 12m",sched:"0 3 * * *"}] }),
+        backup:{enabled:true,restic:"restic 0.16.0",vault:true} }),
       mk({ id:"forge", agentVersion:"v1.2.0", latestVersion:"v1.3.0", agentUpdateAvailable:true, os:"Arch Linux", ip:"100.71.2.5", role:"", status:"warn", cpu:88, mem:71, disk:52, up:"6d", load:"14.2",
         gpu:62, vram:71, gpuName:"RTX 4070", vramText:"8.5 / 12 GB", alert:"load 14.2 · CI backlog building",
         services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"buildkite-agent",state:"running",mem:"120 MB"},{name:"docker",state:"running",mem:"340 MB"}],
-        backup:{enabled:false,restic:""},
-        jobs:[{name:"cache-prune",next:"in 40m",sched:"*/30 * * * *"}] }),
+        backup:{enabled:false,restic:""} }),
       mk({ id:"atlas", agentVersion:"v1.3.0", os:"Ubuntu 24.04", ip:"100.71.9.3", role:"", status:"crit", cpu:5, mem:22, disk:63, up:"2d", load:"0.2",
         gpu:34, vram:41, gpuName:"RTX 3060", vramText:"4.9 / 12 GB", alert:"plex.service failed — exit code 1",
-        services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"plex",state:"failed",mem:"—"},{name:"jellyfin",state:"running",mem:"210 MB"},{name:"sonarr",state:"running",mem:"96 MB"}],
-        jobs:[{name:"library-scan",next:"in 1h",sched:"0 * * * *"}] }),
+        services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"plex",state:"failed",mem:"—"},{name:"jellyfin",state:"running",mem:"210 MB"},{name:"sonarr",state:"running",mem:"96 MB"}] }),
       mk({ id:"pi-gate", agentVersion:"v1.3.0", os:"Raspberry Pi OS", ip:"100.71.0.1", role:"gateway", status:"good", cpu:31, mem:58, disk:44, up:"118d", load:"1.1", gpu:null,
-        services:[{name:"hush-agent",state:"running",mem:"16 MB"},{name:"tailscaled",state:"running",mem:"22 MB"},{name:"adguardhome",state:"running",mem:"54 MB"}],
-        jobs:[{name:"speedtest-log",next:"in 25m",sched:"*/30 * * * *"}] }),
+        services:[{name:"hush-agent",state:"running",mem:"16 MB"},{name:"tailscaled",state:"running",mem:"22 MB"},{name:"adguardhome",state:"running",mem:"54 MB"}] }),
       mk({ id:"lab-01", agentVersion:"v1.3.0", os:"NixOS 24.05", ip:"100.71.5.7", role:"", status:"good", cpu:9, mem:19, disk:12, up:"3d", load:"0.3",
         gpu:88, vram:91, gpuName:"RTX 4090", vramText:"21.8 / 24 GB",
         services:[{name:"hush-agent",state:"running",mem:"18 MB"},{name:"k3s",state:"running",mem:"430 MB"}] }),
@@ -3240,147 +2378,6 @@
       m.netRxHist = m.netRxHist.slice(1).concat([m.netRx]);
       m.netTxHist = m.netTxHist.slice(1).concat([m.netTx]);
     });
-  }
-
-  /* ---------- Jobs: the cron construct, scheduled on the agent ----------
-     A Job is "a cron / timer — fires on a schedule": a saved command the agent
-     runs unattended, on its own box, as the unprivileged hush user — the same
-     primitive a Task runs, with a schedule bolted on. The scheduler lives on the
-     agent (commit #84), so the console is a thin client over hush-control's
-     pass-through proxy: GET/POST /api/machines/{id}/jobs and DELETE .../{jobId}.
-     Jobs are fetched per-machine on demand (not through the fleet poll) and
-     cached in JOBS so the Machine view stays stable between polls. A box whose
-     agent was started without -jobs answers 403 — surfaced as "jobs disabled",
-     not an error. In demo mode jobs live in the fixture so the verb is legible
-     without a live control plane behind it. */
-  const jobScrim = $("#jobScrim");
-  const jobBody = $("#jobSheetBody");
-  let jobDraft = { id:null, name:"", schedule:"", cmd:"" };
-
-  // loadJobs pulls one box's jobs into the JOBS cache and re-renders if we're
-  // still looking at it. A 403 means the agent has jobs disabled; anything else
-  // unreachable just leaves the cache untouched so a blip doesn't wipe the list.
-  async function loadJobs(id){
-    if(MODE === "demo" || jobsLoading.has(id)) return;
-    jobsLoading.add(id);
-    try {
-      const r = await fetch(`api/machines/${encodeURIComponent(id)}/jobs`, {cache:"no-store"});
-      if(r.status === 403){ JOBS_OFF.add(id); JOBS[id] = []; }
-      else if(r.ok){
-        JOBS_OFF.delete(id);
-        const list = await r.json();
-        JOBS[id] = Array.isArray(list) ? list : [];
-      } else return;
-      const m = byId(id); if(m) m.jobs = JOBS[id];
-      if(state.view === "machine" && state.mid === id) render();
-    } catch(e){ /* transient — keep whatever we had */ }
-    finally { jobsLoading.delete(id); }
-  }
-
-  function closeJobSheet(){ jobScrim.classList.remove("open"); }
-  jobScrim.addEventListener("click", e=>{ if(e.target===jobScrim) closeJobSheet(); });
-
-  function openJobSheet(preId){
-    const online = M.filter(m=>m.online);
-    jobDraft = { id: preId || (online[0] && online[0].id) || null, name:"", schedule:"", cmd:"" };
-    if(preId && JOBS_OFF.has(preId)){ toast("jobs are disabled on that box — start its agent with -jobs"); return; }
-    renderJobSheet();
-    jobScrim.classList.add("open");
-  }
-
-  function renderJobSheet(){
-    const online = M.filter(m=>m.online);
-    if(!online.length){
-      jobBody.innerHTML = `<h3>Schedule a job</h3>
-        <p class="sd">a command that fires on a cron schedule</p>
-        <div class="field-note">No machines are online to schedule on.</div>
-        <div class="sheet-actions"><button class="btn primary" id="jClose" style="flex:1">Close</button></div>`;
-      $("#jClose").addEventListener("click", closeJobSheet);
-      return;
-    }
-    if(!online.some(m=>m.id===jobDraft.id)) jobDraft.id = online[0].id;
-    const opts = online.map(m=>`<option value="${esc(m.id)}"${m.id===jobDraft.id?" selected":""}>${esc(m.id)}${m.os?` · ${esc(m.os)}`:""}</option>`).join("");
-    jobBody.innerHTML = `
-      <h3>Schedule a job</h3>
-      <p class="sd">a command that fires on a cron schedule — unattended, on the box</p>
-      <div class="field">
-        <label>Machine</label>
-        <select id="jMachine">${opts}</select>
-      </div>
-      <div class="field">
-        <label>Name</label>
-        <input type="text" id="jName" placeholder="e.g. nightly-backup" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(jobDraft.name)}">
-      </div>
-      <div class="field">
-        <label>Schedule</label>
-        <input type="text" id="jSched" placeholder="e.g. 0 3 * * *  (or @daily)" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(jobDraft.schedule)}">
-        <div class="hint">5-field cron, or a macro like <b>@daily</b> / <b>@hourly</b></div>
-      </div>
-      <div class="field">
-        <label>Command</label>
-        <input type="text" id="jCmd" placeholder="e.g. restic backup /srv" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(jobDraft.cmd)}">
-        <div class="hint">runs via <b>sh -c</b> as the unprivileged hush user</div>
-      </div>
-      <div class="field-note">
-        <b>Heads up —</b> this fires on <b>${esc(jobDraft.id)}</b> with no sandbox, on its own schedule. It can do anything the hush user can — the OS permissions are the only fence.
-      </div>
-      <div class="sheet-actions">
-        <button class="btn ghost" id="jCancel">Cancel</button>
-        <button class="btn primary" id="jSave">◷ Schedule</button>
-      </div>`;
-    $("#jMachine").addEventListener("change", e=>{ jobDraft.id = e.target.value; renderJobHostNote(); });
-    $("#jName").addEventListener("input", e=>{ jobDraft.name = e.target.value; });
-    $("#jSched").addEventListener("input", e=>{ jobDraft.schedule = e.target.value; });
-    $("#jCmd").addEventListener("input", e=>{ jobDraft.cmd = e.target.value; });
-    $("#jCancel").addEventListener("click", closeJobSheet);
-    $("#jSave").addEventListener("click", createJob);
-    $("#jName").focus();
-  }
-  function renderJobHostNote(){
-    const n = jobBody.querySelector(".field-note");
-    if(n) n.innerHTML = `<b>Heads up —</b> this fires on <b>${esc(jobDraft.id)}</b> with no sandbox, on its own schedule. It can do anything the hush user can — the OS permissions are the only fence.`;
-  }
-
-  async function createJob(){
-    const id = jobDraft.id;
-    const name = (jobDraft.name||"").trim();
-    const schedule = (jobDraft.schedule||"").trim();
-    const cmd = (jobDraft.cmd||"").trim();
-    if(!id) return;
-    if(!name){ $("#jName").focus(); toast("give the job a name"); return; }
-    if(!schedule){ $("#jSched").focus(); toast("add a schedule"); return; }
-    if(!cmd){ $("#jCmd").focus(); toast("add a command"); return; }
-    if(MODE === "demo"){
-      const m = byId(id); if(m){ (m.jobs = m.jobs || []).push({ id:"job-"+Math.random().toString(36).slice(2,8), name, schedule, cmd, status:{} }); }
-      closeJobSheet(); render(); toast("scheduled (demo)"); return;
-    }
-    const btn = $("#jSave"); btn.disabled = true; btn.textContent = "Scheduling…";
-    try {
-      const r = await fetch(`api/machines/${encodeURIComponent(id)}/jobs`, {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ name, schedule, cmd }) });
-      if(r.status === 403){ JOBS_OFF.add(id); throw new Error("jobs are disabled on that box — start its agent with -jobs"); }
-      if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error((t||"").trim() || ("error "+r.status)); }
-      await loadJobs(id);
-      closeJobSheet(); render();
-      toast("job scheduled");
-    } catch(err){
-      btn.disabled = false; btn.textContent = "◷ Schedule";
-      toast((err&&err.message) ? err.message : "couldn't schedule");
-    }
-  }
-
-  async function deleteJob(mid, jobId, name){
-    if(!confirm(`Delete job "${name||jobId}"? It stops firing immediately.`)) return;
-    if(MODE === "demo"){
-      const m = byId(mid); if(m && m.jobs){ const i = m.jobs.findIndex(j=>(j.id||j.name)===jobId); if(i>=0) m.jobs.splice(i,1); }
-      render(); return;
-    }
-    try {
-      const r = await fetch(`api/machines/${encodeURIComponent(mid)}/jobs/${encodeURIComponent(jobId)}`, { method:"DELETE" });
-      if(!r.ok && r.status!==204) throw new Error("error "+r.status);
-    } catch(e){ toast("couldn't delete"); }
-    await loadJobs(mid); render();
   }
 
   /* ---------- Backups: the restic construct, defined on the agent ----------
@@ -3687,8 +2684,8 @@
     await loadBackups(mid); render();
   }
 
-  // runBackup streams a run into the shared run terminal (the same overlay a Task
-  // uses), then refreshes the box's backups so the row's last-run status updates.
+  // runBackup streams a run into the run terminal overlay, then refreshes the
+  // box's backups so the row's last-run status updates.
   function runBackup(mid, bid){
     const b = (BACKUPS[mid]||[]).find(x=>(x.id||x.name)===bid) || (byId(mid)?.backups||[]).find(x=>(x.id||x.name)===bid);
     const label = `restic backup · ${b ? (b.name||bid) : bid}`;
@@ -3879,7 +2876,7 @@
   }
 
   /* ---------- Backups: generate the paste-over-SSH setup command ----------
-     Like run-as, hush-control never touches the box — it generates the exact
+     hush-control never touches the box — it generates the exact
      idempotent root command from what the agent advertises in /vitals (restic
      present? -backup on? a rest-server binary for a vault?) plus the box's OS
      (to pick the package manager). You paste it over SSH; re-pasting converges. */
@@ -4066,12 +3063,9 @@ UNIT`);
   $("#palette").querySelectorAll(".pitem").forEach(el=>{
     el.addEventListener("click", ()=>{
       scrim.classList.remove("open");
-      // Machine, Job, Task, and Workflow are the constructs that actually do
-      // something today; the rest are still placeholders.
+      // Machine and Backup are the constructs that actually do something today;
+      // the rest are still placeholders.
       if(el.dataset.c === "Machine"){ openAddSheet(); return; }
-      if(el.dataset.c === "Job"){ openJobSheet(null); return; }
-      if(el.dataset.c === "Task"){ openTaskSheet(null); return; }
-      if(el.dataset.c === "Workflow"){ openWorkflowSheet(); return; }
       if(el.dataset.c === "Backup"){ openBackupSheet(null); return; }
       toast(`＋ ${el.dataset.c} builder — coming in a later phase`);
     });
@@ -4474,89 +3468,6 @@ UNIT`);
     updateScrim.classList.add("open");
   }
 
-  /* ---------- run-as users: generate a paste-over-SSH command ----------
-     hush-control is unprivileged and never edits sudoers itself — doing so would
-     let anyone reaching the (unauthenticated) agent escalate. So this sheet only
-     generates the exact root command to run over SSH. It uses a hush-runas group
-     so the sudoers file is written once and later changes are just group
-     membership; the command is idempotent, so pasting it converges the box to
-     the list shown. It keeps the sudo grant and the agent's HUSH_AGENT_RUNAS in
-     sync, then restarts the agent so the new list is advertised. */
-  const RUNAS_RE = /^[a-z_][a-z0-9_-]{0,31}\$?$/;
-
-  // parseRunAsInput splits the comma-separated field into { users, bad } — valid
-  // usernames (deduped, order preserved) and rejected tokens. "root" is called
-  // out separately since it's the one name that would defeat the whole point.
-  function parseRunAsInput(raw){
-    const seen = new Set(), users = [], bad = [];
-    (raw||"").split(",").forEach(tok=>{
-      const u = tok.trim();
-      if(!u) return;
-      if(u==="root" || !RUNAS_RE.test(u)){ bad.push(u); return; }
-      if(!seen.has(u)){ seen.add(u); users.push(u); }
-    });
-    return { users, bad };
-  }
-
-  // genRunAsScript builds the idempotent root command for a desired user list,
-  // given the box's currently-advertised users (to revoke ones being dropped).
-  function genRunAsScript(users, current){
-    const list = users.join(",");
-    const revoke = (current||[]).filter(u=>!users.includes(u));
-    const L = [
-      "# hush run-as — allow this box's Tasks to run as: " + (users.length?users.join(", "):"(none)"),
-      "sudo groupadd -f hush-runas",
-      "echo 'hush ALL=(%hush-runas) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/hush >/dev/null",
-      "sudo chmod 440 /etc/sudoers.d/hush && sudo visudo -cf /etc/sudoers.d/hush",
-    ];
-    users.forEach(u=> L.push(`sudo usermod -aG hush-runas ${u}   # user must exist: sudo useradd -r -s /usr/sbin/nologin ${u}`));
-    revoke.forEach(u=> L.push(`sudo gpasswd -d ${u} hush-runas`));
-    L.push("sudo mkdir -p /etc/hush && sudo touch /etc/hush/agent.env");
-    L.push("sudo sed -i '/^HUSH_AGENT_RUNAS=/d' /etc/hush/agent.env");
-    L.push(`echo 'HUSH_AGENT_RUNAS=${list}' | sudo tee -a /etc/hush/agent.env >/dev/null`);
-    L.push("sudo systemctl restart hush-agent");
-    return L.join("\n");
-  }
-
-  function openRunAsSheet(m){
-    const current = (m.runAs||[]).slice();
-    let cmd = "";
-    const render = ()=>{
-      const raw = $("#raUsers").value;
-      const { users, bad } = parseRunAsInput(raw);
-      cmd = genRunAsScript(users, current);
-      $("#raCmd").textContent = cmd;
-      const warn = $("#raWarn");
-      if(bad.length){
-        const hasRoot = bad.includes("root");
-        warn.innerHTML = `<div class="field-note" style="border-color:var(--crit-soft)">Ignored: ${esc(bad.join(", "))}${hasRoot?" — <b>never</b> grant run-as to root or a sudo-capable user; it would hand fleet-root to anyone who reaches this agent.":" — not valid usernames."}</div>`;
-      } else warn.innerHTML = "";
-    };
-    updateBody.innerHTML = `
-      <h3>Run-as users · ${esc(m.id)}</h3>
-      <p class="sd">users a Task on this box may run as via <b>sudo -u</b>. Edit the list, then run the generated command on <b>${esc(m.id)}</b> over SSH.</p>
-      ${(()=>{ const bad=runAsUngranted(m); return bad.length?`<div class="field-note" style="border-color:var(--warn-soft);color:var(--warn)">⚠ <b>${esc(bad.join(", "))}</b> ${bad.length>1?"are":"is"} advertised but ${bad.length>1?"have":"has"} no sudoers grant yet — running the command below applies it.</div>`:""; })()}
-      <div class="field" style="margin-top:4px">
-        <label>Allowed users (comma-separated)</label>
-        <input type="text" id="raUsers" value="${esc(current.join(", "))}" placeholder="e.g. media, deploy" autocapitalize="off" autocorrect="off" spellcheck="false">
-        <div class="hint">never root or a sudo-capable user — that list is the ceiling on what anyone reaching this agent can become</div>
-      </div>
-      <div id="raWarn"></div>
-      <div class="cmdbox"><code id="raCmd"></code><button class="btn" id="raCopy">Copy</button></div>
-      <div class="field-note">Uses a <b>hush-runas</b> group, so the sudoers file is written once and later changes are just group membership. Idempotent — pasting it makes the box match this list. Users must already exist.</div>
-      <div class="sheet-actions">
-        <button class="btn primary" id="raDone" style="flex:1">Done</button>
-      </div>`;
-    $("#raUsers").addEventListener("input", render);
-    $("#raCopy").addEventListener("click", async ()=>{
-      try { await navigator.clipboard.writeText(cmd); toast("copied to clipboard"); }
-      catch(e){ toast("couldn't copy — select and copy manually"); }
-    });
-    $("#raDone").addEventListener("click", closeUpdateSheet);
-    render();
-    updateScrim.classList.add("open");
-  }
-
   /* ---------- go ---------- */
   poll();
   setInterval(poll, 2500);
@@ -4564,10 +3475,6 @@ UNIT`);
   setInterval(checkVersion, 15*60*1000);
   pollDiscover();
   setInterval(pollDiscover, 20000);
-  pollWorkflows();
-  setInterval(pollWorkflows, 20000);
-  pollTasks();
-  setInterval(pollTasks, 20000);
   pollBackupStatus();
   setInterval(pollBackupStatus, 60000);
 
