@@ -125,11 +125,48 @@ create_user() {
   done
 }
 
+# curl_network_error inspects a failed curl's exit code and, if it looks like
+# a connectivity problem (DNS, connection refused, timeout, TLS) rather than a
+# real HTTP response, prints a network-specific diagnosis and returns 0. It
+# returns 1 for everything else (notably exit 22, curl's -f code for HTTP >=
+# 400 — a genuine 404). Callers use it so a transient DNS/network blip is not
+# reported as "no tagged release / unsupported platform": the two are
+# indistinguishable without the exit code, and conflating them sends people
+# down the build-from-source path when the release is fine and only their
+# resolver hiccuped.
+curl_network_error() {
+  rc="$1"
+  url="$2"
+  # Pull the host out of the URL so the diagnosis names the box that actually
+  # failed to resolve (github.com vs raw.githubusercontent.com).
+  host="$(printf '%s\n' "$url" | sed -e 's#^[a-z]*://##' -e 's#/.*##')"
+  case "$rc" in
+    6)
+      echo "error: couldn't resolve $host — DNS/name resolution failed on this machine." >&2
+      echo "  This is a local network problem, not a missing release. The download URL is valid:" >&2
+      echo "    $url" >&2
+      echo "  Check DNS (e.g. 'getent hosts $host', your resolv.conf / upstream resolver)," >&2
+      echo "  then re-run the installer — no need to build from source." >&2
+      return 0
+      ;;
+    7 | 28 | 35 | 56)
+      echo "error: couldn't reach $host (curl exit $rc: connection/timeout/TLS) — a network" >&2
+      echo "  problem on this machine, not a missing release. URL: $url" >&2
+      echo "  Check this box's connectivity/proxy/firewall to $host, then re-run." >&2
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 fetch_binary() {
   name="$1"
   url="https://github.com/$REPO/releases/latest/download/${name}_${OS_NAME}_${ARCH_NAME}.tar.gz"
   echo "downloading $name ($OS_NAME/$ARCH_NAME)..." >&2
-  if ! curl -fsSL "$url" -o "$TMP_DIR/$name.tar.gz"; then
+  rc=0
+  curl -fsSL "$url" -o "$TMP_DIR/$name.tar.gz" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    curl_network_error "$rc" "$url" && exit 1
     echo "error: no release binary found at $url" >&2
     echo "  (no tagged release yet, or unsupported platform — build from source instead:" >&2
     echo "   go install github.com/$REPO/cmd/$name@latest)" >&2
@@ -145,8 +182,11 @@ fetch_unit() {
   unit="$1"
   url="$RAW_BASE/systemd/$unit"
   echo "downloading $unit..." >&2
-  if ! curl -fsSL "$url" -o "$TMP_DIR/$unit"; then
-    echo "error: couldn't fetch $url" >&2
+  rc=0
+  curl -fsSL "$url" -o "$TMP_DIR/$unit" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    curl_network_error "$rc" "$url" && exit 1
+    echo "error: couldn't fetch $url (curl exit $rc)" >&2
     exit 1
   fi
   # Point ExecStart (and the updater's ReadWritePaths) at the resolved BIN_DIR
