@@ -19,31 +19,23 @@ import (
 	"github.com/clarkbar-sys/hush/internal/version"
 )
 
-// Service is one systemd unit as the fleet console understands it.
-type Service struct {
-	Name  string `json:"name"`
-	State string `json:"state"` // running | failed | stopped
-	Mem   string `json:"mem"`
-}
-
 // Snapshot is a single point-in-time reading of a machine.
 type Snapshot struct {
-	Host     string    `json:"host"`
-	Version  string    `json:"version"` // hush-agent build version, e.g. "v1.3.0" or "dev"
-	OS       string    `json:"os"`
-	Up       string    `json:"up"`
-	CPU      int       `json:"cpu"`
-	Mem      int       `json:"mem"`
-	Disk     int       `json:"disk"`
-	GPU      *int      `json:"gpu"`
-	VRAM     *int      `json:"vram"`
-	GPUName  string    `json:"gpuName,omitempty"`
-	VRAMText string    `json:"vramText,omitempty"`
-	Load     string    `json:"load"`
-	NetRx    int       `json:"netRx"` // inbound bytes/sec, sampled over the prior ~1s (excludes loopback)
-	NetTx    int       `json:"netTx"` // outbound bytes/sec, sampled over the prior ~1s (excludes loopback)
-	Services []Service `json:"services"`
-	Status   string    `json:"status"` // good | warn | crit
+	Host     string `json:"host"`
+	Version  string `json:"version"` // hush-agent build version, e.g. "v1.3.0" or "dev"
+	OS       string `json:"os"`
+	Up       string `json:"up"`
+	CPU      int    `json:"cpu"`
+	Mem      int    `json:"mem"`
+	Disk     int    `json:"disk"`
+	GPU      *int   `json:"gpu"`
+	VRAM     *int   `json:"vram"`
+	GPUName  string `json:"gpuName,omitempty"`
+	VRAMText string `json:"vramText,omitempty"`
+	Load     string `json:"load"`
+	NetRx    int    `json:"netRx"`  // inbound bytes/sec, sampled over the prior ~1s (excludes loopback)
+	NetTx    int    `json:"netTx"`  // outbound bytes/sec, sampled over the prior ~1s (excludes loopback)
+	Status   string `json:"status"` // good | warn | crit
 }
 
 // --- CPU: sampled in the background so /vitals stays instant -----------------
@@ -289,45 +281,9 @@ func gpuStats() (util, vram *int, name, vramText string) {
 		fmt.Sprintf("%.1f / %.0f GB", usedMB/1024, totMB/1024)
 }
 
-// --- systemd services (best-effort) -----------------------------------------
-
-func services() []Service {
-	svcs := []Service{}
-	out, err := exec.Command("systemctl", "list-units", "--type=service",
-		"--state=running,failed", "--no-legend", "--no-pager", "--plain").Output()
-	if err != nil {
-		return svcs
-	}
-	for _, ln := range strings.Split(string(out), "\n") {
-		fields := strings.Fields(ln)
-		if len(fields) < 4 {
-			continue
-		}
-		state := "running"
-		if fields[2] == "failed" || fields[3] == "failed" {
-			state = "failed"
-		} else if fields[3] != "running" {
-			state = "stopped"
-		}
-		svcs = append(svcs, Service{
-			Name:  strings.TrimSuffix(fields[0], ".service"),
-			State: state,
-		})
-		if len(svcs) >= 12 {
-			break
-		}
-	}
-	return svcs
-}
-
 // --- assembly ---------------------------------------------------------------
 
-func deriveStatus(cpu, mem, disk int, vram *int, svcs []Service) string {
-	for _, s := range svcs {
-		if s.State == "failed" {
-			return "crit"
-		}
-	}
+func deriveStatus(cpu, mem, disk int, vram *int) string {
 	switch {
 	case disk >= 92 || mem >= 95:
 		return "crit"
@@ -342,7 +298,6 @@ func deriveStatus(cpu, mem, disk int, vram *int, svcs []Service) string {
 func Collect() Snapshot {
 	host, _ := os.Hostname()
 	gpu, vram, name, vramText := gpuStats()
-	svcs := services()
 	cpu, mem, disk := cpuUsage(), memUsage(), diskUsage()
 	rx, tx := netUsage()
 	return Snapshot{
@@ -360,8 +315,7 @@ func Collect() Snapshot {
 		Load:     loadAvg(),
 		NetRx:    rx,
 		NetTx:    tx,
-		Services: svcs,
-		Status:   deriveStatus(cpu, mem, disk, vram, svcs),
+		Status:   deriveStatus(cpu, mem, disk, vram),
 	}
 }
 

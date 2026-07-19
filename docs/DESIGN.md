@@ -34,19 +34,18 @@ hush borrows the two things that make a Factorio base legible:
    look. A failed backup isn't a line in a log you'll never read — it's a badge
    on the map and a bell in the header.
 
-## The construct vocabulary (5 nouns)
+## The construct vocabulary (4 nouns)
 
 Everything you can put on the fleet is exactly one of these — the substrate the
 backup console stands on. **Machine, Store, and Backup are the spine** (what am I
-protecting, where does it live, is it safe?); Service and Link are the read-only
-supporting cast. hush once had a "and you can also run things" half — ad-hoc and
+protecting, where does it live, is it safe?); Link is the read-only supporting
+cast. hush once had a "and you can also run things" half — ad-hoc and
 scheduled command execution (Tasks, Jobs, Workflows) — but that was removed;
 what's left is a backup console over a read-only view of the fleet.
 
 | Construct | What it is |
 |---|---|
 | **Machine** | a tailnet host — has vitals, holds everything else |
-| **Service** | a systemd unit — persistent, running or stopped |
 | **Store** | a disk / dataset — the NAS especially |
 | **Backup** | a scheduled restic run that hauls a Machine into a Store, dedup'd |
 | **Link** | the tailnet edge between two machines |
@@ -62,14 +61,12 @@ One canvas, three depths. You never navigate away, you get closer. Phone-first.
   status badge still colour each card — vitals just no longer decide the fleet's
   verdict. Backup problems also aggregate into the header's **alert bell**.
 - **Machine** — "enter the building": header (OS, tailnet IP, uptime, GPU),
-  full-size vitals, the Services list, and its Backups. Tapping
+  full-size vitals, and its Backups. Tapping
   the CPU ring or the network panel opens a live **htop-style** read of the box —
   per-core meters and the busiest processes — served by the agent's `/top`
   endpoint (proxied at `/api/machines/{host}/top`) and re-polled every ~2s. Like
   `/vitals` it's ungated read-only telemetry sampled from `/proc`, so it works on
   every agent without a flag.
-- **Construct** — one thing, full detail: state, metadata, controls, and (from
-  Phase 1) a live-tailing journal.
 
 ### Vitals — concentric dual rings
 
@@ -120,8 +117,8 @@ built around backups and sets the direction from here.
 
 **Shipped — the substrate (generic fleet console).**
 
-- **Phase 0 — Proof of life (read-only).** Fleet map + live vitals + drill into a
-  machine to see its services, plus adding a machine through the console.
+- **Phase 0 — Proof of life (read-only).** Fleet map + live vitals, plus adding a
+  machine through the console.
 - **Store.** Read-only **file browsing** and a windirstat-style **disk-usage
   treemap** on every box (see "Store — browsing files").
 - **Backups.** Root-run restic backups set up on the box over SSH (the
@@ -153,8 +150,13 @@ built around backups and sets the direction from here.
 **Removed (the "run things" half).** hush once shipped ad-hoc and saved command
 execution (Tasks), cron scheduling (Jobs), wired sequences (Workflows), and a
 `sudo -u` run-as allowlist. After dogfooding, that whole half was cut: the agent
-no longer serves `/exec` or `/jobs`. Dedicated Service start/stop/restart and a
-live journal tail were never built and are not planned.
+no longer serves `/exec` or `/jobs`.
+
+**Removed (systemd service detection).** hush once reported each machine's
+running/failed systemd units (the `Service` construct) and let you drill into
+one for a read-only preview of state/metadata (start/stop/restart and a live
+journal tail were previewed but never built). It was cut as out of scope for a
+backup console.
 
 **Removed (the in-agent Backup construct).** hush also shipped restic *inside*
 `hush-agent` — the `-backup` flag, the `/backups` API (create / run / schedule /
