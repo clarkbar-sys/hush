@@ -305,11 +305,6 @@
     border:1px solid var(--border); border-radius:8px; padding:6px 10px; cursor:pointer;
     text-decoration:none; white-space:nowrap; }
   .vbtn:hover { border-color:var(--accent); }
-  .vbody { padding:14px; overflow:auto; display:grid; place-items:center; }
-  .vmedia { max-width:100%; max-height:78vh; border-radius:8px; display:block; }
-  .vaudio { width:100%; }
-  .vpre { font-family:var(--mono); font-size:12px; line-height:1.55; white-space:pre-wrap;
-    word-break:break-word; color:var(--text); width:100%; margin:0; }
   .vnote { font-family:var(--mono); font-size:12px; color:var(--faint); padding:26px 16px; }
   /* ---- live CPU/network (htop-style) panel ---- */
   .topopen { cursor:pointer; transition:box-shadow .15s ease; }
@@ -729,7 +724,7 @@
   const cpuHist = {};              // id -> rolling cpu samples (live mode)
   const netRxHist = {};            // id -> rolling inbound bytes/sec samples (live mode)
   const netTxHist = {};            // id -> rolling outbound bytes/sec samples (live mode)
-  const state = { view:"fleet", mid:null, cname:null, browsePath:null, summLegendOpen:false };
+  const state = { view:"fleet", mid:null, cname:null, summLegendOpen:false };
   const byId = id => M.find(m=>m.id===id);
   let PENDING = [];                // machines just added via the UI, awaiting first check-in
   const JUST_ARRIVED = new Set();  // ids to pop-highlight for one render after their first check-in
@@ -1373,7 +1368,7 @@
       </button>`;
   }
 
-  function enterMachine(id){ state.view="machine"; state.mid=id; state.browsePath=null; render(); scrollTop(); }
+  function enterMachine(id){ state.view="machine"; state.mid=id; render(); scrollTop(); }
   function enterConstruct(name){ state.view="construct"; state.cname=name; render(); scrollTop(); }
   function goFleet(){ state.view="fleet"; render(); scrollTop(); }
   function scrollTop(){ window.scrollTo({top:0,behavior:"instant"}); }
@@ -1422,12 +1417,6 @@
             <span class="gly">▦</span><span class="nm">Disk usage</span>
             <span class="rt">${m.online?"treemap":"offline"}</span></button>
         </div>
-        <div class="list" id="browse">${state.browsePath==null
-          ? `<button class="row" id="browse-open"${m.online?"":" disabled style=\"opacity:.5;cursor:default\""}>
-              <span class="gly">▤</span><span class="nm">Browse filesystem</span>
-              <span class="rt">${m.online?"/":"offline"}</span></button>`
-          : `<div class="empty">loading…</div>`}</div>
-
         <details class="rollup">
           <summary class="sec-title">Services <span class="n">${m.services.length}</span></summary>
           <div class="list">${m.services.length ? m.services.map(svcRow).join("")
@@ -1446,9 +1435,6 @@
     app.querySelectorAll("[data-svc]").forEach(el=>{
       el.addEventListener("click", ()=>enterConstruct(el.dataset.svc));
     });
-    const bo = $("#browse-open");
-    if(bo) bo.addEventListener("click", ()=>{ if(!m.online) return; state.browsePath="/"; fillBrowse(m.id); });
-    if(state.browsePath!=null) fillBrowse(m.id);
     const du = $("#du-open");
     if(du) du.addEventListener("click", ()=>{ if(m.online) openDu(m.id); });
     // The CPU ring, cpu-trend spark and network box all open the live
@@ -1458,88 +1444,14 @@
     });
   }
 
-  /* ---------- Files: the Store construct, unjailed, bounded by the hush user's
-     read permissions on the box. Directories descend; files list (opening them
-     is a later step). ---------- */
-  async function fillBrowse(id){
-    const path = state.browsePath;
-    const stale = () => state.view!=="machine" || state.mid!==id || state.browsePath!==path;
-    let box = $("#browse");
-    if(!box) return;
-    try {
-      const r = await fetch(`api/machines/${encodeURIComponent(id)}/browse?path=${encodeURIComponent(path)}`, {cache:"no-store"});
-      if(stale()) return;
-      box = $("#browse"); if(!box) return;
-      if(!r.ok){
-        const msg = r.status===403 ? "permission denied — the hush user can't read this"
-          : r.status===404 ? "no such directory"
-          : r.status===400 ? "not a directory"
-          : r.status===502 ? "machine unreachable" : `error ${r.status}`;
-        box.innerHTML = browseBar(path, "") + `<div class="empty">${esc(msg)}</div>`;
-        wireBrowse(id); return;
-      }
-      const l = await r.json();
-      if(stale()) return;
-      box = $("#browse"); if(!box) return;
-      const rows = (l.entries||[]).map(browseRow).join("");
-      const trunc = l.truncated ? `<div class="empty">directory truncated — showing the first entries</div>` : "";
-      box.innerHTML = browseBar(l.path, l.parent) + (rows || `<div class="empty">empty directory</div>`) + trunc;
-      wireBrowse(id);
-    } catch(e){
-      if(stale()) return;
-      box = $("#browse"); if(box){ box.innerHTML = browseBar(path, "") + `<div class="empty">could not load</div>`; wireBrowse(id); }
-    }
-  }
-  function browseBar(path, parent){
-    const up = parent ? `<a data-up="${esc(parent)}">↑ up</a>` : "";
-    // Keep the leading "/" and the deepest segments visible on a phone; drop
-    // the middle of a long path rather than truncating the part that matters.
-    let shown = path;
-    if(path.length > 40){
-      const parts = path.split("/").filter(Boolean);
-      shown = "/…/" + parts.slice(-2).join("/");
-    }
-    return `<div class="browsebar"><span class="bpath" title="${esc(path)}">${esc(shown)}</span>
-      <span class="bactions">${up}<a data-close>✕ close</a></span></div>`;
-  }
-  function browseRow(e){
-    if(e.isDir){
-      return `<button class="row" data-dir="${esc(e.name)}">
-        <span class="gly">▸</span><span class="nm">${esc(e.name)}</span>
-        <span class="rt">dir</span></button>`;
-    }
-    const sym = e.symlink ? `<span class="rt" style="opacity:.65">→ ${esc(e.symlink)}</span>` : "";
-    return `<button class="row" data-file="${esc(e.name)}" data-size="${e.size}">
-      <span class="gly" style="background:var(--accent-soft);color:var(--accent)">▪</span>
-      <span class="nm">${esc(e.name)}</span>${sym}
-      <span class="rt">${fmtBytes(e.size)}</span></button>`;
-  }
-  function wireBrowse(id){
-    const box = $("#browse"); if(!box) return;
-    box.querySelectorAll("[data-dir]").forEach(el=>el.addEventListener("click", ()=>{
-      const base = state.browsePath==="/" ? "" : state.browsePath;
-      state.browsePath = base + "/" + el.dataset.dir;
-      fillBrowse(id);
-    }));
-    box.querySelectorAll("[data-file]").forEach(el=>el.addEventListener("click", ()=>{
-      const base = state.browsePath==="/" ? "" : state.browsePath;
-      openFile(id, base + "/" + el.dataset.file, el.dataset.file, +el.dataset.size);
-    }));
-    const up = box.querySelector("[data-up]");
-    if(up) up.addEventListener("click", ()=>{ state.browsePath = up.dataset.up; fillBrowse(id); });
-    const cl = box.querySelector("[data-close]");
-    if(cl) cl.addEventListener("click", ()=>{ state.browsePath = null; renderMachine(); });
-  }
-
   /* ---------- Disk usage: a windirstat-style treemap over the Store
      construct's recursive /du endpoint. Sizes are computed recursively on the
      agent, but only one level is rendered at a time — clicking a directory's
-     box drills into it and fetches that subtree's own children, the same
-     lazy one-directory-at-a-time navigation /browse already uses, just drawn
-     as proportional boxes instead of rows. Lives in its own overlay (like
-     openFile) rather than the Files list, since a treemap wants real screen
-     space. In demo mode there's no agent to ask, so demoDu() below fabricates
-     a plausible, stable tree per machine instead of hitting the network. */
+     box drills into it and fetches that subtree's own children, drawn as
+     proportional boxes instead of rows. Lives in its own overlay since a
+     treemap wants real screen space. In demo mode there's no agent to ask,
+     so demoDu() below fabricates a plausible, stable tree per machine
+     instead of hitting the network. */
   const DU_PALETTE = ["#19e3ff","#7c5cff","#2bffa6","#ffd23f","#ff6f3d","#ff3d6e","#3ddcff","#a56bff","#5cffcf","#ffb23d"];
   function duColor(idx, isDir){
     const base = DU_PALETTE[idx % DU_PALETTE.length];
@@ -1859,62 +1771,6 @@
     return { host:id, cpu:m.cpu, mem:m.mem, cores, procs, running: 118 + (Math.random()*44|0) };
   }
 
-  // openFile pops a viewer over the console for one file, streamed through
-  // control's /file proxy. The kind is chosen by extension: video/audio get a
-  // seekable player (the proxy forwards Range requests), images render inline,
-  // small text is fetched and shown, and anything else offers a download. The
-  // overlay lives on <body>, so the fleet poll re-rendering #app underneath
-  // never tears it down.
-  const VIDEO=["mp4","webm","ogv","ogm","mov","m4v"];
-  const AUDIO=["mp3","ogg","oga","wav","flac","m4a","aac","opus"];
-  const IMAGE=["png","jpg","jpeg","gif","webp","avif","svg","bmp","ico"];
-  const TEXT=["txt","log","md","markdown","json","yaml","yml","toml","ini","conf","cfg","xml",
-    "csv","tsv","sh","bash","zsh","fish","go","py","js","mjs","ts","c","h","cpp","hpp","rs","rb",
-    "lua","pl","php","sql","html","css","service","timer","env","dockerfile","makefile","license"];
-  const TEXT_MAX = 1024*1024;
-  function openFile(id, path, name, size){
-    const url = `api/machines/${encodeURIComponent(id)}/file?path=${encodeURIComponent(path)}`;
-    const dl = url + "&download=1";
-    const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : name.toLowerCase();
-    const ov = document.createElement("div");
-    ov.className = "vov";
-    ov.innerHTML = `<div class="vsheet">
-        <div class="vbar">
-          <div class="vname" title="${esc(path)}">${esc(name)}</div>
-          <div class="vmeta">${fmtBytes(size)}</div>
-          <a class="vbtn" href="${dl}">⤓ Download</a>
-          <button class="vbtn vclose" aria-label="Close">✕</button>
-        </div>
-        <div class="vbody"><div class="vnote">loading…</div></div>
-      </div>`;
-    document.body.appendChild(ov);
-    const body = ov.querySelector(".vbody");
-    const alive = () => document.body.contains(ov);
-    const close = () => { ov.remove(); document.removeEventListener("keydown", onkey); };
-    const onkey = e => { if(e.key==="Escape") close(); };
-    document.addEventListener("keydown", onkey);
-    ov.querySelector(".vclose").addEventListener("click", close);
-    ov.addEventListener("click", e => { if(e.target===ov) close(); });
-
-    if(VIDEO.includes(ext)){
-      body.innerHTML = `<video class="vmedia" controls autoplay playsinline src="${url}"></video>`;
-    } else if(AUDIO.includes(ext)){
-      body.innerHTML = `<audio class="vmedia vaudio" controls autoplay src="${url}"></audio>`;
-    } else if(IMAGE.includes(ext)){
-      body.innerHTML = `<img class="vmedia" src="${url}" alt="${esc(name)}">`;
-    } else if(TEXT.includes(ext)){
-      if(size!=null && size>TEXT_MAX){
-        body.innerHTML = `<div class="vnote">${fmtBytes(size)} — too large to preview. Use Download.</div>`;
-      } else {
-        fetch(url, {cache:"no-store"})
-          .then(r => r.ok ? r.text() : Promise.reject(r.status))
-          .then(t => { if(alive()) body.innerHTML = `<pre class="vpre"></pre>`, body.firstChild.textContent = t; })
-          .catch(s => { if(alive()) body.innerHTML = `<div class="vnote">could not load (${esc(String(s))})</div>`; });
-      }
-    } else {
-      body.innerHTML = `<div class="vnote">No inline preview for this file — use Download.</div>`;
-    }
-  }
   function fmtBytes(n){
     if(n==null) return "";
     if(n<1024) return n+" B";
