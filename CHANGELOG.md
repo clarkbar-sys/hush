@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.0](https://github.com/clarkbar-sys/hush/compare/v2.0.0...v2.1.0) (2026-07-19)
+
+
+### Features
+
+* Cache disk-usage sizing, warm it hourly, add a Re-size button ([#163](https://github.com/clarkbar-sys/hush/issues/163)) ([6dd87a4](https://github.com/clarkbar-sys/hush/commit/6dd87a4aebe7ebb9938cb637cf7e9f48ba0a7f89))
+* **web:** show the backup destination on its own card ([#166](https://github.com/clarkbar-sys/hush/issues/166)) ([826f882](https://github.com/clarkbar-sys/hush/commit/826f882944280df4bc835ab4d820567667cc3806))
+
 ## [2.0.0](https://github.com/clarkbar-sys/hush/compare/v1.29.0...v2.0.0) (2026-07-19)
 
 
