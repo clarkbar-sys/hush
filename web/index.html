@@ -817,6 +817,14 @@
     const crit = M.filter(m=>m.status==="crit").length;
     const warn = M.filter(m=>m.status==="warn").length;
     const good = M.filter(m=>m.status==="good").length;
+    // Backups are flattened across machines because the question is
+    // fleet-shaped ("is everything backed up?"), not per-box.
+    const bkAll = CONV_BACKUPS.flatMap(h => (h.backups||[]).map(b => ({host:h.host, b})));
+    const bkBad = bkAll.filter(x => !x.b.ok).length;
+    // Machines that couldn't be asked are named rather than omitted — a backup
+    // console that quietly drops a machine is worse than one that says it
+    // cannot tell.
+    const bkUnreachable = CONV_BACKUPS.filter(h => !h.reachable).map(h => h.host);
     app.innerHTML = `
       <div class="strip">
         <div style="flex:1">
@@ -845,6 +853,13 @@
           <summary class="sec-title">Workflows <span class="n">${wfSaved.length}</span></summary>
           <div class="wf-saved">${wfSaved.length ? wfSaved.map(wfFleetRow).join("")
             : `<div class="empty">no saved workflows — build one from saved Tasks in + Build</div>`}</div>
+        </details>
+
+        <details class="rollup"${bkBad?" open":""}>
+          <summary class="sec-title">Backups <span class="n">${bkAll.length}</span></summary>
+          <div class="wf-saved">${bkAll.length ? bkAll.map(x=>backupFleetRow(x.host, x.b)).join("")
+            : `<div class="empty">no scheduled backups reporting — see docs/BACKUP-CONVENTION.md</div>`}
+            ${bkUnreachable.length ? `<div class="empty">couldn't reach ${esc(bkUnreachable.join(", "))} — backup state unknown</div>` : ""}</div>
         </details>
       </main>`;
     app.querySelectorAll(".node[data-id]").forEach(el=>{
@@ -908,6 +923,38 @@
       <button class="wf-run" data-trun="${esc(t.id)}">⚡ Run</button>
       <button class="wf-edit" data-tedit="${esc(t.id)}" aria-label="Edit">✎</button>
       <button class="wf-rm" data-trm="${esc(t.id)}" aria-label="Delete">✕</button>
+    </div>`;
+  }
+
+  // backupTarget pulls the store's hostname out of a repository URL for the
+  // "source → target" reading. The URL arrives already credential-stripped —
+  // the runner redacts userinfo before it ever reaches a status file.
+  function backupTarget(repo){
+    const m = String(repo||"").match(/\/\/([^/:@]+)/);
+    return m ? m[1] : "";
+  }
+
+  // One convention backup (docs/BACKUP-CONVENTION.md) as a fleet row. A backup
+  // is a direction, not a machine, so it reads "source → target".
+  //
+  // Three states, not two: restic exits 3 when some source data could not be
+  // read, which leaves a real snapshot that is missing files. That is drawn as
+  // a warning rather than folded into either "complete" or "failed" — it is the
+  // outcome most likely to be mistaken for success.
+  function backupFleetRow(host, b){
+    const sev = b.ok ? "good" : (b.incomplete ? "warn" : "crit");
+    const label = b.ok ? "complete"
+      : b.incomplete ? `incomplete · exit ${b.exit_code} · some files unreadable`
+      : `failed · exit ${b.exit_code}`;
+    const target = backupTarget(b.repository);
+    const s = b.summary || {};
+    const added = (typeof s.data_added === "number") ? fmtBytes(s.data_added) : "";
+    const when = relTimeISO(b.finished || b.started || "");
+    return `<div class="wf-item">
+      <div class="wf-meta">
+        <div class="wf-nm"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--${sev});margin-right:7px;vertical-align:middle"></span>${esc(host)}${target?` <span style="color:var(--accent)">→</span> ${esc(target)}`:""}</div>
+        <div class="wf-sub">${esc(label)}${when?` · ${esc(when)}`:""}${added?` · ${esc(added)} added`:""}</div>
+      </div>
     </div>`;
   }
 
@@ -2083,6 +2130,7 @@
   let wfSaved = [];                       // saved blueprints (from the server, or demo memory)
   const wfDemo = [];                      // demo-mode store, seeded lazily on first open
   let taskSaved = [];                     // saved Tasks (the reusable atom) from the server, or demo memory
+  let CONV_BACKUPS = [];                       // /api/backup-status: root-run convention backups, per machine
   const taskDemo = [];                    // demo-mode task store, seeded lazily on first load
 
   function openWorkflowSheet(){
@@ -2312,6 +2360,18 @@
   async function pollTasks(){
     taskSaved = await loadTasks();
     render();
+  }
+
+  // Backup status is polled slowly: a nightly backup changes once a day, so
+  // there is nothing to gain from riding the 2.5s fleet cadence. A failure to
+  // load leaves the last known list in place rather than blanking the section.
+  async function pollBackupStatus(){
+    try {
+      const r = await fetch("api/backup-status", {cache:"no-store"});
+      if(!r.ok) return;
+      const data = await r.json();
+      if(Array.isArray(data)) { CONV_BACKUPS = data; render(); }
+    } catch(e){ /* keep the last known state */ }
   }
 
   function closeTaskSaveSheet(){ tsaveScrim.classList.remove("open"); }
@@ -3982,6 +4042,8 @@ UNIT`);
   setInterval(pollWorkflows, 20000);
   pollTasks();
   setInterval(pollTasks, 20000);
+  pollBackupStatus();
+  setInterval(pollBackupStatus, 60000);
 
   /* register the service worker so the console is installable and opens
      offline. Only works in a secure context (tsnet HTTPS or localhost);

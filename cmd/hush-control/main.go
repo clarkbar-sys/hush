@@ -158,6 +158,10 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) (http.Ha
 			log.Printf("encode fleet: %v", err)
 		}
 	})
+	// Fleet-wide backup status. A backup is a direction (this box → that store),
+	// so the useful question is fleet-shaped — see backupstatus.go for why this
+	// aggregates rather than proxying per machine.
+	mux.HandleFunc("/api/backup-status", handleBackupStatus(client, store.Snapshot))
 	mux.HandleFunc("/api/machines/{host}/browse", func(w http.ResponseWriter, r *http.Request) {
 		a, ok := store.find(r.PathValue("host"))
 		if !ok {
