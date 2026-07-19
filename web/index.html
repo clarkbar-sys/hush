@@ -214,6 +214,11 @@
   .bkline.good { color:var(--good); border-color:var(--good-soft); background:var(--good-soft); }
   .bkline.warn { color:var(--warn); border-color:var(--warn-soft); background:var(--warn-soft); }
   .bkline.crit { color:var(--crit); border-color:var(--crit-soft); background:var(--crit-soft); }
+  /* run — a backup in flight: accent, not a verdict, so it reads as motion
+     rather than trouble. The glyph pulses so an in-progress run is legible at a
+     glance on the map. */
+  .bkline.run  { color:var(--accent); border-color:var(--accent-soft); background:var(--accent-soft); }
+  .bkline.run .g { animation: blink 1.4s steps(2,start) infinite; }
 
   /* alert center — header bell + panel rows */
   .chip.alert-bell { cursor:pointer; font-weight:700; }
@@ -640,6 +645,7 @@
     border-radius:10px; overflow:hidden; border-left:3px solid var(--good); }
   .bk-card.warn { border-left-color:var(--warn); }
   .bk-card.crit { border-left-color:var(--crit); }
+  .bk-card.run  { border-left-color:var(--accent); }
   .bk-hd { padding:11px 12px 9px; }
   .bk-route { display:flex; align-items:center; gap:7px; flex-wrap:wrap;
     font-family:var(--mono); font-weight:700; font-size:14px; }
@@ -651,6 +657,8 @@
   .bk-state.good { color:var(--good); background:var(--good-soft); }
   .bk-state.warn { color:var(--warn); background:var(--warn-soft); }
   .bk-state.crit { color:var(--crit); background:var(--crit-soft); }
+  .bk-state.run  { color:var(--accent); background:var(--accent-soft); }
+  .bk-state.run .d { animation: blink 1.4s steps(2,start) infinite; }
   .bk-repo { font-family:var(--mono); font-size:10.5px; color:var(--muted);
     margin-top:5px; overflow-wrap:anywhere; }
   .bk-metrics { display:grid; grid-template-columns:repeat(2,1fr); gap:1px;
@@ -893,10 +901,18 @@
     const nRisk = post.filter(p=>p==="risk").length;
     const nFail = post.filter(p=>p==="failed").length;
     const nNone = post.filter(p=>p==="none").length;
+    const nRun  = post.filter(p=>p==="running").length;
     // Backups are flattened across machines because the question is
     // fleet-shaped ("is everything backed up?"), not per-box.
     const bkAll = CONV_BACKUPS.flatMap(h => (h.backups||[]).map(b => ({host:h.host, b})));
-    const bkBad = bkAll.filter(x => !x.b.ok).length;
+    // "Bad" is what forces the section open and colours the count: a run that
+    // finished not-ok, or one that has stalled. A healthy run in flight is
+    // explicitly NOT bad — before this, a running backup (no ok field) counted
+    // as bad, which is exactly the "in progress looks broken" bug being fixed.
+    const bkBad = bkAll.filter(x => bkStalled(x.b) || (!bkRunning(x.b) && !x.b.ok)).length;
+    // ...but a healthy run still opens the section, because someone watching a
+    // backup wants to see it without hunting for the drawer.
+    const bkActive = bkAll.some(x => bkRunning(x.b));
     // Machines that couldn't be asked are named rather than omitted — a backup
     // console that quietly drops a machine is worse than one that says it
     // cannot tell.
@@ -908,6 +924,7 @@
         </div>
         <div class="summ">
           <span class="s"><span class="swatch" style="background:var(--good)"></span><b>${nProt}</b> protected</span>
+          ${nRun?`<span class="s"><span class="swatch" style="background:var(--accent)"></span><b>${nRun}</b> backing up</span>`:""}
           <span class="s"><span class="swatch" style="background:var(--warn)"></span><b>${nRisk}</b> at risk</span>
           <span class="s"><span class="swatch" style="background:var(--faint)"></span><b>${nNone}</b> unprotected</span>
           <span class="s"><span class="swatch" style="background:var(--crit)"></span><b>${nFail}</b> failed</span>
@@ -935,7 +952,7 @@
             : `<div class="empty">no saved workflows — build one from saved Tasks in + Build</div>`}</div>
         </details>
 
-        <details class="rollup"${bkBad?" open":""}>
+        <details class="rollup"${(bkBad||bkActive)?" open":""}>
           <summary class="sec-title">Backups <span class="n">${bkAll.length}</span></summary>
           <div class="wf-saved">${bkAll.length
             ? `<div class="bk-cards">${bkAll.map(x=>backupCard(x.host, x.b)).join("")}</div>`
@@ -1015,20 +1032,56 @@
     return m ? m[1] : "";
   }
 
-  // bkSeverity maps a run to one of three states — never two. restic exits 3
-  // when some source data could not be read, which leaves a real snapshot that
-  // is missing files. Folding that into either "complete" or "failed" would
-  // hide the outcome most likely to be mistaken for success.
-  function bkSeverity(b){ return b.ok ? "good" : (b.incomplete ? "warn" : "crit"); }
+  // bkRunning is true while a run is in flight — the runner writes
+  // "state":"running" at the start and overwrites it with the outcome when
+  // restic exits. It is checked before ok/incomplete everywhere below because a
+  // running run has no outcome yet: its status file carries no ok field, so
+  // treating it as a normal run would read the absent ok as a failure.
+  function bkRunning(b){ return !!b && b.state === "running"; }
+
+  // bkStalled catches the failure mode a "running" marker introduces: a run
+  // killed mid-flight (OOM, reboot, power) leaves "state":"running" on disk
+  // forever, and a permanently-"running" backup would otherwise read as
+  // healthier than a failed one — inverting the whole point of the console.
+  //
+  // The tell is that the run overran its own schedule. While a run is in
+  // flight systemd already reports the *next* fire (one interval out), so once
+  // that time is in the past and the run still hasn't finished, a full interval
+  // has elapsed with no snapshot — wedged, not working. When next_run is
+  // unknown (no systemd, disabled timer), fall back to a generous fixed ceiling
+  // so a hung run still eventually surfaces rather than masquerading as active
+  // forever. Both are deliberately conservative: a legitimately long first
+  // backup must never be mislabelled stalled.
+  const STALL_FALLBACK_MS = 24 * 3600e3;
+  function bkStalled(b){
+    if(!bkRunning(b)) return false;
+    const started = Date.parse(b.started || "") || 0;
+    if(!started) return false;
+    const next = Date.parse(b.next_run || "") || 0;
+    if(next) return Date.now() > next;
+    return (Date.now() - started) > STALL_FALLBACK_MS;
+  }
+
+  // bkSeverity maps a run to one of four states — never two. A run in flight is
+  // "run" (or "warn" once it has clearly stalled); otherwise restic's exit 3,
+  // which leaves a real snapshot that is missing files, is its own "warn" state
+  // between clean "good" and outright "crit" — folding it into either would hide
+  // the outcome most likely to be mistaken for success.
+  function bkSeverity(b){
+    if(bkRunning(b)) return bkStalled(b) ? "warn" : "run";
+    return b.ok ? "good" : (b.incomplete ? "warn" : "crit");
+  }
 
   /* ---------- backup posture: the map's primary signal ----------
      hush is a backup console now, so a machine's place on the map is decided by
      "is this box protected?", not by CPU. Posture reads the same /api/backup-status
      feed the Backups section renders (seeded in demo mode by demoConvBackups), so
-     the map and the cards can never disagree. One of five states, worst-wins:
+     the map and the cards can never disagree. One of six states, worst-wins:
        failed    — a run finished non-zero (restic couldn't write a snapshot)
        none      — reachable, but no backup configured (a total gap)
-       risk      — a run was incomplete (exit 3), or the newest snapshot is stale
+       risk      — a run was incomplete (exit 3), the newest snapshot is stale,
+                    or a run has stalled mid-flight
+       running   — a run is in flight and healthy — working on it, not a verdict
        protected — every backup ran clean and recently
        unknown   — the box couldn't be asked (backup state genuinely unknown) */
   function hostBackupEntry(id){ return CONV_BACKUPS.find(h=>h.host===id); }
@@ -1037,8 +1090,16 @@
     if(!h || !h.reachable) return "unknown";
     const bks = h.backups || [];
     if(!bks.length) return "none";
-    if(bks.some(b=>!b.ok && !b.incomplete)) return "failed";
+    // A stalled run is trouble that hides as activity — surface it, worst of
+    // the running cases, before any healthy-run check below can absolve it.
+    if(bks.some(b=>bkStalled(b))) return "risk";
+    if(bks.some(b=>!bkRunning(b) && !b.ok && !b.incomplete)) return "failed";
     if(bks.some(b=>b.incomplete)) return "risk";
+    // A healthy run in flight is "working on it": not failed, but not yet a
+    // snapshot either, so it doesn't get to read as protected until it lands.
+    // It ranks below the clean/stale checks so a box whose other backups are
+    // fine isn't dragged to "running" by one that happens to be mid-run.
+    if(bks.some(b=>bkRunning(b))) return "running";
     // Stale: a nightly that missed a night. Newest run older than ~36h is the
     // cheapest honest "the schedule stopped firing" tell without per-box cadence.
     const newest = bks.reduce((t,b)=>Math.max(t, Date.parse(b.finished||b.started||"")||0), 0);
@@ -1049,16 +1110,29 @@
     failed:    { sev:"crit",  glyph:"✕", label:"backup failed" },
     none:      { sev:"warn",  glyph:"○", label:"no backup" },
     risk:      { sev:"warn",  glyph:"▲", label:"at risk" },
+    running:   { sev:"run",   glyph:"⟳", label:"backing up" },
     protected: { sev:"good",  glyph:"✓", label:"protected" },
     unknown:   { sev:"muted", glyph:"·", label:"unknown" },
   };
   // Ordering for "trouble floats to the top" — a failed backup is the loudest,
-  // then an outright gap, then an at-risk run, then boxes we couldn't ask.
-  const postureRank = { failed:4, none:3, risk:2, unknown:1, protected:0 };
+  // then an outright gap, then an at-risk run, then boxes we couldn't ask. A
+  // healthy in-progress run sits just above protected: not trouble, but worth
+  // surfacing so someone watching a run can find it without hunting.
+  const postureRank = { failed:5, none:4, risk:3, unknown:2, running:1, protected:0 };
 
-  // bkRank picks the backup that *defines* a host's posture — the worst one — so
-  // the node-card line leads with the run that matters, not just the first.
-  function bkRank(b){ return (!b.ok && !b.incomplete) ? 3 : b.incomplete ? 2 : 1; }
+  // bkRank picks the backup that *defines* a host's posture so the node-card
+  // line leads with the run that matters, not just the first. A stalled run is
+  // the loudest; then failed, then incomplete. A healthy in-flight run ranks
+  // just above a clean one, so on a box that's mid-run the line leads with
+  // "backing up" rather than yesterday's snapshot — but never outranks a real
+  // problem elsewhere on the box.
+  function bkRank(b){
+    if(bkStalled(b)) return 4;
+    if(bkRunning(b)) return 1;
+    if(!b.ok && !b.incomplete) return 3;
+    if(b.incomplete) return 2;
+    return 0;
+  }
 
   // backupLine is the always-on backup readout on every Fleet card: posture
   // glyph + the worst run's outcome, when it ran, and where it ships to.
@@ -1073,8 +1147,11 @@
     else {
       const when = relTimeISO(lead.finished || lead.started || "");
       const tgt = backupTarget(lead.repository);
+      // For a run in flight `when` is when it started, not when it finished —
+      // "backing up · 4m ago" reads as "started 4m ago, still going".
       const word = p==="failed" ? "backup failed"
-        : p==="risk" ? (lead.incomplete ? "incomplete" : "stale")
+        : p==="running" ? "backing up"
+        : p==="risk" ? (bkStalled(lead) ? "stalled" : lead.incomplete ? "incomplete" : "stale")
         : "protected";
       detail = `${word}${when?` · ${when}`:""}${tgt?` <span class="ar">→</span> ${esc(tgt)}`:""}`;
     }
@@ -1107,6 +1184,7 @@
       let msg;
       if(p==="failed") msg = `backup failed${lead&&lead.exit_code?` · exit ${lead.exit_code}`:""}${when?` · ${when}`:""}`;
       else if(p==="none") msg = "no backup configured — this box is unprotected";
+      else if(lead && bkStalled(lead)) msg = `backup stalled — running since ${when||"an unknown time"}`;
       else msg = (lead&&lead.incomplete) ? `backup incomplete${when?` · ${when}`:""}` : `no recent snapshot${when?` · last ${when}`:""}`;
       out.push({ id:m.id, posture:p, sev:POSTURE[p].sev, msg, tgt: lead ? backupTarget(lead.repository) : "" });
     });
@@ -1155,7 +1233,8 @@
   // console inventing a plausible number.
   function backupCard(host, b){
     const sev = bkSeverity(b);
-    const label = b.ok ? "complete"
+    const label = bkRunning(b) ? (bkStalled(b) ? "stalled" : "backing up…")
+      : b.ok ? "complete"
       : b.incomplete ? `incomplete · exit ${b.exit_code}`
       : `failed · exit ${b.exit_code}`;
     const target = backupTarget(b.repository);
@@ -1163,11 +1242,14 @@
 
     const metric = (k, v) => v
       ? `<div class="bk-m"><div class="bk-mk">${k}</div><div class="bk-mv">${esc(v)}</div></div>` : "";
+    // A run in flight has no finished time, so this is when it started —
+    // labelled "started" rather than "last run" so it doesn't claim to be a
+    // completed run's timestamp.
     const last = relTimeISO(b.finished || b.started || "");
     const next = b.next_run ? relTimeISO(b.next_run) : "";
     const protectedSize = (typeof s.total_bytes_processed === "number") ? fmtBytes(s.total_bytes_processed) : "";
     const added = (typeof s.data_added === "number") ? fmtBytes(s.data_added) : "";
-    const metrics = [metric("last run", last), metric("next run", next),
+    const metrics = [metric(bkRunning(b) ? "started" : "last run", last), metric("next run", next),
                      metric("protected", protectedSize), metric("added", added)].join("");
 
     // Bar heights are scaled against the largest run in the window, so the
@@ -3070,10 +3152,11 @@
   // every posture signal render exactly as they would against a live fleet.
   // The story is deliberate — most boxes shipping clean nightly snapshots into
   // the nas vault, the vault itself copying offsite (the 3-2-1 second hop), one
-  // run coming back incomplete, and one outright failing:
+  // run in flight right now, one coming back incomplete, and one outright
+  // failing:
   //   citadel → nas   protected   (clean nightly)
   //   nas     → offsite protected (the vault's own offsite copy)
-  //   pi-gate → nas   protected   (small, clean)
+  //   pi-gate → nas   RUNNING     (nightly in flight — a run behind it in history)
   //   lab-01  → nas   at risk     (restic exit 3 — files it couldn't read)
   //   atlas   → nas   FAILED      (exit 1 — a healthy history that just broke)
   //   forge   —       unprotected (reachable, no backup configured)
@@ -3102,9 +3185,13 @@
         history:hist([{h:154,add:0.5},{h:130,add:0.2},{h:106,add:0.4},{h:82,add:0.3},{h:58,add:0.2},{h:34,add:0.4},{h:10,add:0.3}]),
       }]},
       { host:"pi-gate", reachable:true, backups:[{
+        // A run in flight: "state":"running", a recent start, and no outcome
+        // fields yet (ok/finished/summary) — exactly the shape the runner
+        // writes at the top of a run. next_run is still in the future, so it
+        // reads as backing-up, not stalled. History behind it shows the card's
+        // strip still draws under a live run.
         name:"pi-gate-etc", repository:"rest:http://nas:8000/pi-gate", paths:["/etc","/var/lib/adguardhome"],
-        started:ago(5.02), finished:ago(5), exit_code:0, ok:true, incomplete:false, next_run:soon(19),
-        summary:{ total_bytes_processed:GiB(2.1), data_added:GiB(0.08) },
+        started:ago(0.11), state:"running", next_run:soon(19),
         history:hist([{h:149,add:0.12},{h:125,add:0.06},{h:101,add:0.09},{h:77,add:0.05},{h:53,add:0.11},{h:29,add:0.07},{h:5,add:0.08}]),
       }]},
       { host:"lab-01", reachable:true, backups:[{

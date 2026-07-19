@@ -80,7 +80,56 @@ redact_repo() {
 mkdir -p "$STATUS_DIR"
 chmod 0755 "$STATUS_DIR"
 
+# paths_json renders the .paths file as a JSON array so the console can show
+# what a backup actually covers. Only two characters can break a JSON string in
+# a path — backslash and double quote — so only those are escaped. Comments and
+# blank lines are dropped, matching what --files-from itself ignores.
+#
+# These land in a world-readable file. They are not secrets, but they do
+# describe the box's layout to any local user; a box that considers its
+# directory names sensitive should tighten HUSH_BACKUP_STATUS_DIR.
+#
+# Defined before the run because the start-of-run status file below wants the
+# covered paths too, not just the final one.
+paths_json() {
+  _first=1
+  printf '['
+  while IFS= read -r _line || [ -n "$_line" ]; do
+    case "$_line" in '' | '#'*) continue ;; esac
+    _esc="$(printf '%s' "$_line" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+    if [ "$_first" -eq 1 ]; then _first=0; else printf ','; fi
+    printf '"%s"' "$_esc"
+  done <"$1"
+  printf ']'
+}
+
 started="$(date -Is)"
+
+# Announce the run before restic starts. Until now the status dir stayed empty
+# for the entire run, and an empty dir already carries a meaning — "no backup
+# configured, this box is unprotected". So a first backup grinding through a
+# terabyte was on the map as indistinguishable from a box nobody ever set up.
+# A start-of-run file with "state":"running" makes "working on it" its own,
+# legible thing; the end-of-run mv below overwrites it with the real outcome.
+#
+# Written the same atomic way as the final status (temp then mv) so a reader
+# never catches a half-written file, and carrying none of exit_code/ok/finished
+# — a run in flight has no outcome yet, and leaving those out is what keeps an
+# older console (which never learned about "state") from reading a running
+# backup as a completed one.
+running_status="$(mktemp)"
+cat >"$running_status" <<EOF
+{
+  "name": "$NAME",
+  "repository": "$(redact_repo "${RESTIC_REPOSITORY:-}")",
+  "paths": $(paths_json "$PATHS_FILE"),
+  "started": "$started",
+  "state": "running"
+}
+EOF
+chmod 0644 "$running_status"
+mv "$running_status" "$STATUS_DIR/$NAME.json"
+
 output="$(mktemp)"
 trap 'rm -f "$output"' EXIT INT TERM
 
@@ -104,26 +153,11 @@ if [ "$rc" -eq 0 ]; then ok=true; else ok=false; fi
 if [ "$rc" -eq 3 ]; then incomplete=true; else incomplete=false; fi
 finished="$(date -Is)"
 
-# paths_json renders the .paths file as a JSON array so the console can show
-# what a backup actually covers. Only two characters can break a JSON string in
-# a path — backslash and double quote — so only those are escaped. Comments and
-# blank lines are dropped, matching what --files-from itself ignores.
+# The final status carries no "state" field: a finished run has an outcome
+# (ok/incomplete/exit_code), not a state, and omitting it both restores today's
+# schema exactly and clears the "running" marker written at the top when this
+# file overwrites it.
 #
-# These land in a world-readable file. They are not secrets, but they do
-# describe the box's layout to any local user; a box that considers its
-# directory names sensitive should tighten HUSH_BACKUP_STATUS_DIR.
-paths_json() {
-  _first=1
-  printf '['
-  while IFS= read -r _line || [ -n "$_line" ]; do
-    case "$_line" in '' | '#'*) continue ;; esac
-    _esc="$(printf '%s' "$_line" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
-    if [ "$_first" -eq 1 ]; then _first=0; else printf ','; fi
-    printf '"%s"' "$_esc"
-  done <"$1"
-  printf ']'
-}
-
 # Deliberately does NOT embed restic's stderr: escaping arbitrary text into
 # JSON from shell is a good way to emit invalid JSON. Diagnostics live in the
 # journal, which is where you want them anyway.
