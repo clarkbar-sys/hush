@@ -1,0 +1,120 @@
+#!/usr/bin/env sh
+# Runs one convention-named restic backup and records its outcome where an
+# unprivileged hush-agent can read it.
+#
+#   restic-backup-run <name>
+#
+# Reads three files, all named after the backup:
+#
+#   /etc/restic/<name>.env        credentials (0600, root-only)
+#   /etc/restic/<name>.paths      what to back up, one path per line
+#   /etc/restic/<name>.excludes   what to skip (optional)
+#
+# and writes one:
+#
+#   /var/lib/hush-backups/<name>.json   last-run status, world-readable
+#
+# That split is the whole point. The backup itself needs root — it reads
+# /home, service state dirs, and anything else an unprivileged user can't —
+# but hush-agent runs as an unprivileged user and must never hold a repo
+# credential. So the privileged side writes a status file containing no
+# secrets, and the agent only ever reads that. The repository URL is recorded
+# with its userinfo stripped, since restic's `rest:` backend carries HTTP auth
+# inline in the URL.
+#
+# Exit code is restic's own, unchanged. In particular restic exits 3 when some
+# source data could not be read: a snapshot exists but is INCOMPLETE. It is
+# reported as a failure here on purpose — an incomplete backup that looks green
+# is worse than one that looks broken.
+
+set -eu
+
+NAME="${1:-}"
+if [ -z "$NAME" ]; then
+  echo "usage: restic-backup-run <name>" >&2
+  exit 2
+fi
+
+CONF_DIR="${RESTIC_CONF_DIR:-/etc/restic}"
+STATUS_DIR="${HUSH_BACKUP_STATUS_DIR:-/var/lib/hush-backups}"
+
+ENV_FILE="$CONF_DIR/$NAME.env"
+PATHS_FILE="$CONF_DIR/$NAME.paths"
+EXCLUDES_FILE="$CONF_DIR/$NAME.excludes"
+
+# systemd's EnvironmentFile= has usually already loaded these; sourcing here
+# too keeps the script runnable by hand for a one-off or a restore drill.
+if [ -z "${RESTIC_REPOSITORY:-}" ]; then
+  if [ ! -r "$ENV_FILE" ]; then
+    echo "error: $ENV_FILE not readable and RESTIC_REPOSITORY unset" >&2
+    exit 2
+  fi
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+fi
+
+if [ ! -r "$PATHS_FILE" ]; then
+  echo "error: $PATHS_FILE not readable — nothing to back up" >&2
+  exit 2
+fi
+
+# Strip userinfo from a repository URL. restic's rest: backend takes HTTP auth
+# only via the URL, so the raw value is a credential and must never reach the
+# world-readable status file. Two forms, because restic uses both:
+#   rest:http://user:pass@host/path  ->  rest:http://host/path
+#   sftp:user@host:/path             ->  sftp:host:/path
+# The sftp form carries no password (it authenticates by key), but a username
+# still doesn't belong in a file everyone on the box can read.
+redact_repo() {
+  printf '%s' "$1" \
+    | sed -e 's#://[^@/]*@#://#' \
+          -e 's#^\([a-z0-9]*:\)[^@/:]*@#\1#'
+}
+
+mkdir -p "$STATUS_DIR"
+chmod 0755 "$STATUS_DIR"
+
+started="$(date -Is)"
+output="$(mktemp)"
+trap 'rm -f "$output"' EXIT INT TERM
+
+set -- backup --json --files-from "$PATHS_FILE" --tag hush
+if [ -r "$EXCLUDES_FILE" ]; then
+  set -- "$@" --exclude-file "$EXCLUDES_FILE"
+fi
+
+# restic's own exit code is what we report, so don't let set -e swallow it.
+rc=0
+restic "$@" >"$output" 2>&1 || rc=$?
+cat "$output"
+
+# restic --json emits one object per line; the final summary carries the
+# counts and the new snapshot id. Embed it verbatim rather than reparsing —
+# no jq/python dependency, and no chance of mangling it in shell.
+summary="$(grep '"message_type":"summary"' "$output" | tail -n 1 || true)"
+[ -n "$summary" ] || summary=null
+
+if [ "$rc" -eq 0 ]; then ok=true; else ok=false; fi
+
+# Deliberately does NOT embed restic's stderr: escaping arbitrary text into
+# JSON from shell is a good way to emit invalid JSON. Diagnostics live in the
+# journal, which is where you want them anyway.
+tmp_status="$(mktemp)"
+cat >"$tmp_status" <<EOF
+{
+  "name": "$NAME",
+  "repository": "$(redact_repo "${RESTIC_REPOSITORY:-}")",
+  "started": "$started",
+  "finished": "$(date -Is)",
+  "exit_code": $rc,
+  "ok": $ok,
+  "incomplete": $([ "$rc" -eq 3 ] && echo true || echo false),
+  "summary": $summary
+}
+EOF
+chmod 0644 "$tmp_status"
+mv "$tmp_status" "$STATUS_DIR/$NAME.json"
+
+exit "$rc"
