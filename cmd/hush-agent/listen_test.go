@@ -146,3 +146,13 @@ func TestResolveListenPassthrough(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveListenEmptyFallsBackToDefaultPort(t *testing.T) {
+	// An empty -listen (e.g. systemd expanding an unset ${HUSH_AGENT_LISTEN} when
+	// agent.env is missing) must resolve to the default port, not net's ":80".
+	want := ":" + defaultAgentPort
+	got, err := resolveListen("")
+	if err != nil || got != want {
+		t.Errorf("resolveListen(%q) = (%q, %v), want (%q, nil)", "", got, err, want)
+	}
+}

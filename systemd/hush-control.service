@@ -10,8 +10,11 @@ Type=simple
 User=hush
 Group=hush
 WorkingDirectory=/etc/hush
+# The :-defaults keep hush-control bootable if control.env is missing (the -
+# prefix already makes the file optional): an unset variable would otherwise
+# expand to an empty argument and override the binary's own flag default.
 EnvironmentFile=-/etc/hush/control.env
-ExecStart=/usr/local/bin/hush-control -listen ${HUSH_CONTROL_LISTEN} -config ${HUSH_CONTROL_CONFIG}
+ExecStart=/usr/local/bin/hush-control -listen ${HUSH_CONTROL_LISTEN:-127.0.0.1:8080} -config ${HUSH_CONTROL_CONFIG:-/etc/hush/fleet.json}
 Restart=on-failure
 RestartSec=5s
 
