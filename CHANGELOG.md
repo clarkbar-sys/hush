@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.0](https://github.com/clarkbar-sys/hush/compare/v1.22.1...v1.23.0) (2026-07-19)
+
+
+### Features
+
+* **web:** make the backup sheet Time Machine simple ([#118](https://github.com/clarkbar-sys/hush/issues/118)) ([2805be8](https://github.com/clarkbar-sys/hush/commit/2805be829dba6a0ba4a9ae855ed3645d345a406b))
+
 ## [1.22.1](https://github.com/clarkbar-sys/hush/compare/v1.22.0...v1.22.1) (2026-07-18)
 
 
