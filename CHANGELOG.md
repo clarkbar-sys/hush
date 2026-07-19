@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.0](https://github.com/clarkbar-sys/hush/compare/v1.23.1...v1.24.0) (2026-07-19)
+
+
+### Features
+
+* **backups:** escrow repo keys off-box via hush-agent -export-keys ([#123](https://github.com/clarkbar-sys/hush/issues/123)) ([1aca499](https://github.com/clarkbar-sys/hush/commit/1aca4993ccd000de0e5c676e473a4cc0dc2d320b))
+
 ## [1.23.1](https://github.com/clarkbar-sys/hush/compare/v1.23.0...v1.23.1) (2026-07-19)
 
 
