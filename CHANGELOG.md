@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.1](https://github.com/clarkbar-sys/hush/compare/v1.23.0...v1.23.1) (2026-07-19)
+
+
+### Bug Fixes
+
+* **web:** restart the agent after standing up a vault so it's detected ([#120](https://github.com/clarkbar-sys/hush/issues/120)) ([59bfc81](https://github.com/clarkbar-sys/hush/commit/59bfc81d0425c49648d2b47adcf064082e012d59))
+
 ## [1.23.0](https://github.com/clarkbar-sys/hush/compare/v1.22.1...v1.23.0) (2026-07-19)
 
 
