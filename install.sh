@@ -292,11 +292,10 @@ install_agent() {
     "# local-only agent, or host:port to pin a specific interface." \
     "HUSH_AGENT_LISTEN=tailnet" \
     "" \
-    "# Uncomment to enable the Job scheduler: saved commands that fire on a cron" \
-    "# schedule as the unprivileged hush user, persisted to /var/lib/hush/jobs.json." \
-    "# Off by default because Jobs run unattended. HUSH_AGENT_EXEC=0 likewise" \
-    "# disables the one-shot /exec runner (on by default)." \
-    "# HUSH_AGENT_JOBS=1"
+    "# Uncomment to enable restic backups: the agent reads the paths you name and" \
+    "# stores a repository key on the box, so it's off by default. State persists" \
+    "# to /var/lib/hush/backups.json." \
+    "# HUSH_AGENT_BACKUP=1"
   enable_service hush-agent.service
   install_agent_updater
 }

@@ -6,7 +6,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -59,11 +58,7 @@ type Machine struct {
 	NetRx                int                      `json:"netRx"` // inbound bytes/sec
 	NetTx                int                      `json:"netTx"` // outbound bytes/sec
 	Services             []vitals.Service         `json:"services"`
-	Jobs                 []any                    `json:"jobs"`
-	Tasks                []any                    `json:"tasks"`
-	RunAs                []string                 `json:"runAs,omitempty"`        // users a Task may run as here (agent -run-as); drives the console picker
-	RunAsGranted         *[]string                `json:"runAsGranted,omitempty"` // subset of RunAs the agent verified it can sudo to now; nil = not verified (older agent / exec off)
-	Backup               *vitals.BackupCapability `json:"backup,omitempty"`       // backup readiness (restic/-backup/vault) so the console can generate setup commands
+	Backup               *vitals.BackupCapability `json:"backup,omitempty"` // backup readiness (restic/-backup/vault) so the console can generate setup commands
 	Online               bool                     `json:"online"`
 	Alert                string                   `json:"alert,omitempty"`
 }
@@ -230,42 +225,12 @@ func buildMux(store *agentStore, discoverer *discoverer, dialer *agentDialer, we
 		}
 		proxyFile(w, r, streamClient, a)
 	})
-	// A Task run can stream for minutes, so it rides the no-timeout streamClient
-	// like /file does, not the 2s fleet-poll client.
-	mux.HandleFunc("/api/machines/{host}/exec", func(w http.ResponseWriter, r *http.Request) {
-		a, ok := store.find(r.PathValue("host"))
-		if !ok {
-			http.Error(w, "unknown machine", http.StatusNotFound)
-			return
-		}
-		proxyExec(w, r, streamClient, a)
-	})
-	// Jobs: the cron scheduler lives on the agent, so these are pass-through
-	// proxies (like /browse), not a control-side store. List/create/delete are
-	// quick request-response calls, so they ride the 2s fleet-poll client, not
-	// the streaming one. A box with jobs disabled answers 403, relayed verbatim.
-	mux.HandleFunc("/api/machines/{host}/jobs", func(w http.ResponseWriter, r *http.Request) {
-		a, ok := store.find(r.PathValue("host"))
-		if !ok {
-			http.Error(w, "unknown machine", http.StatusNotFound)
-			return
-		}
-		proxyJobs(w, r, client, a)
-	})
-	mux.HandleFunc("/api/machines/{host}/jobs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		a, ok := store.find(r.PathValue("host"))
-		if !ok {
-			http.Error(w, "unknown machine", http.StatusNotFound)
-			return
-		}
-		proxyJob(w, r, client, a, r.PathValue("id"))
-	})
 	// Backups: restic definitions live on the agent (the box holds its own repo
-	// key), so these are pass-through proxies like Jobs. List/create/delete and a
+	// key), so these are pass-through proxies. List/create/delete and a
 	// snapshots listing ride a client with a longer timeout than the 2s fleet
 	// poll, since a create runs `restic init` and a snapshots probe across the
 	// tailnet to the rest-server; a run streams for as long as the backup takes,
-	// so it rides the no-timeout streamClient like /exec.
+	// so it rides the no-timeout streamClient like /file.
 	backupClient := dialer.client(60 * time.Second)
 	mux.HandleFunc("/api/machines/{host}/backups", func(w http.ResponseWriter, r *http.Request) {
 		a, ok := store.find(r.PathValue("host"))
@@ -314,240 +279,6 @@ func buildMux(store *agentStore, discoverer *discoverer, dialer *agentDialer, we
 			return
 		}
 		proxyBackupRestore(w, r, streamClient, a, r.PathValue("id"))
-	})
-	// Workflows: saved multi-step blueprints. They persist to workflows.json
-	// beside the fleet config and run by fanning out to the same /exec each Task
-	// uses. A run streams for as long as its steps do, so it rides the no-timeout
-	// streamClient like /exec and /file.
-	wstore := newWorkflowStore(workflowsPath(store.path))
-	mux.HandleFunc("/api/workflows", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			w.Header().Set("Content-Type", "application/json")
-			if err := json.NewEncoder(w).Encode(wstore.Snapshot()); err != nil {
-				log.Printf("encode workflows: %v", err)
-			}
-		case http.MethodPost:
-			var req struct {
-				Name  string `json:"name"`
-				Steps []Step `json:"steps"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "bad request body", http.StatusBadRequest)
-				return
-			}
-			wf, err := validateWorkflow(req.Name, req.Steps, func(host string) bool {
-				_, ok := store.find(host)
-				return ok
-			})
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			saved, err := wstore.Add(wf)
-			if err != nil {
-				log.Printf("add workflow: %v", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
-			if err := json.NewEncoder(w).Encode(saved); err != nil {
-				log.Printf("encode workflow: %v", err)
-			}
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/workflows/{id}", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPut:
-			var req struct {
-				Name  string `json:"name"`
-				Steps []Step `json:"steps"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "bad request body", http.StatusBadRequest)
-				return
-			}
-			name, steps, err := checkWorkflow(req.Name, req.Steps, func(host string) bool {
-				_, ok := store.find(host)
-				return ok
-			})
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			saved, found, err := wstore.Update(r.PathValue("id"), name, steps)
-			if err != nil {
-				log.Printf("update workflow: %v", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if !found {
-				http.Error(w, "unknown workflow", http.StatusNotFound)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			if err := json.NewEncoder(w).Encode(saved); err != nil {
-				log.Printf("encode workflow: %v", err)
-			}
-		case http.MethodDelete:
-			removed, err := wstore.Delete(r.PathValue("id"))
-			if err != nil {
-				log.Printf("delete workflow: %v", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if !removed {
-				http.Error(w, "unknown workflow", http.StatusNotFound)
-				return
-			}
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/workflows/{id}/run", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		wf, ok := wstore.Find(r.PathValue("id"))
-		if !ok {
-			http.Error(w, "unknown workflow", http.StatusNotFound)
-			return
-		}
-		caller := callerFrom(r.Context())
-		if caller == "" {
-			caller = "lan"
-		}
-		log.Printf("workflow %q (%d steps) run by %s", wf.Name, len(wf.Steps), caller)
-		runWorkflow(r.Context(), w, streamClient, store.find, wf)
-	})
-	// Saved Tasks: named, re-runnable single commands — the reusable atom a
-	// Workflow's steps are built from. They persist to tasks.json beside the
-	// fleet config and run by proxying to the same /exec an ad-hoc Task uses, so
-	// a saved run is audited and bounded exactly like a one-shot.
-	tstore := newTaskStore(tasksPath(store.path))
-	mux.HandleFunc("/api/tasks", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			w.Header().Set("Content-Type", "application/json")
-			if err := json.NewEncoder(w).Encode(tstore.Snapshot()); err != nil {
-				log.Printf("encode tasks: %v", err)
-			}
-		case http.MethodPost:
-			var req struct {
-				Name string `json:"name"`
-				Host string `json:"host"`
-				Cmd  string `json:"cmd"`
-				User string `json:"user"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "bad request body", http.StatusBadRequest)
-				return
-			}
-			t, err := validateTask(req.Name, req.Host, req.Cmd, req.User, func(host string) bool {
-				_, ok := store.find(host)
-				return ok
-			})
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			saved, err := tstore.Add(t)
-			if err != nil {
-				log.Printf("add task: %v", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
-			if err := json.NewEncoder(w).Encode(saved); err != nil {
-				log.Printf("encode task: %v", err)
-			}
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPut:
-			var req struct {
-				Name string `json:"name"`
-				Host string `json:"host"`
-				Cmd  string `json:"cmd"`
-				User string `json:"user"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "bad request body", http.StatusBadRequest)
-				return
-			}
-			name, host, cmd, user, err := checkTask(req.Name, req.Host, req.Cmd, req.User, func(host string) bool {
-				_, ok := store.find(host)
-				return ok
-			})
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			saved, found, err := tstore.Update(r.PathValue("id"), name, host, cmd, user)
-			if err != nil {
-				log.Printf("update task: %v", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if !found {
-				http.Error(w, "unknown task", http.StatusNotFound)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			if err := json.NewEncoder(w).Encode(saved); err != nil {
-				log.Printf("encode task: %v", err)
-			}
-		case http.MethodDelete:
-			removed, err := tstore.Delete(r.PathValue("id"))
-			if err != nil {
-				log.Printf("delete task: %v", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if !removed {
-				http.Error(w, "unknown task", http.StatusNotFound)
-				return
-			}
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/tasks/{id}/run", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		t, ok := tstore.Find(r.PathValue("id"))
-		if !ok {
-			http.Error(w, "unknown task", http.StatusNotFound)
-			return
-		}
-		a, ok := store.find(t.Host)
-		if !ok {
-			http.Error(w, t.Host+" is not in the fleet", http.StatusNotFound)
-			return
-		}
-		// Reuse proxyExec verbatim — same streaming, same audit log — by handing
-		// it the saved command as if it had been posted ad-hoc. The saved run-as
-		// user (if any) rides along so the agent runs it via sudo -u.
-		payload, _ := json.Marshal(struct {
-			Cmd        string `json:"cmd"`
-			TimeoutSec int    `json:"timeoutSec"`
-			User       string `json:"user,omitempty"`
-		}{Cmd: t.Cmd, TimeoutSec: taskTimeoutSec, User: t.User})
-		r.Body = io.NopCloser(bytes.NewReader(payload))
-		r.ContentLength = int64(len(payload))
-		proxyExec(w, r, streamClient, a)
 	})
 	mux.HandleFunc("/api/agents", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -780,8 +511,8 @@ func (s *agentStore) Add(a Agent) (Agent, error) {
 	updated := append(s.agents, a)
 	// The fleet config shares the store package's crash-safe atomic write, but
 	// keeps its own bespoke load (loadAgents falls back to a local agent and
-	// fails loudly on a corrupt parse) — the console can rebuild a workflow
-	// list, but must not silently forget its fleet.
+	// fails loudly on a corrupt parse) — a derived cache can be rebuilt, but the
+	// console must not silently forget its fleet.
 	if err := store.Save(s.path, updated); err != nil {
 		return Agent{}, fmt.Errorf("save %s: %w — check that its directory is writable (see the -config flag and the systemd unit's ReadWritePaths)", s.path, err)
 	}
@@ -918,52 +649,6 @@ func proxyFile(w http.ResponseWriter, r *http.Request, client *http.Client, a Ag
 	}
 }
 
-// proxyExec forwards a Task run to an agent's /exec and streams the Server-Sent
-// Events back to the phone, flushing each frame so output appears live. Like
-// proxyFile it rides the no-timeout streamClient, since a run can take minutes,
-// and it relays the agent's status verbatim so "exec disabled" (403) or "agent
-// unreachable" (502) surface cleanly. Exec is the sharpest capability hush has,
-// so every run is logged with who ran it (Tailscale login in tsnet mode), where,
-// and the command — the audit trail the read-only endpoints don't need.
-func proxyExec(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
-	if err != nil {
-		http.Error(w, "bad request body", http.StatusBadRequest)
-		return
-	}
-	caller := callerFrom(r.Context())
-	if caller == "" {
-		caller = "lan"
-	}
-	log.Printf("exec on %s by %s: %s", a.Name, caller, execCmdPreview(body))
-
-	u := strings.TrimRight(a.Addr, "/") + "/exec"
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, u, bytes.NewReader(body))
-	if err != nil {
-		http.Error(w, "bad upstream request", http.StatusInternalServerError)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		http.Error(w, "agent unreachable", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	if ct := resp.Header.Get("Content-Type"); ct != "" {
-		w.Header().Set("Content-Type", ct)
-	}
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("X-Accel-Buffering", "no")
-	w.WriteHeader(resp.StatusCode)
-	flushCopy(w, resp.Body)
-}
-
 // flushCopy streams src to w, flushing after every chunk so SSE frames reach the
 // client as they arrive instead of buffering until the body closes.
 func flushCopy(w http.ResponseWriter, src io.Reader) {
@@ -983,20 +668,6 @@ func flushCopy(w http.ResponseWriter, src io.Reader) {
 			return
 		}
 	}
-}
-
-// execCmdPreview pulls the command out of an /exec request body for the audit
-// log, trimmed so a giant one-liner can't flood the logs.
-func execCmdPreview(body []byte) string {
-	var req struct {
-		Cmd string `json:"cmd"`
-	}
-	_ = json.Unmarshal(body, &req)
-	c := strings.TrimSpace(req.Cmd)
-	if len(c) > 200 {
-		c = c[:200] + "…"
-	}
-	return c
 }
 
 // collectFleet fans out to every agent's /vitals. latest is the latest
@@ -1026,8 +697,6 @@ func fetchOne(client *http.Client, a Agent, latest string) Machine {
 		Status:   "crit",
 		Alert:    "unreachable",
 		Services: []vitals.Service{},
-		Jobs:     []any{},
-		Tasks:    []any{},
 	}
 	if m.ID == "" {
 		m.ID = a.Addr
@@ -1057,8 +726,6 @@ func fetchOne(client *http.Client, a Agent, latest string) Machine {
 	m.CPU, m.Mem, m.Disk = s.CPU, s.Mem, s.Disk
 	m.NetRx, m.NetTx = s.NetRx, s.NetTx
 	m.GPU, m.VRAM, m.GPUName, m.VRAMText = s.GPU, s.VRAM, s.GPUName, s.VRAMText
-	m.RunAs = s.RunAs
-	m.RunAsGranted = s.RunAsGranted
 	m.Backup = s.Backup
 	if len(s.Services) > 0 {
 		m.Services = s.Services

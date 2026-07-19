@@ -10,8 +10,7 @@ import (
 )
 
 // backupsFleet wires a fake agent behind a control mux so a request to
-// /api/machines/{host}/backups exercises the real proxy path end to end, the way
-// jobsFleet does for /jobs.
+// /api/machines/{host}/backups exercises the real proxy path end to end.
 func backupsFleet(t *testing.T, agent http.Handler) (http.Handler, *agentStore) {
 	t.Helper()
 	srv := httptest.NewServer(agent)

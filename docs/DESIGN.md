@@ -34,22 +34,21 @@ hush borrows the two things that make a Factorio base legible:
    look. A failed backup isn't a line in a log you'll never read — it's a badge
    on the map and a bell in the header.
 
-## The construct vocabulary (8 nouns)
+## The construct vocabulary (5 nouns)
 
 Everything you can put on the fleet is exactly one of these — the substrate the
 backup console stands on. **Machine, Store, and Backup are the spine** (what am I
-protecting, where does it live, is it safe?); Service, Job, Task, Workflow, and
-Link are the supporting cast, the "and you can also run things" half.
+protecting, where does it live, is it safe?); Service and Link are the read-only
+supporting cast. hush once had a "and you can also run things" half — ad-hoc and
+scheduled command execution (Tasks, Jobs, Workflows) — but that was removed;
+what's left is a backup console over a read-only view of the fleet.
 
 | Construct | What it is |
 |---|---|
 | **Machine** | a tailnet host — has vitals, holds everything else |
 | **Service** | a systemd unit — persistent, running or stopped |
-| **Job** | a cron / timer — fires on a schedule |
-| **Task** | a one-shot run of a program — ephemeral |
-| **Workflow** | a wired sequence (`cd X → git pull → restart`) — reusable, stampable |
 | **Store** | a disk / dataset — the NAS especially |
-| **Backup** | a Job that hauls a Machine into a Store, dedup'd |
+| **Backup** | a scheduled restic run that hauls a Machine into a Store, dedup'd |
 | **Link** | the tailnet edge between two machines |
 
 ## UX — semantic zoom
@@ -63,7 +62,7 @@ One canvas, three depths. You never navigate away, you get closer. Phone-first.
   status badge still colour each card — vitals just no longer decide the fleet's
   verdict. Backup problems also aggregate into the header's **alert bell**.
 - **Machine** — "enter the building": header (OS, tailnet IP, uptime, GPU),
-  full-size vitals, and constructs grouped into Services / Jobs / Tasks. Tapping
+  full-size vitals, the Services list, and its Backups. Tapping
   the CPU ring or the network panel opens a live **htop-style** read of the box —
   per-core meters and the busiest processes — served by the agent's `/top`
   endpoint (proxied at `/api/machines/{host}/top`) and re-polled every ~2s. Like
@@ -86,9 +85,9 @@ directly for the demo fleet; served by `hush-control` it shows live data).
 
 ## Architecture
 
-Imperative, execute-directly. Tapping "do X on Y" runs it immediately over the
-tailnet. Git is **not** foundational — GitHub-as-IaC is just a Workflow you
-build later. No reconciler, no convergence loop.
+Imperative, read-then-act. The console reads the fleet live over the tailnet and
+drives backups directly on the box that holds the data. No reconciler, no
+convergence loop.
 
 ```
   phone browser ── https over tailnet ──▶  hush-control (on the NAS)
@@ -111,8 +110,7 @@ build later. No reconciler, no convergence loop.
   riding the host's Tailscale identity.
 - **Web UI** — a single static page (`web/index.html`), vanilla HTML/CSS/JS.
 
-Language: **Go** across the backend. **Scheme** is reserved for the Workflow DSL
-(Phase 3 — blueprints are a Lisp's home turf).
+Language: **Go** across the backend.
 
 ## Roadmap
 
@@ -126,9 +124,6 @@ built around backups and sets the direction from here.
   machine to see its services, plus adding a machine through the console.
 - **Store.** Read-only **file browsing** and a windirstat-style **disk-usage
   treemap** on every box (see "Store — browsing files").
-- **Tasks / run-as / Jobs / Workflows.** Ad-hoc and saved commands, scoped to
-  another user via `sudo -u`, scheduled on the agent (cron), and sequenced into
-  plain-Go Workflows (see those sections below).
 - **Backups.** The restic-backed Backup construct: create / schedule / run /
   snapshots / restore / off-box key escrow (see "Backups — restic").
 
@@ -157,11 +152,12 @@ built around backups and sets the direction from here.
 - **Scheduled restore-tests / `restic check`.** A green "verified restorable"
   badge, so confidence isn't a manual walk.
 
-**Deferred (from the original roadmap).** Dedicated Service start/stop/restart,
-a live journal tail, Service/Job **creation** from the palette, and the Scheme
-Workflow DSL are all still unbuilt — and no longer the priority. An ad-hoc
-`systemctl restart …` is available today via the Task construct. These remain
-part of the substrate's story, not the backup console's.
+**Removed (the "run things" half).** hush once shipped ad-hoc and saved command
+execution (Tasks), cron scheduling (Jobs), wired sequences (Workflows), and a
+`sudo -u` run-as allowlist. After dogfooding, that whole half was cut: the agent
+no longer serves `/exec` or `/jobs`, and the console is purely a backup and
+read-only fleet view. The write path that remains is backups. Dedicated Service
+start/stop/restart and a live journal tail were never built and are not planned.
 
 ## Store — browsing files
 
@@ -196,153 +192,25 @@ bounded — a 25-second walk deadline and a cap on files stated — so pointing 
 at something enormous (a whole root filesystem, a NAS's media pool) returns a
 partial, `truncated` answer instead of hanging the request.
 
-## Tasks — running a command
-
-The **Task** construct ("a one-shot run of a program — ephemeral") is the write
-half of the browse model above: the agent's `POST /exec` runs a shell command
-and streams its output back as [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events)
-(`start` → `out` → `exit`); `hush-control` proxies it at
-`/api/machines/{host}/exec`, flushing each frame so output appears live on the
-phone. The console launches a run from **＋ Build → Task** or a Machine's
-**Tasks** section, then shows a full-screen live terminal. An ad-hoc run is
-ephemeral — recorded per session, not persisted.
-
-**Saving a Task — the reusable atom.** A run can graduate from ephemeral to a
-named building block: **Save as Task** in the run view mints a `{name, host,
-cmd}` the console keeps in `tasks.json` beside `workflows.json` (same
-already-writable directory), exposed at `/api/tasks` — `GET`/`POST` to list and
-save, `PUT`/`DELETE /api/tasks/{id}` to edit and remove, and `POST
-/api/tasks/{id}/run` to execute. A saved run resolves its command server-side
-and fans out to the **same `/exec`** an ad-hoc Task uses, so it's audited and
-bounded identically — the pinned machine is validated against the fleet at save
-time, the way a Workflow step's is. Saved Tasks surface in the Fleet page's
-**Tasks** rollup (Run / Edit / Delete) and are the pieces a Workflow is built
-from.
-
-**Same boundary as browse: the Unix user, not app logic.** A Task runs `sh -c`
-as the unprivileged `hush` user with no jail and no allowlist of binaries —
-whatever that user can do in a shell, a Task can do. This is the deliberate
-end of the model the Store section describes ("the same model a future *run a
-command on this machine* capability wants"). A run is bounded, not sandboxed:
-its own process group (so a timeout or a client hang-up kills the whole tree),
-a default 5-minute / max 60-minute timeout, and a 1 MiB output cap.
-
-**Exec is on by default, opt-out per agent.** A box opts out with `-exec=false`
-(or `HUSH_AGENT_EXEC=0`, so a systemd env file can toggle it without editing
-`ExecStart`), after which `/exec` returns `403` and the agent is read-only.
-Because `/exec` is new agent code, only agents running the release that
-introduced it (or newer) can run Tasks — `hush-control` proxies to `/exec`, so
-an older agent simply reports exec as unavailable. In tsnet mode every run is
-gated by the same Tailscale identity as everything else, and `hush-control`
-logs who ran what against which box.
-
-**Run-as — scoping a Task to another user.** By default `/exec` runs as the
-`hush` user; a box can also offer a set of **run-as users** (the agent's
-`-run-as` / `HUSH_AGENT_RUNAS` allowlist), and a Task, saved Task, or Workflow
-step may name one to run as via `sudo -n -u <user>`. This is the least-privilege
-alternative to giving `hush` blanket passwordless sudo: the box lists the
-identities it offers — never `root` — and each run becomes one of them, so the
-blast radius is bounded to those unprivileged users. The allowlist is the hard
-ceiling — `/exec` refuses (`403`) any user not on it *before* running anything,
-and because the agent is unauthenticated on the tailnet, that ceiling is
-load-bearing. The username rides `sudo` as its own argument (never interpolated
-into the shell line) and must match a conservative username charset; `-n` makes
-a missing sudoers grant fail fast rather than hang on a password prompt. The
-agent advertises its list in `/vitals`, so the console offers a per-machine
-picker and — since `hush-control` is unprivileged and must **never** edit
-sudoers itself (that would let anyone reaching the agent escalate) — *generates*
-the root command to install the matching `hush-runas` grant rather than applying
-it, for the operator to run over SSH.
-
-The advertised list and the sudoers grant are two separate settings, so they can
-drift. The agent closes that gap by *verifying* each advertised user against the
-real grant — a passwordless `sudo -n -l -u <user>` probe (the same `-n` a Task
-uses, so it predicts the exact failure), cached briefly so `/vitals` never shells
-out per poll — and reports the runnable subset as `runAsGranted`. The console
-cross-references it and flags any advertised user without a live grant, so a
-missing or stale sudoers rule surfaces in the picker before a Task hits it.
-Verification is display-only: `/exec` still gates on the agent's own vetted
-allowlist, never on whatever sudoers happens to permit, so the "never `root`"
-ceiling stays load-bearing.
-
-## Jobs — scheduling a command
-
-The **Job** construct ("a cron / timer — fires on a schedule") is the Task
-primitive with a schedule bolted on: a saved command the agent runs unattended,
-on its own box, as the unprivileged `hush` user. The scheduler lives on the
-**agent** — a cron engine keyed by job id, its definitions persisted to
-`jobs.json` in the agent's state dir, its per-fire run history (last run, exit
-code, duration) kept in memory since a restart honestly forgets fires it never
-performed. The agent exposes `GET /jobs` (definitions + status), `POST /jobs`
-(create from `{name, schedule, cmd}`), and `DELETE /jobs/{id}`;
-`hush-control` proxies these at `/api/machines/{host}/jobs` and
-`/api/machines/{host}/jobs/{id}`. Unlike Tasks and Workflows — whose stores live
-in `hush-control` — a Job's home is the box it fires on, so the proxy is a
-**pass-through** the way `/browse` is, not a control-side store.
-
-The console drives it from **＋ Build → Job** (or a Machine's Jobs section): pick
-a machine, name the job, give it a 5-field cron spec (or a macro like `@daily`),
-and a command. The Machine view lists each job with its schedule and the outcome
-of its last fire — status leads, since "did the nightly backup pass" is the thing
-worth seeing at a glance — with a delete that unschedules it immediately. Jobs
-are fetched per-machine on demand, not dragged through the fleet poll.
-
-**Jobs are off by default, opt-in per agent.** A box serves `/jobs` only when its
-agent is started with `-jobs` (unattended scheduled execution is a sharper
-capability than an attended `/exec` run, so it isn't on by the exec default);
-until then `/jobs` returns `403`, which the console surfaces as "jobs disabled on
-this box" rather than an error. Every create and delete is audited by
-`hush-control` with the caller's Tailscale identity, the way a Task run is — a
-Job is, after all, a Task that runs itself.
-
-## Workflows — wiring a sequence
-
-The **Workflow** construct ("a wired sequence (`cd X → git pull → restart`) —
-reusable, stampable") is sequencing layered on the Task primitive: a saved,
-ordered list of steps, each a `{machine, command}` pair. The builder lets you
-type a step inline **or drop in a saved Task** — a Workflow is, at heart, a
-chain of Tasks — copying its `{machine, command}` into a step so the two stores
-stay decoupled (a Workflow keeps working if a Task it was built from is later
-deleted). `hush-control` stores
-blueprints in `workflows.json` beside `fleet.json` (same writable directory the
-systemd unit already grants) and exposes them at `/api/workflows` —
-`GET`/`POST` to list and save, `DELETE /api/workflows/{id}` to remove, and
-`POST /api/workflows/{id}/run` to execute. A run fans out to the **same
-`/exec`** each Task uses, one step at a time, and streams a combined SSE log
-(`step` → `out` → `stepExit`, then a terminal `done`) so the console can group
-each command's output under its step and show live progress. The builder and
-run view live under **＋ Build → Workflow**.
-
-**Fail-fast, like `set -e`.** Steps run in order and the first one to exit
-non-zero — or error, or end without a status — stops the run; the `done` frame
-carries `failedStep` so the UI marks where it stopped. A blueprint is validated
-at save time (every step's machine must be in the fleet), and each step inherits
-the Task run's bounds: unjailed as the `hush` user, a 5-minute per-step timeout,
-audited by `hush-control` with the caller's Tailscale identity.
-
-**No Scheme yet.** The design reserves Scheme for a visual blueprint DSL; this
-first slice is plain Go over the existing exec plumbing, so Workflows are usable
-now and the Lisp can land later without changing the runtime beneath them.
-
 ## Backups — restic, the first slice
 
-The **Backup** construct ("a Job that hauls a Machine into a Store, dedup'd") is
+The **Backup** construct ("a scheduled restic run that hauls a Machine into a Store, dedup'd") is
 a saved set of paths a box sends into a [restic](https://restic.net) repository,
 encrypted and dedup'd. restic gives hush the three things a bare NAS-local copy
 can't — content-defined **dedup**, **snapshot** history, and client-side
 **encryption** — and this package is a thin, streaming shell over the restic
-binary, not a reimplementation of any of it. A Backup lives on the **agent**,
-like a Job: the box that holds the data holds the repository key, so the console
+binary, not a reimplementation of any of it. A Backup lives on the **agent**:
+the box that holds the data holds the repository key, so the console
 drives backups through hush-control's pass-through proxy
 (`/api/machines/{host}/backups`, `…/{id}/run`, `…/{id}/snapshots`) rather than a
 control-side store. A box serves `/backups` only when its agent is started with
 `-backup` (or `HUSH_AGENT_BACKUP=1`) — off by default, since a backup reads
 whatever paths you point it at; until then the endpoint returns `403`, surfaced
-as "backups disabled" like Jobs.
+as "backups disabled".
 
 **The key stays on the box.** A restic repo is a backend location plus an
 encryption password. hush keeps that password in the agent's `0700` state dir
-(`backups.json`, beside `jobs.json`) and hands it to restic through the
+(`backups.json`) and hands it to restic through the
 environment — `RESTIC_REPOSITORY` / `RESTIC_PASSWORD`, never argv, so it never
 lands in the process table or an audit log. It is the one field the API never
 returns (`GET /backups` omits it by construction) and never accepts back through
@@ -351,7 +219,7 @@ control plane and the phone drive backups without the key ever passing through
 them, so neither can become the thing that leaks it. restic is invoked with an
 explicit argument slice (no `sh -c`), so a path that looks like a flag or holds
 shell metacharacters is passed through literally — the stricter handling a typed
-backup wants, versus the Task runner's deliberately-unjailed `sh -c`.
+backup wants.
 
 **Escrow without breaking the rule.** Keeping the key on the box has a circular
 edge: the box a backup exists to survive is the one box holding the sole copy of
@@ -377,8 +245,8 @@ over `/`) is the other end of the spectrum for a box you want in full.
 (tolerating one that already exists, so a second machine can point at the same
 repo) and lists its snapshots to verify the password — a bad backend URL or
 wrong key fails at create time, not silently at 3am. A run streams restic's
-output to the console's shared run terminal as the same Server-Sent Events a Task
-uses (`start` → `out` → `exit`), and records the last run's outcome and the
+output to the console's run terminal as Server-Sent Events
+(`start` → `out` → `exit`), and records the last run's outcome and the
 snapshot it wrote. Deleting a backup forgets its definition only; the
 repository's snapshots are left for `restic` to prune directly, so a mistaken
 delete loses the schedule, never the data.
@@ -396,8 +264,7 @@ can't harm the backup history. That makes the lifecycle whole: configure → run
 
 **Runs on demand or on a schedule.** A backup can be run by hand from the
 console, or given an optional 5-field cron schedule (`@daily` macros too) so the
-agent fires it unattended — the same robfig/cron engine the Job scheduler uses,
-so a nightly backup and a nightly Job are the same clockwork. A scheduled fire
+agent fires it unattended, on the box, via a robfig/cron engine. A scheduled fire
 has no client to stream to; the outcome lands in the backup's status (and its
 next-run time is reported to the console) either way. A fire is skipped, not
 queued, while a run for the same backup is already in flight, so a long backup
@@ -406,7 +273,7 @@ re-registered on agent restart. An empty schedule is manual-only.
 
 **Setup is generated, never applied.** Getting a box backup-ready needs three
 things — `restic` installed, `-backup` enabled, and (for a vault box) a
-`rest-server` — and, like run-as, `hush-control` is unprivileged and never
+`rest-server` — and `hush-control` is unprivileged and never
 touches the box. So the agent advertises its readiness in `/vitals` (a
 `BackupCapability`: is `-backup` on, restic's version, is a `rest-server` binary
 present), and the console's **Set up backups** sheet turns that plus the box's OS

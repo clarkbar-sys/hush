@@ -5,7 +5,7 @@
 // installed at all. But it means a plain net.Dial to an agent's 100.x tailnet
 // address has no route and fails: the kernel doesn't know the tailnet exists,
 // only the tsnet node does. So every connection to an agent (the fleet poll,
-// discovery probes, and the /browse, /top, /exec, ... proxies) must dial
+// discovery probes, and the /browse, /top, /backups, ... proxies) must dial
 // through the tsnet node's own stack via srv.Dial, not the kernel.
 //
 // agentDialer is the single seam that makes that switch. Every agent-facing
@@ -82,7 +82,7 @@ func (d *agentDialer) use(dial func(ctx context.Context, network, addr string) (
 // client builds an http.Client for talking to agents over this dialer,
 // carrying http.DefaultTransport's settings (proxy, idle-conn pooling) and
 // only substituting the dial. timeout is the overall per-request budget; pass
-// 0 for the streaming clients (/file, /exec) that must not be cut off. The
+// 0 for the streaming clients (/file, /backups run) that must not be cut off. The
 // transport is tracked so a later use() swap can flush its pooled connections.
 func (d *agentDialer) client(timeout time.Duration) *http.Client {
 	t := http.DefaultTransport.(*http.Transport).Clone()

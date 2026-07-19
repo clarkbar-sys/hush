@@ -15,8 +15,8 @@ usually can't at a glance — *is everything backed up, and could I get it back?
 on a legible map where every machine is coloured by its **backup posture**
 (protected, at risk, unprotected, failed), so the box that isn't safe is the one
 that stands out. It grew out of a general "see and run your fleet" console
-(*Factorio for your homelab* — Machine, Service, Job, Task, Workflow, Store,
-Backup, Link), and that substrate is still here; backups are just the spine now.
+(*Factorio for your homelab*), and the read-only spine of that — machines,
+services, stores, and links — is still here; backups are the point now.
 
 See [`docs/DESIGN.md`](./docs/DESIGN.md) for the design and
 [issue #6](https://github.com/clarkbar-sys/hush/issues/6) for the full
@@ -27,9 +27,9 @@ on-demand or unattended-scheduled backups, paths picked from the disk-usage
 treemap, snapshot restore, and off-box key escrow — and the console is now built
 around it: the fleet map leads with backup posture, a header **alert bell** ranks
 the backups that need attention, and you can **browse inside a snapshot** from
-your phone to confirm your data is really there before a restore. The general
-substrate is live too — Tasks, run-as, Jobs, Workflows, file browsing, and a live
-htop-style CPU/network panel per machine. Next up: push/email alert delivery,
+your phone to confirm your data is really there before a restore. The read-only
+substrate is live too — service vitals, file browsing, and a live htop-style
+CPU/network panel per machine. Next up: push/email alert delivery,
 cross-site replication, and retention policy. See
 [`docs/DESIGN.md#roadmap`](./docs/DESIGN.md#roadmap) for the full picture.
 
@@ -171,49 +171,6 @@ button carries a count badge when new agents appear that you haven't
 added — you don't have to open the sheet to notice a fresh box. Adding stays a
 deliberate tap; discovery only ever suggests.
 
-### Run a command (Tasks)
-
-The **Task** construct runs a one-shot command on a machine and streams its
-output live to the console — **＋ Build → Task**, or the **Tasks** section of any
-Machine view. Commands run via `sh -c` as the unprivileged `hush` user with no
-sandbox — the OS permissions of that user are the only boundary, the same model
-as file browsing.
-
-It's **on by default**; a box opts out by starting `hush-agent` with
-`-exec=false` (or setting `HUSH_AGENT_EXEC=0` in its env file and restarting),
-after which `/exec` returns `403` and the agent is read-only. Because `/exec`
-is new agent code, only agents running this release or newer can run Tasks —
-older ones report exec as unavailable until you re-run the installer. See
-[`docs/DESIGN.md`](./docs/DESIGN.md#tasks--running-a-command).
-
-#### Run a Task as another user
-
-By default a Task runs as the unprivileged `hush` user. A box can also offer a
-set of **run-as users** so a Task — ad-hoc, saved, or a Workflow step — runs as
-one of them via `sudo -u`: least privilege per workload, without ever giving
-`hush` blanket root. Start the agent with `-run-as media,deploy` (or
-`HUSH_AGENT_RUNAS=media,deploy` in its env file); the agent advertises that list
-and the console shows a **Run as** picker wherever it applies. Empty (the
-default) leaves the feature off, and `/exec` refuses any user not on the list.
-
-It needs a matching **sudoers grant** — `hush` must be allowed to `sudo -u`
-those users. The installer never writes sudoers (a broken sudoers file is how
-you lock yourself out); instead a Machine's **Run-as users** sheet generates the
-exact root command to paste over SSH, using a `hush-runas` group so the file is
-written once and later changes are just group membership. **Never list `root` or
-a sudo-capable user:** the agent is reachable by anyone on the tailnet, so that
-list is the ceiling on what a caller can become. Users needn't exist yet — allow
-one now, `useradd` it later.
-
-Because the advertised list (`HUSH_AGENT_RUNAS`) and the sudoers grant are set
-separately, they can drift. The agent verifies each advertised user against the
-*real* grant (a passwordless `sudo -n -l` probe, cached and re-checked
-periodically) and reports the runnable subset in `/vitals`. The console's **Run
-as** picker flags any user it can't actually `sudo -u` yet — "no sudoers
-grant" — so a missing or drifted grant shows up as a ⚠ up front instead of a
-Task failing at run time. A user listed but not yet granted (e.g. you set the
-env but haven't pasted the **Run-as users** command) is exactly this case.
-
 ### Back up a machine (Backups)
 
 The **Backup** construct sends a machine's paths into a
@@ -224,10 +181,10 @@ URL on the NAS is the blessed target, reachable over the tailnet and
 append-only; `sftp:` and local paths work too), name the paths (or **pick them
 from the disk-usage treemap**), and optionally tick **whole machine**
 (`--one-file-system`). Give it a **cron schedule** and the agent fires it
-unattended — nightly, on the box — the same clockwork Jobs use; leave the
-schedule blank to run it only by hand. Creating a backup initialises the repo and
-verifies the password against it, so a bad address or key fails then and not at
-3am; a run streams restic's output to the same live terminal a Task uses.
+unattended — nightly, on the box; leave the schedule blank to run it only by
+hand. Creating a backup initialises the repo and verifies the password against
+it, so a bad address or key fails then and not at 3am; a run streams restic's
+output to a live terminal in the console.
 
 It's **off by default** — a backup reads whatever paths you point it at — so a
 box serves it only when `hush-agent` is started with `-backup` (or
@@ -248,9 +205,8 @@ it at a live path.
 You don't have to memorise any of this — the Machine view's **Set up backups**
 button detects what a box is missing (`restic`, `-backup`, a vault) and generates
 the exact idempotent command to paste over SSH, picking the right package manager
-for the box's OS, the same way the **Run-as users** sheet generates its sudoers
-grant. The steps below are what that command does, for when you'd rather do it by
-hand.
+for the box's OS. The steps below are what that command does, for when you'd
+rather do it by hand.
 
 A backup needs three things in place; once they are, the console does the rest.
 

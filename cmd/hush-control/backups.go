@@ -231,3 +231,21 @@ func backupCreatePreview(body []byte) string {
 	}
 	return name + " → " + repo
 }
+
+// relayAgentJSON performs an upstream request to an agent and copies its status
+// and body straight through to the caller, shaping "agent unreachable" as a 502.
+// It's the shared tail of the backup proxies — the same verbatim relay
+// proxyBrowse does, factored out because several handlers need it.
+func relayAgentJSON(w http.ResponseWriter, req *http.Request, client *http.Client, name string) {
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "agent unreachable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		log.Printf("relay agent %s: %v", name, err)
+	}
+}

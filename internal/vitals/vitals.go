@@ -44,24 +44,9 @@ type Snapshot struct {
 	NetTx    int       `json:"netTx"` // outbound bytes/sec, sampled over the prior ~1s (excludes loopback)
 	Services []Service `json:"services"`
 	Status   string    `json:"status"` // good | warn | crit
-	// RunAs is the set of OS users a Task may run as on this box via `sudo -u`,
-	// as configured by the agent's -run-as allowlist. It's advertised here so the
-	// console can offer a per-machine "run as" picker instead of free text. Empty
-	// or absent means the box offers no run-as users (the feature is off). This is
-	// capability metadata the agent fills in, not something vitals.Collect reads.
-	RunAs []string `json:"runAs,omitempty"`
-	// RunAsGranted, when non-nil, is the subset of RunAs the agent verified it
-	// can actually `sudo -n -u` right now — the sudoers grant is in place and the
-	// user resolves. A name in RunAs but absent here is advertised yet not
-	// currently runnable, so the console can flag it before a Task fails at run
-	// time. Nil (the field is omitted) means no verification was done — an older
-	// agent, or exec off — and the console makes no claim either way. Like RunAs,
-	// the agent fills this in; vitals.Collect never touches it.
-	RunAsGranted *[]string `json:"runAsGranted,omitempty"`
 	// Backup, when non-nil, reports this box's backup readiness so the console can
-	// generate the exact setup commands (the way the run-as sheet generates the
-	// sudoers grant). Like RunAs, the agent fills it in; vitals.Collect never
-	// touches it. Nil means an older agent that doesn't report it.
+	// generate the exact setup commands. The agent fills it in; vitals.Collect
+	// never touches it. Nil means an older agent that doesn't report it.
 	Backup *BackupCapability `json:"backup,omitempty"`
 }
 
