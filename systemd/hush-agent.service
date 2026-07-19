@@ -8,14 +8,19 @@ Wants=network-online.target
 Type=simple
 User=hush
 Group=hush
-# EnvironmentFile is optional (- prefix): if /etc/hush/agent.env is missing —
-# e.g. an immutable-distro OS update wiped /etc/hush (SteamOS resets /etc on
-# updates) — HUSH_AGENT_LISTEN is simply unset. The :-tailnet default below then
-# supplies the same value the installer writes, instead of expanding to an empty
-# -listen argument. Without it the agent would bind Go's net default of :80, fail
-# with "permission denied" as the unprivileged hush user, and crash-loop.
+# Environment= supplies the default; the optional EnvironmentFile= below (- prefix)
+# overrides it when /etc/hush/agent.env is present. If that file is missing — e.g.
+# an immutable-distro OS update wiped /etc/hush (SteamOS resets /etc on updates) —
+# HUSH_AGENT_LISTEN keeps this default instead of expanding to an empty -listen
+# argument (which the agent would read as Go's net default of :80, fail with
+# "permission denied" as the unprivileged hush user, and crash-loop).
+#
+# NOTE: systemd does NOT support shell-style ${VAR:-default} expansion — that form
+# is passed through literally and reaches the binary verbatim, breaking startup.
+# The Environment=/EnvironmentFile= pair is the correct way to express a default.
+Environment=HUSH_AGENT_LISTEN=tailnet
 EnvironmentFile=-/etc/hush/agent.env
-ExecStart=/usr/local/bin/hush-agent -listen ${HUSH_AGENT_LISTEN:-tailnet}
+ExecStart=/usr/local/bin/hush-agent -listen ${HUSH_AGENT_LISTEN}
 Restart=on-failure
 RestartSec=5s
 
