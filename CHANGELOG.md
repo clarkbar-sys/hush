@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.27.0](https://github.com/clarkbar-sys/hush/compare/v1.26.1...v1.27.0) (2026-07-19)
+
+
+### Features
+
+* **backups:** alert center + browse-inside-a-snapshot; pivot docs ([#138](https://github.com/clarkbar-sys/hush/issues/138)) ([b1ac0b5](https://github.com/clarkbar-sys/hush/commit/b1ac0b53b5b2fc1886b415a6a324dae0f20abf33))
+* **console:** make the Fleet map backup-first ([#136](https://github.com/clarkbar-sys/hush/issues/136)) ([c02a5cd](https://github.com/clarkbar-sys/hush/commit/c02a5cd1fbc8d750d2e1b60ee95960089b918e05))
+
 ## [1.26.1](https://github.com/clarkbar-sys/hush/compare/v1.26.0...v1.26.1) (2026-07-19)
 
 
