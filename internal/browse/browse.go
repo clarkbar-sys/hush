@@ -126,6 +126,13 @@ type DuListing struct {
 	Parent    string    `json:"parent"`
 	Entries   []DuEntry `json:"entries"`   // sorted by size, largest first
 	Truncated bool      `json:"truncated"` // hit maxDuFiles or ctx's deadline before finishing every child
+	// ComputedAt and Cached are filled in by DuCache, not Du itself: ComputedAt
+	// is the RFC3339 UTC time the walk that produced this listing ran, and
+	// Cached is true when the response was served from the cache without
+	// re-walking. Both are omitted (zero) on a bare Du call, so the on-the-wire
+	// shape only grows when sizing goes through the cache.
+	ComputedAt string `json:"computedAt,omitempty"`
+	Cached     bool   `json:"cached,omitempty"`
 }
 
 // Du sizes every immediate child of path, recursing into subdirectories to
