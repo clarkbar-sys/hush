@@ -97,7 +97,7 @@ func TestRunWorkflowForwardsStepRunAsUser(t *testing.T) {
 
 	dir := t.TempDir()
 	store := newAgentStore(filepath.Join(dir, "fleet.json"), []Agent{{Name: "box", Addr: agent.URL}})
-	mux, _ := buildMux(store, muxDiscoverer(store), "")
+	mux, _ := buildMux(store, muxDiscoverer(store), nil, "")
 
 	body := `{"name":"asDeploy","steps":[{"host":"box","cmd":"whoami","user":"deploy"}]}`
 	rec := httptest.NewRecorder()
@@ -295,7 +295,7 @@ func TestWorkflowsHTTPCreateListRun(t *testing.T) {
 
 	dir := t.TempDir()
 	store := newAgentStore(filepath.Join(dir, "fleet.json"), []Agent{{Name: "box", Addr: agent.URL}})
-	mux, _ := buildMux(store, muxDiscoverer(store), "")
+	mux, _ := buildMux(store, muxDiscoverer(store), nil, "")
 
 	// Create.
 	body := `{"name":"Ping","steps":[{"host":"box","cmd":"echo ok"}]}`

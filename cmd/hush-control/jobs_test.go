@@ -17,7 +17,7 @@ func jobsFleet(t *testing.T, agent http.Handler) (http.Handler, *agentStore) {
 	srv := httptest.NewServer(agent)
 	t.Cleanup(srv.Close)
 	store := newTestStore(t, []Agent{{Name: "nas", Addr: srv.URL, IP: "100.71.4.2"}})
-	mux, _ := buildMux(store, muxDiscoverer(store), "")
+	mux, _ := buildMux(store, muxDiscoverer(store), nil, "")
 	return mux, store
 }
 

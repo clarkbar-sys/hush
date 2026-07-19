@@ -31,7 +31,7 @@ import (
 // state), or — when neither is present — interactively via the first-run setup
 // page bound to listen (the -listen address). Either way we end up with a live
 // *tsnet.Server that serveConsoleOverTsnet then serves the console over.
-func serveTsnet(mux http.Handler, disco *discoverySource, listen, hostname, stateDir string, allow []string) {
+func serveTsnet(mux http.Handler, disco *discoverySource, dialer *agentDialer, listen, hostname, stateDir string, allow []string) {
 	authKey := os.Getenv("TS_AUTHKEY")
 
 	var srv *tsnet.Server
@@ -49,16 +49,23 @@ func serveTsnet(mux http.Handler, disco *discoverySource, listen, hostname, stat
 	}
 	defer srv.Close()
 
-	serveConsoleOverTsnet(srv, disco, mux, allow)
+	serveConsoleOverTsnet(srv, disco, dialer, mux, allow)
 }
 
 // serveConsoleOverTsnet serves mux over HTTPS on :443 of an already-up tsnet
 // node, gating every request on Tailscale identity. It blocks (log.Fatal) until
 // the server exits.
-func serveConsoleOverTsnet(srv *tsnet.Server, disco *discoverySource, mux http.Handler, allow []string) {
+func serveConsoleOverTsnet(srv *tsnet.Server, disco *discoverySource, dialer *agentDialer, mux http.Handler, allow []string) {
 	lc, err := srv.LocalClient()
 	if err != nil {
 		log.Fatalf("tsnet: local client: %v", err)
+	}
+
+	// The node is up, so agents are now reachable through its userspace stack —
+	// route every agent-facing client there instead of the host kernel, which has
+	// no route to their tailnet addresses (see agentdial.go).
+	if dialer != nil {
+		dialer.useTsnet(srv)
 	}
 
 	// The tailnet is now reachable through lc, so /api/discover can enumerate it.

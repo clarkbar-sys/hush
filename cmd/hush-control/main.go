@@ -110,18 +110,25 @@ func main() {
 	log.Printf("hush-control: %d agent(s) configured", len(agents))
 	store := newAgentStore(*configPath, agents)
 
+	// dialer routes every connection to an agent. In tsnet mode the control plane
+	// is its own userspace tailnet node, so it must reach agents through that node
+	// (not the host kernel, which has no route to their 100.x addresses); useTsnet
+	// flips it there once the node is up. See agentdial.go.
+	dialer := newAgentDialer()
+
 	// disco starts empty; it's populated with a tailnet peer lister once the tsnet
 	// node is up (before that — during first-run setup — it stays nil and
 	// discovery reports itself unavailable). The discoverer polls it in the
 	// background so the console can badge newly appeared agents without re-probing
-	// the tailnet on every request.
+	// the tailnet on every request. Its probe rides the shared dialer so candidate
+	// checks reach 100.x agents over the tailnet, same as the fleet poll.
 	disco := &discoverySource{}
-	discoClient := &http.Client{Timeout: 2 * time.Second}
+	discoClient := dialer.client(2 * time.Second)
 	probe := func(addr string) testAgentResult { return testAgent(discoClient, addr) }
 	discoverer := newDiscoverer(disco, probe, store.Snapshot)
 	go discoverer.run(context.Background())
 
-	mux, fc := buildMux(store, discoverer, *webDir)
+	mux, fc := buildMux(store, discoverer, dialer, *webDir)
 	go fc.run(context.Background())
 
 	// The console is served only over the tailnet now — plain-HTTP LAN mode has
@@ -130,7 +137,7 @@ func main() {
 	if !*useTsnet {
 		log.Printf("hush-control: plain-HTTP LAN mode has been removed — serving over the tailnet (tsnet). See the README to provision the node.")
 	}
-	serveTsnet(mux, disco, *listen, *hostname, *stateDir, allow)
+	serveTsnet(mux, disco, dialer, *listen, *hostname, *stateDir, allow)
 }
 
 // buildMux wires the console routes: live fleet JSON, fleet membership, and
@@ -141,13 +148,23 @@ func main() {
 // the caller can start its background polling loop (main() does; tests that
 // don't care about fleet polling can discard it — /api/fleet still works,
 // falling back to a live scan on the cold cache).
-func buildMux(store *agentStore, discoverer *discoverer, webDir string) (http.Handler, *fleetCache) {
+func buildMux(store *agentStore, discoverer *discoverer, dialer *agentDialer, webDir string) (http.Handler, *fleetCache) {
 	// Go's mime table doesn't know .webmanifest; without this the PWA manifest
 	// is served as text/plain and browsers grumble. Register the correct type
 	// so http.FileServer(FS) picks it up.
 	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 
-	client := &http.Client{Timeout: 2 * time.Second}
+	// A nil dialer (tests that don't exercise tsnet routing) dials directly,
+	// which is what a bare http.Client did before and is right for loopback
+	// httptest agents.
+	if dialer == nil {
+		dialer = newAgentDialer()
+	}
+
+	// Every agent-facing client rides the shared dialer so it reaches agents over
+	// the tailnet node in tsnet mode. The version checker is the one exception: it
+	// talks to GitHub, not an agent, so it keeps a plain client on the host stack.
+	client := dialer.client(2 * time.Second)
 	vc := &versionChecker{client: &http.Client{Timeout: 5 * time.Second}}
 	fc := newFleetCache(client, store.Snapshot, func(ctx context.Context) string {
 		return vc.status(ctx, false).Latest
@@ -179,7 +196,7 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) (http.Ha
 	// takes a beat longer than a plain read — it rides a client with a little
 	// more headroom than the 2s fleet-poll one so that sampling delay plus a
 	// slow hop doesn't clip an otherwise-healthy response.
-	topClient := &http.Client{Timeout: 4 * time.Second}
+	topClient := dialer.client(4 * time.Second)
 	mux.HandleFunc("/api/machines/{host}/top", func(w http.ResponseWriter, r *http.Request) {
 		a, ok := store.find(r.PathValue("host"))
 		if !ok {
@@ -190,13 +207,13 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) (http.Ha
 	})
 	// Streaming a file can take far longer than the 2s fleet-poll budget (a
 	// whole video), so it rides its own client with no overall timeout.
-	streamClient := &http.Client{}
+	streamClient := dialer.client(0)
 	// A recursive size walk can run for the agent's whole duDeadline (25s), far
 	// past the 2s fleet-poll budget, so /du rides its own client with a timeout
 	// just past that deadline rather than the no-timeout streamClient — a du
 	// call that hangs (agent wedged, network gone) should still fail, just not
 	// as impatiently as a fleet poll would.
-	duClient := &http.Client{Timeout: 30 * time.Second}
+	duClient := dialer.client(30 * time.Second)
 	mux.HandleFunc("/api/machines/{host}/du", func(w http.ResponseWriter, r *http.Request) {
 		a, ok := store.find(r.PathValue("host"))
 		if !ok {
@@ -249,7 +266,7 @@ func buildMux(store *agentStore, discoverer *discoverer, webDir string) (http.Ha
 	// poll, since a create runs `restic init` and a snapshots probe across the
 	// tailnet to the rest-server; a run streams for as long as the backup takes,
 	// so it rides the no-timeout streamClient like /exec.
-	backupClient := &http.Client{Timeout: 60 * time.Second}
+	backupClient := dialer.client(60 * time.Second)
 	mux.HandleFunc("/api/machines/{host}/backups", func(w http.ResponseWriter, r *http.Request) {
 		a, ok := store.find(r.PathValue("host"))
 		if !ok {
