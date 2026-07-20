@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.0](https://github.com/clarkbar-sys/hush/compare/v2.5.0...v2.6.0) (2026-07-20)
+
+
+### Features
+
+* **sessions:** spawn opencode/claude on any box, tracked read-only ([#145](https://github.com/clarkbar-sys/hush/issues/145)) ([#183](https://github.com/clarkbar-sys/hush/issues/183)) ([d9c6084](https://github.com/clarkbar-sys/hush/commit/d9c6084d9b821a9b7935646ee7d7d08b31313280))
+* **web:** add a user on a machine — compose a passwordless-login sudo command ([#185](https://github.com/clarkbar-sys/hush/issues/185)) ([3a064aa](https://github.com/clarkbar-sys/hush/commit/3a064aab933ef34b20849c0f7f84bdb5453edac9))
+
 ## [2.5.0](https://github.com/clarkbar-sys/hush/compare/v2.4.1...v2.5.0) (2026-07-20)
 
 
