@@ -256,7 +256,7 @@ func readMeminfo() map[string]uint64 {
 
 func diskUsage() int {
 	var st syscall.Statfs_t
-	if err := syscall.Statfs("/", &st); err != nil {
+	if err := syscall.Statfs(diskPath(), &st); err != nil {
 		return 0
 	}
 	used := uint64(st.Blocks) - uint64(st.Bfree)
@@ -265,6 +265,38 @@ func diskUsage() int {
 		return 0
 	}
 	return clamp(round(float64(used) / float64(denom) * 100))
+}
+
+// diskPath picks the mount point whose fill level actually reflects "how
+// full is this box." On immutable-root distros (SteamOS, Fedora
+// Silverblue/Kinoite) "/" is a small, often near-full, read-only OS
+// partition, while the real capacity — games, user data, everything hush's
+// own Store/backup features read — lives on a separate /home partition. "/"
+// reporting 80%+ there is a fact about the tiny OS slice, not the disk the
+// user cares about. When /home is its own filesystem, report on it instead;
+// on an ordinary single-partition box "/" and "/home" share a device and
+// this is a no-op.
+func diskPath() string {
+	root, err := os.Stat("/")
+	if err != nil {
+		return "/"
+	}
+	home, err := os.Stat("/home")
+	if err != nil {
+		return "/"
+	}
+	rootDev, ok := root.Sys().(*syscall.Stat_t)
+	if !ok {
+		return "/"
+	}
+	homeDev, ok := home.Sys().(*syscall.Stat_t)
+	if !ok {
+		return "/"
+	}
+	if rootDev.Dev != homeDev.Dev {
+		return "/home"
+	}
+	return "/"
 }
 
 func loadAvg() string {
