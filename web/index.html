@@ -699,16 +699,20 @@
   .bk-card.tap:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 
   /* ---- backup watch modal ---- */
-  /* A run in flight has no percentage to show: the runner records the final
-     summary, not live restic progress, so an honest bar is indeterminate — a
-     shuttle that says "moving" without inventing a number the console can't
-     know. Elapsed time, which we CAN know from the start timestamp, ticks
-     live beside it as the real progress signal. */
+  /* Two bars, and which one you get is a question of what the box can actually
+     tell us. The runner publishes restic's live byte progress beside the status
+     file, so a run in flight usually has a real percentage — .wt-prog.det draws
+     it. When it doesn't (a runner too old to publish, progress switched off, or
+     the seconds before the first sample lands) the bar falls back to the
+     indeterminate shuttle: "moving", without inventing a number. Elapsed time
+     ticks live under both. */
   .wt-prog { height:8px; border-radius:999px; overflow:hidden; position:relative;
     background:var(--accent-soft); margin:2px 0 10px; }
   .wt-prog::before { content:""; position:absolute; top:0; bottom:0; width:38%;
     border-radius:999px; background:var(--accent);
     animation: wt-shuttle 1.5s ease-in-out infinite; }
+  .wt-prog.det::before { animation:none; left:0; width:var(--pct,0%);
+    transition:width .4s ease; }
   @keyframes wt-shuttle { 0%{ left:-40%; } 100%{ left:102%; } }
   .wt-elapsed { font-variant-numeric:tabular-nums; }
   .wt-note { font-family:var(--mono); font-size:10px; color:var(--faint);
@@ -1064,6 +1068,56 @@
     const next = Date.parse(b.next_run || "") || 0;
     if(next) return Date.now() > next;
     return (Date.now() - started) > STALL_FALLBACK_MS;
+  }
+
+  // bkProgress returns the live byte progress of a run in flight, or null when
+  // there is none worth drawing.
+  //
+  // Null covers more than "the field is missing": a runner too old to publish,
+  // progress switched off on that box, the seconds before the first sample
+  // lands, and — the one that matters — a sample that has gone stale. The agent
+  // already refuses to attach progress unless systemd says the unit is running,
+  // but systemd can be slower to notice a dead run than a reader is, and a
+  // frozen percentage presented as live is worse than no percentage at all.
+  // Every one of those falls back to the indeterminate shuttle.
+  const PROGRESS_STALE_MS = 120e3;
+  function bkProgress(b){
+    if(!b || !bkRunning(b) || bkStalled(b)) return null;
+    const p = b.progress;
+    if(!p || typeof p.percent_done !== "number") return null;
+    const updated = Date.parse(p.updated || "");
+    if(!isNaN(updated) && Date.now() - updated > PROGRESS_STALE_MS) return null;
+    return p;
+  }
+
+  // progressScanning reports whether restic is still working out how much there
+  // is to do, in which case the percentage is measured against a total that
+  // isn't final yet.
+  //
+  // restic's scanner walks the tree while the upload is already running, so
+  // total_bytes climbs for the first stretch of a big backup and the percentage
+  // can visibly go backwards. There is no scan-complete flag in the status line
+  // to read, so the console watches the total itself and calls the scan done
+  // once two consecutive *new* samples report an unchanged one. Comparing per
+  // repaint instead would flicker, since the console repaints more often than
+  // the runner publishes. Keyed by run (host+name+started) so a new run starts
+  // over rather than inheriting the last one's verdict.
+  const scanState = new Map();
+  function progressScanning(host, b, p){
+    if(typeof p.total_bytes !== "number") return false;
+    const key = host + " " + (b.name || "");
+    let st = scanState.get(key);
+    if(!st || st.started !== (b.started || "")){
+      st = { started: b.started || "", total: p.total_bytes, updated: p.updated || "", stable: 0 };
+      scanState.set(key, st);
+      return true;   // first sample of this run — assume the scan is still going
+    }
+    if(p.updated && p.updated !== st.updated){
+      st.stable = (p.total_bytes === st.total) ? st.stable + 1 : 0;
+      st.total = p.total_bytes;
+      st.updated = p.updated;
+    }
+    return st.stable < 2;
   }
 
   // bkSeverity maps a run to one of four states — never two. A run in flight is
@@ -1465,16 +1519,40 @@
       : b.incomplete ? `incomplete · exit ${b.exit_code}`
       : `failed · exit ${b.exit_code}`;
 
-    // The live watch — an indeterminate shuttle (no fabricated %) over a
-    // ticking elapsed clock — for a healthy run in flight. A stalled run gets a
-    // plain warning instead: it isn't moving, so a "moving" bar would lie.
+    // The live watch for a healthy run in flight: a real percentage when the box
+    // publishes one, the indeterminate shuttle when it doesn't, and a ticking
+    // elapsed clock under either. A stalled run gets a plain warning instead —
+    // it isn't moving, so a "moving" bar would lie.
     const started = Date.parse(b.started || "");
     let watch = "";
     if(running && !stalled){
       const elapsed = isNaN(started) ? "—" : fmtElapsed(Date.now() - started);
-      watch = `<div class="wt-prog" role="progressbar" aria-label="backing up"></div>
-        <p class="wt-note">running for <span class="wt-elapsed" id="wtElapsed">${esc(elapsed)}</span>
-          · live byte progress isn't reported — the runner records the summary once restic finishes</p>`;
+      const prog = bkProgress(b);
+      if(prog){
+        // Clamped because the bar's width is drawn straight from this: one
+        // malformed sample must not paint outside the track.
+        const frac = Math.max(0, Math.min(1, prog.percent_done));
+        const pct = Math.round(frac * 100);
+        const scanning = progressScanning(host, b, prog);
+        const done = typeof prog.bytes_done === "number" ? fmtBytes(prog.bytes_done) : "";
+        const total = typeof prog.total_bytes === "number" ? fmtBytes(prog.total_bytes) : "";
+        // The ETA is restic's own, and it is withheld while the scan is still
+        // running — an estimate against a total that is still climbing is a
+        // number that will be wrong in a way the reader can't see.
+        const eta = (!scanning && typeof prog.seconds_remaining === "number" && prog.seconds_remaining > 0)
+          ? `${fmtElapsed(prog.seconds_remaining * 1e3)} left` : "";
+        const bits = [(done && total) ? `${done} of ${total}` : "",
+                      scanning ? "still scanning" : eta].filter(Boolean).join(" · ");
+        watch = `<div class="wt-prog det" role="progressbar" aria-label="backing up"
+            aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"
+            style="--pct:${(frac * 100).toFixed(1)}%"></div>
+          <p class="wt-note"><strong>${pct}%</strong>${bits ? " · " + esc(bits) : ""}
+            · running for <span class="wt-elapsed" id="wtElapsed">${esc(elapsed)}</span></p>`;
+      } else {
+        watch = `<div class="wt-prog" role="progressbar" aria-label="backing up"></div>
+          <p class="wt-note">running for <span class="wt-elapsed" id="wtElapsed">${esc(elapsed)}</span>
+            · this box isn't reporting live byte progress</p>`;
+      }
     } else if(running && stalled){
       watch = `<p class="wt-note">this run has overrun its schedule with no snapshot yet — it may have
         been killed mid-flight (a reboot or OOM leaves the "running" marker behind)</p>`;
@@ -2433,6 +2511,13 @@
         // strip still draws under a live run.
         name:"pi-gate-etc", repository:"rest:http://nas:8000/pi-gate", paths:["/etc","/var/lib/adguardhome"],
         started:ago(0.11), state:"running", next_run:soon(19),
+        // Live byte progress, in the shape the runner publishes beside the
+        // status file. jitterDemo advances it on every poll: the bar visibly
+        // moves, and the sample stays fresh — the console discards one older
+        // than two minutes, so a frozen fixture would decay into the fallback
+        // shuttle while the demo page sat open.
+        progress:{ percent_done:0.37, bytes_done:GiB(2.6), total_bytes:GiB(7.1),
+          files_done:1840, total_files:5200, seconds_remaining:412, updated:ago(0) },
         history:hist([{h:149,add:0.12},{h:125,add:0.06},{h:101,add:0.09},{h:77,add:0.05},{h:53,add:0.11},{h:29,add:0.07},{h:5,add:0.08}]),
       }]},
       { host:"lab-01", reachable:true, backups:[{
@@ -2462,6 +2547,20 @@
       m.netRxHist = m.netRxHist.slice(1).concat([m.netRx]);
       m.netTxHist = m.netTxHist.slice(1).concat([m.netTx]);
     });
+    // Advance the demo's one in-flight backup. total_bytes deliberately holds
+    // still, so the scan-detection settles after a couple of polls and the demo
+    // shows both faces of the bar: "still scanning" first, then the ETA.
+    for(const h of CONV_BACKUPS){
+      for(const b of (h.backups||[])){
+        if(!b.progress || !bkRunning(b)) continue;
+        const p = b.progress;
+        p.percent_done = Math.min(0.995, p.percent_done + 0.004 + Math.random()*0.004);
+        p.bytes_done = Math.round(p.total_bytes * p.percent_done);
+        p.files_done = Math.round(p.total_files * p.percent_done);
+        p.seconds_remaining = Math.max(1, Math.round(650 * (1 - p.percent_done)));
+        p.updated = new Date().toISOString();
+      }
+    }
   }
 
   /* ---------- build → add a machine ---------- */

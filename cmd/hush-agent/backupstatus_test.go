@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -524,5 +525,141 @@ func TestMarkRunningKeepsOwnStartWhenSystemdWillNotSay(t *testing.T) {
 	markRunning(&prev, "")
 	if prev.Started != "" {
 		t.Fatalf("Started = %q, want empty rather than the previous run's", prev.Started)
+	}
+}
+
+// --- live progress -----------------------------------------------------
+
+func TestProgressAttachedToRunningBackup(t *testing.T) {
+	dir := t.TempDir()
+	writeStatus(t, dir, "nightly.json", `{"name":"nightly","state":"running","started":"2026-07-19T11:54:47-04:00"}`)
+	writeStatus(t, dir, "nightly.progress.json",
+		`{"name":"nightly","updated":"2026-07-19T12:30:00-04:00","percent_done":0.42,"bytes_done":100,"total_bytes":238}`)
+	stubRunningBackups(t, map[string]string{"nightly": "2026-07-19T11:54:47-04:00"})
+
+	got, err := readConventionBackupStatuses(dir)
+	if err != nil {
+		t.Fatalf("readConventionBackupStatuses: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].Progress == nil {
+		t.Fatal("running backup carries no progress")
+	}
+	// Passed through verbatim: the agent must not need a release to carry a
+	// field the runner has started publishing.
+	var p map[string]any
+	if err := json.Unmarshal(got[0].Progress, &p); err != nil {
+		t.Fatalf("progress is not valid JSON: %v", err)
+	}
+	if p["percent_done"] != 0.42 {
+		t.Fatalf("percent_done = %v, want 0.42", p["percent_done"])
+	}
+}
+
+func TestProgressIgnoredWhenNotRunning(t *testing.T) {
+	// The severe case. A run killed mid-flight (OOM, reboot) never runs the
+	// runner's cleanup, so its last progress file outlives it. Attaching that
+	// to a finished backup would show a frozen percentage that reads as live.
+	dir := t.TempDir()
+	writeStatus(t, dir, "nightly.json", `{"name":"nightly","ok":true,"exit_code":0,"finished":"2026-07-19T12:00:00-04:00"}`)
+	writeStatus(t, dir, "nightly.progress.json", `{"name":"nightly","percent_done":0.42}`)
+	stubRunningBackups(t, nil)
+
+	got, err := readConventionBackupStatuses(dir)
+	if err != nil {
+		t.Fatalf("readConventionBackupStatuses: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].Progress != nil {
+		t.Fatalf("finished backup carries stale progress: %s", got[0].Progress)
+	}
+}
+
+func TestProgressFileIsNotListedAsABackup(t *testing.T) {
+	// <name>.progress.json ends in .json, so unlike the .jsonl history log it
+	// is not excluded by the suffix filter and must be skipped by name. Left
+	// in, a running backup grows a phantom twin card called "nightly.progress".
+	dir := t.TempDir()
+	writeStatus(t, dir, "nightly.json", `{"name":"nightly","state":"running"}`)
+	writeStatus(t, dir, "nightly.progress.json", `{"name":"nightly","percent_done":0.5}`)
+	stubRunningBackups(t, map[string]string{"nightly": ""})
+
+	got, err := readConventionBackupStatuses(dir)
+	if err != nil {
+		t.Fatalf("readConventionBackupStatuses: %v", err)
+	}
+	if len(got) != 1 {
+		names := make([]string, len(got))
+		for i, s := range got {
+			names[i] = s.Name
+		}
+		t.Fatalf("len = %d, want 1; got %v", len(got), names)
+	}
+	if got[0].Name != "nightly" {
+		t.Fatalf("name = %q, want nightly", got[0].Name)
+	}
+}
+
+func TestProgressSynthesizedForFirstEverRun(t *testing.T) {
+	// A backup that has never finished has no status file at all — the case the
+	// systemd probe exists for — and it is also the longest run a box will ever
+	// do, so it is exactly where a percentage is worth the most.
+	dir := t.TempDir()
+	writeStatus(t, dir, "first-ever.progress.json", `{"name":"first-ever","percent_done":0.07}`)
+	stubRunningBackups(t, map[string]string{"first-ever": "2026-07-19T11:54:47-04:00"})
+
+	got, err := readConventionBackupStatuses(dir)
+	if err != nil {
+		t.Fatalf("readConventionBackupStatuses: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].Name != "first-ever" || got[0].State != "running" {
+		t.Fatalf("got %+v", got[0])
+	}
+	if got[0].Progress == nil {
+		t.Fatal("first-ever run carries no progress")
+	}
+}
+
+func TestProgressMalformedIsDroppedNotFatal(t *testing.T) {
+	// A reader can catch a half-written file. Losing the percentage is fine;
+	// losing the whole status read because of it is not.
+	dir := t.TempDir()
+	writeStatus(t, dir, "nightly.json", `{"name":"nightly","state":"running"}`)
+	writeStatus(t, dir, "nightly.progress.json", `{"name":"nightly","percent_don`)
+	stubRunningBackups(t, map[string]string{"nightly": ""})
+
+	got, err := readConventionBackupStatuses(dir)
+	if err != nil {
+		t.Fatalf("readConventionBackupStatuses: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].Progress != nil {
+		t.Fatalf("malformed progress should be dropped, got %s", got[0].Progress)
+	}
+	if got[0].State != "running" {
+		t.Fatalf("state = %q, want running", got[0].State)
+	}
+}
+
+func TestProgressOmittedFromJSONWhenAbsent(t *testing.T) {
+	// The wire shape must stay byte-identical for every box that is not
+	// mid-run, so an older console sees exactly what it saw before.
+	dir := t.TempDir()
+	writeStatus(t, dir, "nightly.json", `{"name":"nightly","ok":true}`)
+	stubRunningBackups(t, nil)
+
+	rec := httptest.NewRecorder()
+	handleConventionBackupStatus(dir)(rec, httptest.NewRequest(http.MethodGet, "/backup-status", nil))
+	if body := rec.Body.String(); strings.Contains(body, "progress") {
+		t.Fatalf("absent progress must not appear on the wire: %s", body)
 	}
 }
