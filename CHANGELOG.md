@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/clarkbar-sys/hush/compare/v2.1.0...v2.2.0) (2026-07-20)
+
+
+### Features
+
+* **web:** condense fleet cards with progressive disclosure ([#170](https://github.com/clarkbar-sys/hush/issues/170)) ([c25654d](https://github.com/clarkbar-sys/hush/commit/c25654d005bb4f4730c7383bb849fc21917d5f77))
+
 ## [2.1.0](https://github.com/clarkbar-sys/hush/compare/v2.0.0...v2.1.0) (2026-07-19)
 
 
