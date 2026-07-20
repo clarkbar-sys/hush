@@ -141,8 +141,12 @@
 
   main { padding: 4px 16px 96px; }
 
-  /* ---- fleet grid ---- */
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+  /* ---- fleet grid ----
+     .wrap stays a fixed 480px until the 900px breakpoint (see above), so a
+     2-column grid below that never had real room to give — on phones it
+     crushed each card's cpu/mem/disk/gpu/net meter row into ~half its
+     width. One column until .wrap actually widens fixes that. */
+  .grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 8px; }
   @media (min-width: 900px) { .grid { grid-template-columns: 1fr 1fr 1fr; } }
 
   .node {
