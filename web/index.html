@@ -333,6 +333,26 @@
     background:var(--panel-2); border:1px solid var(--border); border-radius:10px;
     padding:11px 12px; margin:0 0 14px; max-height:44vh; overflow:auto; white-space:pre; }
 
+  /* ---- sessions section (machine view): running coding agents ---- */
+  .se-sec { display:flex; flex-direction:column; gap:9px; }
+  .se-row { display:flex; align-items:center; gap:10px; padding:10px 12px;
+    border:1px solid var(--border); border-radius:10px; background:var(--panel); }
+  .se-gly { color:var(--accent); font-size:14px; flex:none; }
+  .se-main { min-width:0; flex:1; }
+  .se-top { display:flex; align-items:baseline; gap:8px; font-family:var(--mono); font-size:12.5px; }
+  .se-tool { font-weight:700; color:var(--text); }
+  .se-user { color:var(--muted); }
+  .se-up { color:var(--faint); margin-left:auto; font-size:11px; }
+  .se-cmd { display:block; margin-top:3px; font-family:var(--mono); font-size:10.5px;
+    color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .se-stop { flex:none; }
+  .se-spawn { align-self:flex-start; }
+  /* fields inside the spawn sheet */
+  .se-seg { display:flex; gap:6px; margin:2px 0 12px; }
+  .se-seg button { flex:1; font-family:var(--mono); font-size:12px; padding:8px 6px;
+    border:1px solid var(--border); border-radius:9px; background:var(--panel); color:var(--muted); cursor:pointer; }
+  .se-seg button.on { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+
   /* alert center — header bell + panel rows */
   .chip.alert-bell { cursor:pointer; font-weight:700; }
   .chip.alert-bell b { font-family:var(--mono); }
@@ -508,10 +528,10 @@
   .field label { display:block; font-family:var(--mono); font-size:10.5px; letter-spacing:.1em;
     text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
   .field .opt { text-transform:none; letter-spacing:0; color:var(--faint); font-family:var(--sans); }
-  .field input { width:100%; font-family:var(--mono); font-size:14px; color:var(--text);
+  .field input, .field select { width:100%; font-family:var(--mono); font-size:14px; color:var(--text);
     background: var(--panel-2); border:1px solid var(--border); border-radius:9px;
     padding: 10px 12px; outline:none; }
-  .field input:focus { border-color: var(--accent); }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
   .field input::placeholder { color: var(--faint); }
   .field .hint { margin-top:5px; font-family:var(--mono); font-size:10.5px; color:var(--faint); }
 
@@ -802,6 +822,13 @@
   <div class="sheet" role="dialog" aria-label="opencode config">
     <div class="grab"></div>
     <div id="ocSheetBody"></div>
+  </div>
+</div>
+
+<div class="scrim" id="spawnScrim">
+  <div class="sheet" role="dialog" aria-label="spawn or stop a session">
+    <div class="grab"></div>
+    <div id="spawnSheetBody"></div>
   </div>
 </div>
 
@@ -1390,6 +1417,224 @@
     return { "$schema":"https://opencode.ai/config.json", provider };
   }
 
+  /* ---------- sessions: running coding agents (opencode / claude) ----------
+     A session is a coding-agent process on a box, owned by a Unix user. hush
+     only ever *reads* them — the agent's /sessions is a privilege-free /proc
+     scan — and never spawns or kills one. Both actions are sudo commands the
+     console composes for you to paste over SSH (JuiceSSH from a phone); control
+     stays a pure visualisation. See docs/SESSIONS.md. */
+  const SESSIONS = {};              // host -> { sessions:[…], loaded:true, err:"" }
+  const SESSIONS_POLL_MS = 6000;    // sessions change slowly; no need to ride the 2.5s fleet cadence
+  const USER_RE = /^[a-z_][a-z0-9_-]*$/;   // a conservative POSIX login, to keep a typo out of the generated command
+
+  function onMachine(id){ return state.view==="machine" && state.mid===id; }
+
+  // fetchSessions refreshes one machine's session list into SESSIONS, then
+  // repaints the machine view if it's still the one on screen. Demo mode has no
+  // agent to ask, so it fabricates a stable per-box list. An old agent (no
+  // /sessions handler) answers 404 — flagged distinctly so the section can say
+  // "update the agent" rather than "nothing running".
+  async function fetchSessions(id){
+    if(MODE==="demo"){ SESSIONS[id] = { sessions:demoSessions(id), loaded:true, err:"" }; if(onMachine(id)) renderMachine(); return; }
+    try {
+      const r = await fetch(`api/machines/${encodeURIComponent(id)}/sessions`, {cache:"no-store"});
+      if(!r.ok){ SESSIONS[id] = { sessions:[], loaded:true, err:r.status===404?"old-agent":"unreach" }; }
+      else { const data = await r.json(); SESSIONS[id] = { sessions:(data&&data.sessions)||[], loaded:true, err:"" }; }
+    } catch(e){ SESSIONS[id] = { sessions:[], loaded:true, err:"unreach" }; }
+    if(onMachine(id)) renderMachine();
+  }
+
+  function seGlyph(tool){ return tool==="claude" ? "✳" : "⌁"; }
+  function fmtUptime(sec){
+    if(!sec || sec<0) return "";
+    if(sec<60) return sec+"s";
+    const m=Math.round(sec/60); if(m<60) return m+"m";
+    const h=Math.floor(m/60); return h<24 ? h+"h" : Math.floor(h/24)+"d";
+  }
+
+  // sessionsSection renders the machine view's Sessions block: the coding agents
+  // running now (each with a Stop button that opens its sudo kill command) and a
+  // Spawn button that composes the launch command. Spawn is always offered — the
+  // command is text to paste, so it works even against an agent too old to
+  // *report* sessions.
+  function sessionsSection(m){
+    const st = SESSIONS[m.id];
+    const list = (st&&st.sessions)||[];
+    let body;
+    if(!m.online && MODE!=="demo"){
+      body = `<div class="empty">machine unreachable — bring it online to see running sessions</div>`;
+    } else if(!st || !st.loaded){
+      body = `<div class="empty">reading…</div>`;
+    } else if(st.err==="old-agent"){
+      body = `<div class="empty">this agent is too old to report sessions — update hush-agent to see what's running</div>`;
+    } else if(st.err==="unreach"){
+      body = `<div class="empty">couldn't read sessions from this machine</div>`;
+    } else if(!list.length){
+      body = `<div class="empty">no coding-agent sessions running</div>`;
+    } else {
+      body = list.map(s=>{
+        const up = fmtUptime(s.uptime);
+        return `<div class="se-row">
+          <span class="se-gly">${seGlyph(s.tool)}</span>
+          <div class="se-main">
+            <div class="se-top"><span class="se-tool">${esc(s.tool)}</span>
+              <span class="se-user">${esc(s.user||"?")}</span>
+              ${up?`<span class="se-up">${up}</span>`:""}</div>
+            ${s.cmd?`<span class="se-cmd">${esc(s.cmd)}</span>`:""}
+          </div>
+          <button class="btn se-stop" data-pid="${s.pid}" data-user="${esc(s.user||"")}" data-tool="${esc(s.tool)}">Stop</button>
+        </div>`;
+      }).join("");
+    }
+    return `<div class="sec-title">Sessions${list.length?` <span class="n">${list.length}</span>`:""}</div>
+      <div class="se-sec">
+        ${body}
+        <button class="btn primary se-spawn" id="se-spawn">＋ Spawn a session</button>
+      </div>`;
+  }
+
+  /* ---------- spawn / stop command sheets ----------
+     The write half of the Session construct is not a hush write at all: it's a
+     command you run yourself, as root, on the target box. These sheets compose
+     that command and hand it to you to copy into JuiceSSH — the exact posture
+     the backup convention uses. */
+  const spawnScrim = $("#spawnScrim");
+  const spawnBody = $("#spawnSheetBody");
+  let spHost=null, spTool="opencode", spUser="", spTarget="";
+  function closeSpawn(){ spawnScrim.classList.remove("open"); }
+  spawnScrim.addEventListener("click", e=>{ if(e.target===spawnScrim) closeSpawn(); });
+
+  // spawnTargets are the fleet's LLM boxes something off-box can call — the same
+  // tailnet|open reachable set the opencode export offers. Spawning opencode
+  // points it at one of these by writing that box's opencode.json.
+  function spawnTargets(){ return M.filter(x=>ocReachable(x).length); }
+
+  // buildSpawnCmd composes the one &&-chained sudo command that: installs
+  // opencode and claude if missing (the workflow wants both present), writes the
+  // chosen LLM's opencode.json (base64-piped so the JSON can't collide with the
+  // command's own quoting), and launches the tool in a named tmux session you
+  // can attach to now and reattach to later. `sudo -u <user>` is the whole user
+  // preflight — it fails loudly on its own if the user doesn't exist.
+  function buildSpawnCmd(){
+    const u = spUser.trim();
+    if(!USER_RE.test(u)) return { cmd:"", err:"enter a Linux username to run as" };
+    let lines =
+      `  command -v opencode >/dev/null 2>&1 || curl -fsSL https://opencode.ai/install | bash &&\n` +
+      `  command -v claude   >/dev/null 2>&1 || curl -fsSL https://claude.ai/install.sh | bash &&\n`;
+    if(spTool==="opencode"){
+      lines += `  export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$PATH" &&\n`;
+      const t = spTarget && byId(spTarget);
+      if(t){
+        const json = JSON.stringify(ocConfig(t, 0), null, 2);
+        const b64 = btoa(unescape(encodeURIComponent(json)));
+        lines += `  mkdir -p "$HOME/.config/opencode" &&\n`;
+        lines += `  printf %s "${b64}" | base64 -d > "$HOME/.config/opencode/opencode.json" &&\n`;
+      }
+      lines += `  exec tmux new-session -A -s hush-opencode opencode`;
+    } else {
+      lines += `  export PATH="$HOME/.local/bin:$PATH" &&\n`;
+      lines += `  exec tmux new-session -A -s hush-claude claude`;
+    }
+    return { cmd:`sudo -u ${u} -H bash -lc '\n${lines}'`, err:"" };
+  }
+
+  function openSpawnSheet(host){
+    spHost = host; spTool = "opencode"; spUser = "";
+    const ts = spawnTargets();
+    // Default the LLM target to this box if it serves one, else the first box on
+    // the fleet that does — the common case is "spawn here, point at the GPU box".
+    const here = ts.find(x=>x.id===host);
+    spTarget = here ? here.id : (ts[0] ? ts[0].id : "");
+    renderSpawnSheet();
+    spawnScrim.classList.add("open");
+  }
+
+  function renderSpawnSheet(){
+    const ts = spawnTargets();
+    const targetField = spTool==="opencode" ? (ts.length
+      ? `<div class="field">
+           <label for="spTarget">point opencode at</label>
+           <select id="spTarget">${ts.map(x=>`<option value="${esc(x.id)}"${x.id===spTarget?" selected":""}>${esc(x.id)} · ${ocReachable(x).reduce((n,r)=>n+((r.models||[]).length),0)} models</option>`).join("")}</select>
+           <div class="hint">writes that box's tailnet LLM into ~/.config/opencode/opencode.json before launching</div>
+         </div>`
+      : `<div class="field-note">no tailnet-reachable LLM on the fleet — opencode will launch with whatever config already exists on the box. Expose a runtime (see a machine's Inference section) to point it at one.</div>`)
+      : `<div class="field-note">claude uses its own Anthropic login (run <span style="font-family:var(--mono)">claude</span> once in the session to sign in). Routing claude at a hush-net endpoint is a follow-up.</div>`;
+    const { cmd, err } = buildSpawnCmd();
+    spawnBody.innerHTML = `
+      <h3>Spawn a session <span class="sd" style="font-family:var(--mono)">${esc(spHost)}</span></h3>
+      <p class="sd">compose the command, then paste it into a root shell on ${esc(spHost)} (JuiceSSH) — hush never runs it for you</p>
+      <div class="field">
+        <label for="spUser">run as user</label>
+        <input id="spUser" type="text" autocapitalize="off" autocomplete="off" spellcheck="false"
+          placeholder="e.g. josh" value="${esc(spUser)}">
+        <div class="hint">the session runs as this user; the command fails on its own if the user doesn't exist</div>
+      </div>
+      <div class="field">
+        <label>tool</label>
+        <div class="se-seg">
+          <button type="button" data-tool="opencode" class="${spTool==="opencode"?"on":""}">opencode</button>
+          <button type="button" data-tool="claude" class="${spTool==="claude"?"on":""}">claude</button>
+        </div>
+      </div>
+      ${targetField}
+      <div class="cmdbox"><code id="spCmd">${esc(cmd||err)}</code><button class="btn" id="spCopy">Copy</button></div>
+      <div class="field-note">Launches in a tmux session named <span style="font-family:var(--mono)">hush-${esc(spTool)}</span> — detach with <span style="font-family:var(--mono)">Ctrl-b d</span> and it keeps running (hush will show it); re-run to reattach.</div>
+      <div class="sheet-actions"><button class="btn primary" id="spClose" style="flex:1">Close</button></div>`;
+
+    const code = $("#spCmd"), copy = $("#spCopy");
+    const refresh = ()=>{ const r = buildSpawnCmd(); code.textContent = r.cmd || r.err; copy.disabled = !r.cmd; };
+    copy.disabled = !cmd;
+    const ui = $("#spUser");
+    ui.addEventListener("input", ()=>{ spUser = ui.value; refresh(); });
+    spawnBody.querySelectorAll(".se-seg button").forEach(b=>{
+      b.addEventListener("click", ()=>{ spTool = b.dataset.tool; renderSpawnSheet(); });
+    });
+    const sel = $("#spTarget");
+    if(sel) sel.addEventListener("change", ()=>{ spTarget = sel.value; refresh(); });
+    copy.addEventListener("click", async ()=>{
+      const r = buildSpawnCmd(); if(!r.cmd) return;
+      try { await navigator.clipboard.writeText(r.cmd); toast("copied — paste into JuiceSSH on "+spHost); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
+    $("#spClose").addEventListener("click", closeSpawn);
+    // keep focus in the user field across the initial paint so you can just type
+    if(document.activeElement !== ui) ui.focus();
+  }
+
+  // openStopSheet composes the stop command for one running session: a plain
+  // kill of the process hush detected. hush never sends the signal — it hands
+  // you the line, same as spawn.
+  function openStopSheet(host, s){
+    const u = s.user && USER_RE.test(s.user) ? s.user : "";
+    const cmd = u ? `sudo -u ${u} kill ${s.pid}` : `sudo kill ${s.pid}`;
+    spHost = host;
+    spawnBody.innerHTML = `
+      <h3>Stop session <span class="sd" style="font-family:var(--mono)">${esc(s.tool)} · pid ${s.pid}</span></h3>
+      <p class="sd">run this as root on ${esc(host)} to stop it — hush never kills a process itself</p>
+      <div class="cmdbox"><code>${esc(cmd)}</code><button class="btn" id="stCopy">Copy</button></div>
+      <div class="field-note">Ends the ${esc(s.tool)} process${u?` owned by ${esc(u)}`:""}; its tmux session closes with it. It drops off the Sessions list on the next refresh.</div>
+      <div class="sheet-actions"><button class="btn primary" id="stClose" style="flex:1">Done</button></div>`;
+    $("#stCopy").addEventListener("click", async ()=>{
+      try { await navigator.clipboard.writeText(cmd); toast("copied — paste into JuiceSSH on "+host); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
+    $("#stClose").addEventListener("click", closeSpawn);
+    spawnScrim.classList.add("open");
+  }
+
+  // demoSessions seeds the offline/file:// preview so the Sessions section, the
+  // spawn sheet and the stop sheet all render without a live agent.
+  function demoSessions(id){
+    if(id==="citadel") return [
+      { pid:48213, user:"josh", tool:"opencode", cmd:"opencode", uptime:5400 },
+      { pid:52140, user:"josh", tool:"claude",   cmd:"claude",   uptime:640 },
+    ];
+    if(id==="forge") return [
+      { pid:11902, user:"ci", tool:"opencode", cmd:"opencode run --agent build", uptime:120 },
+    ];
+    return [];
+  }
+
   /* ---------- alert center: backups that need attention ----------
      A backup console's core job is to tell you when the nightly failed or a box
      drifted out of protection. Posture is aggregated into a ranked alert list,
@@ -1831,7 +2076,11 @@
       </div>`;
   }
 
-  function enterMachine(id){ state.view="machine"; state.mid=id; render(); scrollTop(); }
+  function enterMachine(id){ state.view="machine"; state.mid=id; render(); scrollTop();
+    // Load this box's sessions once on entry; the slow interval refreshes after.
+    // Never fetch from within renderMachine — fetchSessions repaints on
+    // completion, which would recurse.
+    const m = byId(id); if(m && (m.online || MODE==="demo")) fetchSessions(id); }
   function goFleet(){ state.view="fleet"; render(); scrollTop(); }
   function scrollTop(){ window.scrollTo({top:0,behavior:"instant"}); }
   function sevVar(s){ return s==="good"?"good":s==="warn"?"warn":"crit"; }
@@ -1905,6 +2154,8 @@
             </div>`;
         })()}
 
+        ${sessionsSection(m)}
+
         ${(()=>{ const h = hostBackupEntry(m.id); const bks = (h&&h.backups)||[];
           return `<div class="sec-title">Backups${bks.length?` <span class="n">${bks.length}</span>`:""}</div>
           <div class="wf-saved">${bks.length
@@ -1928,6 +2179,12 @@
     if(du) du.addEventListener("click", ()=>{ if(m.online) openDu(m.id); });
     const ocx = $("#ocExport");
     if(ocx) ocx.addEventListener("click", ()=>openOcSheet(m.id));
+    const spawn = $("#se-spawn");
+    if(spawn) spawn.addEventListener("click", ()=>openSpawnSheet(m.id));
+    app.querySelectorAll(".se-stop").forEach(b=>{
+      b.addEventListener("click", ()=>openStopSheet(m.id, {
+        pid: +b.dataset.pid, user: b.dataset.user, tool: b.dataset.tool }));
+    });
     // The CPU ring, cpu-trend spark and network box all open the live
     // htop-style panel. Demo mode has no agent, so it opens on synthetic data.
     app.querySelectorAll("[data-top]").forEach(el=>{
@@ -3146,6 +3403,9 @@
   setInterval(pollDiscover, 20000);
   pollBackupStatus();
   setInterval(pollBackupStatus, 60000);
+  // Refresh the open machine's session list on its own slow cadence — sessions
+  // change far less often than vitals, and only the machine on screen is polled.
+  setInterval(()=>{ const id=state.mid; if(state.view==="machine" && byId(id) && (byId(id).online||MODE==="demo")) fetchSessions(id); }, SESSIONS_POLL_MS);
 
   /* register the service worker so the console is installable and opens
      offline. Only works in a secure context (tsnet HTTPS or localhost);

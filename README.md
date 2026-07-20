@@ -297,6 +297,7 @@ the console and can be updated by re-running the one-line installer.
 | `cmd/hush-agent` | one static Go binary per machine; reports vitals as JSON |
 | `cmd/hush-control` | control plane on the NAS; fans out to agents, serves the UI |
 | `internal/vitals` | Linux vitals collection (`/proc`, systemd, `nvidia-smi`) |
+| `internal/sessions` | read-only detection of running coding agents (opencode/claude) for the console's Sessions view (see [`docs/SESSIONS.md`](./docs/SESSIONS.md)) |
 | `web/` | the console — a single static page |
 | `docs/mockups/` | interactive UX reference (open directly for the demo fleet) |
 | `systemd/` | unit files for running the binaries as services |

@@ -147,6 +147,16 @@ built around backups and sets the direction from here.
 - **Scheduled restore-tests / `restic check`.** A green "verified restorable"
   badge, so confidence isn't a manual walk.
 
+**Alongside — sessions (remote coding agents).** A box that serves models on the
+tailnet is something you'd point a coding agent at; sessions let you spawn
+opencode or Claude Code on any box from your phone and attach over SSH. It does
+*not* reintroduce the removed "run things" half below: hush-control still
+executes nothing. The console **composes a `sudo` command** you paste into a
+root shell (JuiceSSH), and the agent **reads** which coding agents are running
+(a `/sessions` endpoint, an unprivileged `/proc` scan like `/top`) and shows
+them — spawn and stop are both commands you run, never a hush write. See
+[`docs/SESSIONS.md`](./SESSIONS.md).
+
 **Removed (the "run things" half).** hush once shipped ad-hoc and saved command
 execution (Tasks), cron scheduling (Jobs), wired sequences (Workflows), and a
 `sudo -u` run-as allowlist. After dogfooding, that whole half was cut: the agent

@@ -199,6 +199,18 @@ func buildMux(store *agentStore, discoverer *discoverer, dialer *agentDialer, we
 		}
 		proxyTop(w, r, topClient, a)
 	})
+	// /sessions is a cheap /proc read (no double-sample like /top), so it rides
+	// the standard fleet-poll client. It lists the box's running coding agents so
+	// the console can show them and offer a stop command; an agent too old to
+	// serve it answers 404, relayed as-is.
+	mux.HandleFunc("/api/machines/{host}/sessions", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxySessions(w, r, client, a)
+	})
 	// Streaming a file can take far longer than the 2s fleet-poll budget (a
 	// whole video), so it rides its own client with no overall timeout.
 	streamClient := dialer.client(0)
@@ -525,6 +537,33 @@ func proxyTop(w http.ResponseWriter, r *http.Request, client *http.Client, a Age
 	w.WriteHeader(resp.StatusCode)
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		log.Printf("proxy top %s: %v", a.Name, err)
+	}
+}
+
+// proxySessions forwards a request to one agent's /sessions and relays its
+// response verbatim, the same shape as proxyTop. The phone can't address agents
+// directly in tsnet mode, so the session list rides through hush-control like
+// every other per-machine read.
+func proxySessions(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent) {
+	u := strings.TrimRight(a.Addr, "/") + "/sessions"
+	if q := r.URL.RawQuery; q != "" {
+		u += "?" + q
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, u, nil)
+	if err != nil {
+		http.Error(w, "bad upstream request", http.StatusInternalServerError)
+		return
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "agent unreachable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		log.Printf("proxy sessions %s: %v", a.Name, err)
 	}
 }
 
