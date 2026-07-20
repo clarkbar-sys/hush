@@ -310,6 +310,29 @@
   .bkline.llm { margin-top:6px; }
   .bkline.llm .g { opacity:.9; }
 
+  /* ---- inference section (machine view): detected runtimes + opencode export ---- */
+  .oc-sec { display:flex; flex-direction:column; gap:9px; }
+  .oc-rt { border:1px solid var(--border); border-radius:10px; padding:10px 12px; background:var(--panel); }
+  .oc-rt.good { border-color:var(--good-soft); }
+  .oc-rt.warn { border-color:var(--warn-soft); }
+  .oc-rt.crit { border-color:var(--crit-soft); }
+  .oc-rt-hd { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    font-family:var(--mono); font-size:12px; }
+  .oc-rt.good .oc-gly { color:var(--good); }
+  .oc-rt.warn .oc-gly { color:var(--warn); }
+  .oc-rt.crit .oc-gly { color:var(--crit); }
+  .oc-kind { font-weight:700; color:var(--text); }
+  .oc-addr { color:var(--muted); }
+  .oc-scope { color:var(--faint); margin-left:auto; }
+  .oc-models { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+  .oc-m { font-family:var(--mono); font-size:10.5px; color:var(--accent);
+    background:var(--accent-soft); border-radius:6px; padding:2px 7px; }
+  .oc-export { align-self:flex-start; }
+  /* the generated opencode.json, previewed inside its export sheet */
+  .oc-json { font-family:var(--mono); font-size:11.5px; line-height:1.5; color:var(--text);
+    background:var(--panel-2); border:1px solid var(--border); border-radius:10px;
+    padding:11px 12px; margin:0 0 14px; max-height:44vh; overflow:auto; white-space:pre; }
+
   /* alert center — header bell + panel rows */
   .chip.alert-bell { cursor:pointer; font-weight:700; }
   .chip.alert-bell b { font-family:var(--mono); }
@@ -772,6 +795,13 @@
   <div class="sheet" role="dialog" aria-label="Backup details">
     <div class="grab"></div>
     <div id="watchSheetBody"></div>
+  </div>
+</div>
+
+<div class="scrim" id="ocScrim">
+  <div class="sheet" role="dialog" aria-label="opencode config">
+    <div class="grab"></div>
+    <div id="ocSheetBody"></div>
   </div>
 </div>
 
@@ -1301,6 +1331,65 @@
       + `${n?` <span class="ar">·</span> ${n} model${n===1?"":"s"}`:""}</span></div>`;
   }
 
+  /* ---------- opencode.json from a box's detected runtimes ----------
+     A machine serving reachable models is something you'd point a coding agent
+     at. These turn what the LLM readout already knows — kind, bind address,
+     served model ids — into a ready opencode config the operator copies or
+     downloads from the machine view. Pure client-side; no new agent data. */
+
+  // splitAddr breaks a runtime's reported "host:port" (bracketed for IPv6) so a
+  // baseURL can be rebuilt from it.
+  function splitAddr(addr){
+    addr = addr || "";
+    if(addr[0]==="["){ const j=addr.indexOf("]"); return { host:addr.slice(1,j), port:addr.slice(j+2) }; }
+    const i = addr.lastIndexOf(":");
+    return i<0 ? { host:addr, port:"" } : { host:addr.slice(0,i), port:addr.slice(i+1) };
+  }
+
+  // ocReachable is the subset of a box's runtimes something off-box can actually
+  // call — the same tailnet|open verdict the agent applies. A loopback runtime
+  // is bound to 127.0.0.1, so pointing opencode at it from another machine can
+  // only fail; it's never offered as an export.
+  function ocReachable(m){
+    return ((m.llm&&m.llm.runtimes)||[]).filter(r=>r.exposure==="tailnet"||r.exposure==="open");
+  }
+
+  // ocConfig builds the opencode.json object for a box's reachable runtimes.
+  // Each runtime becomes one openai-compatible provider whose baseURL points at
+  // where it actually listens — with one substitution: a wildcard bind
+  // (0.0.0.0 / ::, what an "open" runtime reports) is not a usable host, so the
+  // box's tailnet IP stands in. cost is pinned to zero because local inference
+  // is free, which keeps opencode from inventing dollar figures. A context
+  // limit is emitted only when the operator supplies one: the runtime doesn't
+  // advertise its configured context, and a wrong guess is worse than letting
+  // opencode fall back to its own default.
+  function ocConfig(m, ctx){
+    const baseKey = (m.id||"local").toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-+|-+$/g,"") || "local";
+    const rts = ocReachable(m);
+    const provider = {};
+    rts.forEach((r,idx)=>{
+      const { host, port } = splitAddr(r.addr);
+      let h = host;
+      if(h==="0.0.0.0" || h==="::" || h==="") h = m.ip || h;
+      const hostPart = h.includes(":") ? `[${h}]` : h;
+      const baseURL = `http://${hostPart}${port?":"+port:""}/v1`;
+      const key = rts.length>1 ? `${baseKey}-${port||idx+1}` : baseKey;
+      const models = {};
+      (r.models||[]).forEach(id=>{
+        const mdl = { name:id, cost:{ input:0, output:0 } };
+        if(ctx>0) mdl.limit = { context:ctx };
+        models[id] = mdl;
+      });
+      provider[key] = {
+        npm: "@ai-sdk/openai-compatible",
+        name: `${m.id} · ${r.kind==="ollama"?"ollama":"openai-compatible"}`,
+        options: { baseURL },
+        models,
+      };
+    });
+    return { "$schema":"https://opencode.ai/config.json", provider };
+  }
+
   /* ---------- alert center: backups that need attention ----------
      A backup console's core job is to tell you when the nightly failed or a box
      drifted out of protection. Posture is aggregated into a ranked alert list,
@@ -1790,6 +1879,32 @@
             <span class="gly">▦</span><span class="nm">Disk usage</span>
             <span class="rt">${m.online?"treemap":"offline"}</span></button>
         </div>
+
+        ${(()=>{
+          const rts = (m.llm&&m.llm.runtimes)||[];
+          if(!rts.length) return "";
+          const rows = rts.map(r=>{
+            const meta = LLM_SCOPE[r.exposure] || LLM_SCOPE.unknown;
+            const ms = r.models||[];
+            return `<div class="oc-rt ${meta.sev}">
+              <div class="oc-rt-hd">
+                <span class="oc-gly">${meta.glyph}</span>
+                <span class="oc-kind">${r.kind==="ollama"?"ollama":"openai-compatible"}</span>
+                <span class="oc-addr">${esc(r.addr)}</span>
+                <span class="oc-scope">${meta.word}</span>
+              </div>
+              ${ms.length?`<div class="oc-models">${ms.map(x=>`<span class="oc-m">${esc(x)}</span>`).join("")}</div>`:""}
+            </div>`;
+          }).join("");
+          return `<div class="sec-title">Inference <span class="n">${rts.length}</span></div>
+            <div class="oc-sec">
+              ${rows}
+              ${ocReachable(m).length
+                ? `<button class="btn primary oc-export" id="ocExport">⧉ opencode.json</button>`
+                : `<div class="empty">bound to loopback — reachable only on the box itself, so there's nothing off-box to point opencode at</div>`}
+            </div>`;
+        })()}
+
         ${(()=>{ const h = hostBackupEntry(m.id); const bks = (h&&h.backups)||[];
           return `<div class="sec-title">Backups${bks.length?` <span class="n">${bks.length}</span>`:""}</div>
           <div class="wf-saved">${bks.length
@@ -1811,6 +1926,8 @@
     if(agentUpdBadge) agentUpdBadge.addEventListener("click", ()=>openAgentUpdateSheet(m));
     const du = $("#du-open");
     if(du) du.addEventListener("click", ()=>{ if(m.online) openDu(m.id); });
+    const ocx = $("#ocExport");
+    if(ocx) ocx.addEventListener("click", ()=>openOcSheet(m.id));
     // The CPU ring, cpu-trend spark and network box all open the live
     // htop-style panel. Demo mode has no agent, so it opens on synthetic data.
     app.querySelectorAll("[data-top]").forEach(el=>{
@@ -2453,17 +2570,20 @@
     return [
       mk({ id:"citadel", agentVersion:"v1.3.0", os:"Debian 12", ip:"100.71.8.9", role:"", status:"good", cpu:23, mem:47, disk:38, up:"41d", load:"0.9",
         gpu:18, vram:47, gpuName:"RTX 3090", vramText:"11.3 / 24 GB",
+        llm:{runtimes:[{kind:"openai",addr:"100.71.8.9:8091",exposure:"tailnet",models:["qwen2.5-coder-32b-instruct","llama-3.3-70b-instruct"]}]},
         backups:[{id:"citadel-root",name:"citadel-root",repo:"rest:http://nas:8000/citadel",paths:["/"],oneFileSystem:true,schedule:"0 3 * * *",status:{runs:41,lastCode:0,lastRun:"2026-07-18T03:00:00Z",lastSnapshot:"9f2ab3c1"}}] }),
       mk({ id:"nas", agentVersion:"v1.3.0", os:"TrueNAS · ZFS", ip:"100.71.4.2", role:"store", status:"good", cpu:11, mem:34, disk:81, up:"92d", load:"0.4", gpu:null,
         backup:{enabled:true,restic:"restic 0.16.0",vault:true} }),
       mk({ id:"forge", agentVersion:"v1.2.0", latestVersion:"v1.3.0", agentUpdateAvailable:true, os:"Arch Linux", ip:"100.71.2.5", role:"", status:"warn", cpu:88, mem:71, disk:52, up:"6d", load:"14.2",
         gpu:62, vram:71, gpuName:"RTX 4070", vramText:"8.5 / 12 GB", alert:"load 14.2 · CI backlog building",
+        llm:{runtimes:[{kind:"openai",addr:"127.0.0.1:8091",exposure:"loopback",models:["deepseek-coder-v2-lite"]}]},
         backup:{enabled:false,restic:""} }),
       mk({ id:"atlas", agentVersion:"v1.3.0", os:"Ubuntu 24.04", ip:"100.71.9.3", role:"", status:"crit", cpu:5, mem:22, disk:63, up:"2d", load:"0.2",
         gpu:34, vram:41, gpuName:"RTX 3060", vramText:"4.9 / 12 GB", alert:"disk I/O errors — check drive health" }),
       mk({ id:"pi-gate", agentVersion:"v1.3.0", os:"Raspberry Pi OS", ip:"100.71.0.1", role:"gateway", status:"good", cpu:31, mem:58, disk:44, up:"118d", load:"1.1", gpu:null }),
       mk({ id:"lab-01", agentVersion:"v1.3.0", os:"NixOS 24.05", ip:"100.71.5.7", role:"", status:"good", cpu:9, mem:19, disk:12, up:"3d", load:"0.3",
-        gpu:88, vram:91, gpuName:"RTX 4090", vramText:"21.8 / 24 GB" }),
+        gpu:88, vram:91, gpuName:"RTX 4090", vramText:"21.8 / 24 GB",
+        llm:{runtimes:[{kind:"ollama",addr:"0.0.0.0:11434",exposure:"open",models:["qwen2.5-coder:32b","deepseek-r1:14b"]}]} }),
     ];
   }
   // demoConvBackups seeds the backup-first fleet story for MODE="demo": the
@@ -2962,6 +3082,59 @@
     });
     $("#agentUpdClose").addEventListener("click", closeUpdateSheet);
     updateScrim.classList.add("open");
+  }
+
+  /* ---------- opencode.json export sheet ----------
+     Opened from the machine view's Inference section. Shows the generated
+     config (see ocConfig) with copy + download, plus the one input the runtime
+     can't provide — its configured context limit. Editing the field repaints
+     only the <pre>, so the input keeps focus as you type. */
+  const ocScrim = $("#ocScrim");
+  const ocBody = $("#ocSheetBody");
+  let ocMid = null, ocCtx = "";
+  function openOcSheet(id){ ocMid = id; ocCtx = ""; renderOcSheet(); ocScrim.classList.add("open"); }
+  function closeOcSheet(){ ocScrim.classList.remove("open"); }
+  ocScrim.addEventListener("click", e=>{ if(e.target===ocScrim) closeOcSheet(); });
+  function ocText(){
+    const m = byId(ocMid);
+    if(!m) return "";
+    const n = parseInt(ocCtx,10);
+    return JSON.stringify(ocConfig(m, n>0?n:0), null, 2);
+  }
+  function renderOcSheet(){
+    const m = byId(ocMid);
+    if(!m || !ocReachable(m).length){ closeOcSheet(); return; }
+    ocBody.innerHTML = `
+      <h3>opencode.json <span class="sd" style="font-family:var(--mono)">${esc(m.id)}</span></h3>
+      <p class="sd">save to ~/.config/opencode/opencode.json, or .opencode/ inside a project</p>
+      <div class="field">
+        <label for="ocCtx">context limit <span class="opt">— tokens, optional</span></label>
+        <input id="ocCtx" type="number" min="0" inputmode="numeric" value="${esc(ocCtx)}"
+          placeholder="blank — let opencode decide">
+        <div class="hint">the runtime doesn't report its configured context — set it to the box's -c / num_ctx to avoid silent truncation</div>
+      </div>
+      <pre class="oc-json"><code id="ocCode">${esc(ocText())}</code></pre>
+      <div class="sheet-actions">
+        <button class="btn" id="ocCopy">⧉ Copy</button>
+        <button class="btn" id="ocDl">⬇ Download</button>
+        <button class="btn primary" id="ocClose">Close</button>
+      </div>`;
+    const ci = $("#ocCtx"), code = $("#ocCode");
+    ci.addEventListener("input", ()=>{ ocCtx = ci.value; code.textContent = ocText(); });
+    $("#ocClose").addEventListener("click", closeOcSheet);
+    $("#ocCopy").addEventListener("click", async ()=>{
+      try { await navigator.clipboard.writeText(ocText()); toast("⧉ opencode.json copied"); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
+    $("#ocDl").addEventListener("click", ()=>{
+      const blob = new Blob([ocText()], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "opencode.json";
+      document.body.appendChild(a); a.click();
+      a.remove(); URL.revokeObjectURL(url);
+      toast("⬇ opencode.json downloaded");
+    });
   }
 
   /* ---------- go ---------- */
