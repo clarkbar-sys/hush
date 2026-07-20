@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.4.0](https://github.com/clarkbar-sys/hush/compare/v2.3.1...v2.4.0) (2026-07-20)
+
+
+### Features
+
+* **backup:** show live restic progress for a run in flight ([#176](https://github.com/clarkbar-sys/hush/issues/176)) ([e488a02](https://github.com/clarkbar-sys/hush/commit/e488a0298add46b51d102543ec50ed85d5b0357b))
+
+
+### Bug Fixes
+
+* **web:** stop cramming fleet cards two-wide on mobile ([#177](https://github.com/clarkbar-sys/hush/issues/177)) ([cdf2277](https://github.com/clarkbar-sys/hush/commit/cdf227705efeacd0cb86c736bedc8f4a3ac9a029))
+
 ## [2.3.1](https://github.com/clarkbar-sys/hush/compare/v2.3.0...v2.3.1) (2026-07-20)
 
 
