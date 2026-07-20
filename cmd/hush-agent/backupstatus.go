@@ -62,6 +62,15 @@ type conventionBackupStatus struct {
 	// wire shape identical to before for every box that isn't mid-run.
 	State string `json:"state,omitempty"`
 
+	// Progress is how far the run in flight has got, read from the
+	// <name>.progress.json the runner maintains beside this file. Raw JSON, for
+	// the same reason Summary is: the agent stays ignorant of the schema, so a
+	// field the runner starts publishing reaches the console without a change
+	// here. Only ever populated for a run that is actually running — a progress
+	// file outliving its run (killed mid-flight, so the runner's cleanup never
+	// ran) must not decorate a finished backup with a stale percentage.
+	Progress json.RawMessage `json:"progress,omitempty"`
+
 	// History and NextRun are assembled by the agent rather than read from the
 	// status file: history lives in its own append-only log, and the next fire
 	// is systemd's to answer, not something a finished run can know.
@@ -105,6 +114,30 @@ func readHistory(dir, name string) []json.RawMessage {
 		return nil
 	}
 	return out
+}
+
+// readProgress returns the live progress of a run in flight, or nil.
+//
+// Passed through as raw JSON rather than unmarshalled, exactly as the summary
+// and the history lines are — the agent has no opinion about restic's numbers,
+// and a runner that starts publishing another field should not need a matching
+// release of the agent to make it visible.
+//
+// A missing file is the normal case and not an error: it means a run that has
+// not published yet, a runner too old to publish at all, or progress switched
+// off. The console draws the indeterminate shuttle it always drew for those.
+// A file that does not parse is dropped for the same reason — a half-written
+// number must not take out the whole status read.
+func readProgress(dir, name string) json.RawMessage {
+	b, err := os.ReadFile(filepath.Join(dir, name+".progress.json"))
+	if err != nil {
+		return nil
+	}
+	b = []byte(strings.TrimSpace(string(b)))
+	if len(b) == 0 || !json.Valid(b) {
+		return nil
+	}
+	return json.RawMessage(b)
 }
 
 // nextRun asks systemd when this backup's timer fires next, as RFC 3339.
@@ -353,7 +386,16 @@ func readConventionBackupStatuses(dir string) ([]conventionBackupStatus, error) 
 		// The .history.jsonl logs sit in this directory too, but end in
 		// .jsonl, so this filter already passes over them; they are read per
 		// backup below rather than enumerated as statuses of their own.
+		//
+		// The <name>.progress.json files need excluding explicitly, because
+		// unlike the history logs they DO end in .json. Left in, every backup
+		// would sprout a phantom twin named "<name>.progress" for exactly as
+		// long as it was running — a second card, reporting no outcome, that
+		// disappears when the run ends.
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		if strings.HasSuffix(e.Name(), ".progress.json") {
 			continue
 		}
 		path := filepath.Join(dir, e.Name())
@@ -377,8 +419,16 @@ func readConventionBackupStatuses(dir string) ([]conventionBackupStatus, error) 
 		// at all, so "no active unit" does not mean "not running", and clearing a
 		// marker on that basis would report a live run as finished. Deciding a
 		// marker is orphaned stays with the console, which has bkStalled for it.
+		//
+		// Progress is attached only here, gated on systemd's answer rather than
+		// on the file's own "running" marker. A run killed mid-flight leaves
+		// both the marker and the last progress file behind, and a frozen
+		// percentage presented as live is a worse lie than no percentage: the
+		// console's stalled detection would eventually catch the marker, but
+		// the number beside it would have looked authoritative the whole time.
 		if started, ok := running[s.Name]; ok {
 			markRunning(&s, started)
+			s.Progress = readProgress(dir, s.Name)
 			matched[s.Name] = true
 		}
 		s.History = readHistory(dir, strings.TrimSuffix(e.Name(), ".json"))
@@ -395,6 +445,7 @@ func readConventionBackupStatuses(dir string) ([]conventionBackupStatus, error) 
 			continue
 		}
 		s := conventionBackupStatus{Name: name, State: "running", Started: started}
+		s.Progress = readProgress(dir, name)
 		s.History = readHistory(dir, name)
 		s.NextRun = nextRun(name)
 		out = append(out, s)

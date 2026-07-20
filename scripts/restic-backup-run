@@ -103,6 +103,13 @@ paths_json() {
   printf ']'
 }
 
+# json_num pulls one numeric field out of a JSON object without a parser. Safe
+# only for fields whose values are bare numbers — which is every field the
+# progress file carries, and is precisely why it carries only those.
+json_num() {
+  printf '%s' "$1" | grep -o "\"$2\":[0-9.eE+-]*" | head -n 1 | cut -d: -f2-
+}
+
 started="$(date -Is)"
 
 # Announce the run before restic starts. Until now the status dir stayed empty
@@ -131,7 +138,94 @@ chmod 0644 "$running_status"
 mv "$running_status" "$STATUS_DIR/$NAME.json"
 
 output="$(mktemp)"
-trap 'rm -f "$output"' EXIT INT TERM
+
+# Live progress, published beside the status file.
+#
+# restic --json emits one status object per line to stdout the whole time it
+# works, carrying percent_done, bytes_done/total_bytes and an ETA. This script
+# was already capturing that stream — for the final summary line — and throwing
+# the rest away, so the console could only ever draw an indeterminate shuttle
+# for a run in flight. A poller copies the newest status line's numbers into a
+# world-readable file, which costs the agent no new privilege: the same one-way
+# split the rest of this script exists to maintain.
+#
+# Numbers only, reassembled by hand rather than passed through verbatim, for
+# two reasons. restic's status line also carries current_files — the absolute
+# paths being read *right now*, far more revealing than the top-level path list
+# already published, and this file is 0644. And an object of bare numbers needs
+# no string escaping, which is the same reason the summary is embedded whole
+# instead of being rebuilt.
+progress_file="$STATUS_DIR/$NAME.progress.json"
+
+# A run killed outright (SIGKILL, OOM, power) never runs the cleanup below and
+# leaves its progress behind. Clear it up front so a fresh run cannot briefly
+# show the previous one's percentage.
+rm -f "$progress_file"
+
+publish_progress() {
+  _line="$(grep '"message_type":"status"' "$output" 2>/dev/null | tail -n 1)" || return 0
+  [ -n "$_line" ] || return 0
+
+  # percent_done is the one field the console cannot render without. Every
+  # other field is optional: restic omits seconds_remaining until it has an
+  # estimate, and files_done until the first file lands.
+  _pct="$(json_num "$_line" percent_done)"
+  [ -n "$_pct" ] || return 0
+
+  _fields="\"percent_done\":$_pct"
+  for _k in bytes_done total_bytes files_done total_files seconds_remaining; do
+    _v="$(json_num "$_line" "$_k")"
+    if [ -n "$_v" ]; then
+      _fields="$_fields,\"$_k\":$_v"
+    fi
+  done
+
+  # The temp file is made in STATUS_DIR, not $TMPDIR, so the mv is a rename
+  # within one filesystem and therefore atomic. A reader polling this file
+  # several times a minute would otherwise eventually catch a cross-device mv
+  # mid-copy and see a truncated object.
+  _tmp="$(mktemp "$STATUS_DIR/.$NAME.progress.XXXXXX")"
+  printf '{"name":"%s","updated":"%s",%s}\n' "$NAME" "$(date -Is)" "$_fields" >"$_tmp"
+  chmod 0644 "$_tmp"
+  mv "$_tmp" "$progress_file"
+}
+
+# A function, not an inline trap, so the last thing cleanup runs is always a
+# succeeding rm. A trap ending in a failing command can carry that status out
+# as the script's own, and this script's exit code is restic's verdict — the
+# difference between a green backup and an incomplete one.
+cleanup() {
+  rm -f "$output"
+  if [ -n "${progress_pid:-}" ]; then
+    kill "$progress_pid" 2>/dev/null || true
+  fi
+  # Removed on the way out: once the run is over the status file carries the
+  # real outcome, and a leftover percentage is a number with nothing behind it.
+  rm -f "$progress_file"
+}
+trap cleanup EXIT INT TERM
+
+# Seconds between progress publishes. Set to 0 to switch live progress off; the
+# console then falls back to the indeterminate shuttle it drew before this
+# existed, which is the same thing it shows for a runner too old to publish.
+progress_interval="${HUSH_BACKUP_PROGRESS_INTERVAL:-5}"
+progress_pid=""
+if [ "$progress_interval" -gt 0 ] 2>/dev/null; then
+  (
+    # Drop the inherited traps before doing anything else. dash, bash and
+    # busybox ash all reset them for an async subshell already, but this script
+    # runs under whatever /bin/sh a box happens to have, and the failure mode if
+    # one does not is severe and silent: the poller would run cleanup on its own
+    # way out, deleting $output while restic is still writing to it, and the run
+    # would finish with its summary gone and no sign of why.
+    trap - EXIT INT TERM
+    while :; do
+      sleep "$progress_interval"
+      publish_progress || true
+    done
+  ) &
+  progress_pid=$!
+fi
 
 set -- backup --json --files-from "$PATHS_FILE" --tag hush
 if [ -r "$EXCLUDES_FILE" ]; then
