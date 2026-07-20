@@ -291,10 +291,10 @@ a thin hop on top of it — the next slice, not a rebuild.
 ## Local inference — capability *and* reach
 
 A box that can run models is a fleet resource, so the console says so. The agent
-probes a small list of loopback addresses (`-llm-endpoints`, default
-`127.0.0.1:8091,127.0.0.1:11434`) and reports what answers on `/vitals`: the
-runtime kind, its address, its model catalogue, and — the load-bearing part —
-how far it is reachable.
+scans a small set of ports (`-llm-ports`, default `8091,11434`) in the kernel's
+listener table, probes each runtime **at whatever address it is bound to**, and
+reports on `/vitals`: the runtime kind, where it listens, its model catalogue,
+and — the load-bearing part — how far it is reachable.
 
 Reachability is reported per runtime rather than implied, because the two facts
 a reader needs come apart constantly. llama-swap and Ollama both bind loopback
@@ -315,20 +315,41 @@ So the readout is one verdict, not a model list:
   unverified scope must never render as a safety claim.
 
 Scope comes from the kernel's own listener table (`/proc/net/tcp{,6}`), not from
-the probe succeeding — the probe always runs over loopback, so it can't tell the
-difference. Where a runtime binds several addresses, the widest wins: one
-interface open to the world defines the box.
+a probe succeeding — a probe reaching a service says nothing about who *else*
+can reach it. Where a runtime binds several addresses the widest wins: one
+interface open to the world defines the box, whatever else it also listens on.
+
+**Discovery reads the same table, and that is not an implementation detail.**
+The first version of this probed a fixed list of loopback addresses, which
+inverted its own purpose the moment it mattered: binding llama-swap to the
+tailnet took it off `127.0.0.1`, the loopback probe stopped finding it, and the
+console dropped six models and showed *less* capability than before — a yellow
+"local only · 1 model" card for a box that had just become the fleet's inference
+server. Reading the bind table first means a runtime is found wherever it
+listens, so exposing one can never hide it.
+
+A runtime reachable over loopback (bound there explicitly, or bound to every
+interface) is contacted that way; one bound to a single non-loopback address is
+contacted there. The reported address is always the bind address, so it can't
+contradict the exposure beside it — a wildcard-bound runtime is probed at
+`127.0.0.1` but reported as `0.0.0.0`.
 
 Detection re-runs on an interval (`-llm-interval`, default 2m) rather than once
 at boot, because llama-swap hot-reloads its config directory — models come and
-go with no restart to re-trigger a one-shot probe. `/vitals` serves the last
-completed pass, so a hung runtime can't stall a poll. An empty `-llm-endpoints`
-turns detection off, which omits the field entirely; the console reads a missing
-field as "this agent doesn't report LLM state", never as "this box has none".
+go with no restart to re-trigger a one-shot probe — and because a runtime can be
+rebound while the agent stays up. `/vitals` serves the last completed pass, so a
+hung runtime can't stall a poll.
 
-Probing is read-only HTTP against loopback plus a `/proc` read, so it needs no
-privilege and the agent never holds an inference credential — the same posture
-as `/backup-status`.
+`-llm-endpoints` pins exact `host:port` targets and replaces discovery, for a
+runtime on a non-standard port. Clearing both flags turns detection off, which
+omits the field entirely; the console reads a missing field as "this agent
+doesn't report LLM state", never as "this box has none".
+
+Probing is read-only HTTP plus a `/proc` read, so it needs no privilege and the
+agent never holds an inference credential — the same posture as
+`/backup-status`. Note that it discloses *reach*, not authorization: neither
+llama-swap nor Ollama authenticates, so on an exposed box the tailnet ACL is
+what actually bounds who can use the GPU.
 
 ## Running it (dev)
 

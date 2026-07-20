@@ -64,8 +64,12 @@ const (
 
 // LLMRuntime is one detected LLM server on a box.
 type LLMRuntime struct {
-	Kind     string   `json:"kind"`             // openai | ollama
-	Addr     string   `json:"addr"`             // address the agent probed, e.g. 127.0.0.1:8091
+	Kind string `json:"kind"` // openai | ollama
+	// Addr is where the runtime listens, as the kernel reports it — not
+	// necessarily where the agent contacted it. A wildcard-bound runtime is
+	// probed over loopback but reported as 0.0.0.0, so the address never
+	// contradicts the exposure beside it.
+	Addr     string   `json:"addr"`
 	Exposure string   `json:"exposure"`         // loopback | tailnet | open | unknown
 	Models   []string `json:"models,omitempty"` // model ids served, sorted
 }

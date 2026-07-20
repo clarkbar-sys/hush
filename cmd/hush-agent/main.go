@@ -41,7 +41,8 @@ func main() {
 	backupStatusDir := flag.String("backup-status-dir", defaultBackupStatusDir, "directory of status files written by root-run convention backups (see docs/BACKUP-CONVENTION.md). Read-only; served on /backup-status")
 	duCacheTTL := flag.Duration("du-cache-ttl", time.Hour, "how long a /du sizing result stays fresh before it's recomputed on the next request (0 disables the cache — every /du re-walks)")
 	duRefresh := flag.Duration("du-refresh", time.Hour, "how often to re-size recently-viewed /du paths in the background so the treemap loads warm (0 disables background refresh)")
-	llmEndpoints := flag.String("llm-endpoints", strings.Join(llm.DefaultEndpoints, ","), "comma-separated addresses to probe for local LLM runtimes (llama-swap/OpenAI-compatible or Ollama), reported on /vitals. Empty disables LLM detection")
+	llmPorts := flag.String("llm-ports", strings.Join(llm.DefaultPorts, ","), "comma-separated ports to scan for local LLM runtimes (llama-swap/OpenAI-compatible or Ollama); whatever address a runtime is bound to on one of these is probed there. Empty disables discovery")
+	llmEndpoints := flag.String("llm-endpoints", "", "comma-separated host:port targets that replace -llm-ports discovery, for a runtime on a non-standard port. Empty means discover")
 	llmInterval := flag.Duration("llm-interval", 2*time.Minute, "how often to re-probe the LLM endpoints, so a hot-reloaded model catalogue doesn't go stale")
 	flag.Parse()
 
@@ -71,12 +72,20 @@ func main() {
 
 	// Local inference is detected in the background and reported on /vitals, so
 	// the console can show which boxes serve models — and, just as importantly,
-	// whether anything off-box can reach them. Probing is read-only HTTP against
-	// loopback plus a /proc read, so it needs no privilege and no new flag to be
-	// useful; an empty -llm-endpoints turns it off entirely, which leaves the
-	// field absent rather than reporting an empty catalogue.
-	if eps := splitList(*llmEndpoints); len(eps) > 0 {
-		llm.StartProbe(context.Background(), eps, *llmInterval)
+	// whether anything off-box can reach them. Detection reads the kernel
+	// listener table to find where each runtime is actually bound, so exposing a
+	// runtime doesn't hide it: a loopback-only probe would stop finding a
+	// runtime the moment someone moved it onto the tailnet, reporting *less*
+	// capability precisely when there is more. Probing is read-only HTTP plus a
+	// /proc read, so it needs no privilege. Clearing both flags turns detection
+	// off, which leaves the field absent rather than reporting an empty
+	// catalogue — "this agent doesn't report" is not "this box has none".
+	llmOpts := llm.Options{
+		Ports:     splitList(*llmPorts),
+		Endpoints: splitList(*llmEndpoints),
+	}
+	if llmOpts.Enabled() {
+		llm.StartProbe(context.Background(), llmOpts, *llmInterval)
 	}
 
 	mux := http.NewServeMux()
