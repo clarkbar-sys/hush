@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/clarkbar-sys/hush/internal/browse"
+	"github.com/clarkbar-sys/hush/internal/llm"
 	"github.com/clarkbar-sys/hush/internal/updater"
 	"github.com/clarkbar-sys/hush/internal/version"
 	"github.com/clarkbar-sys/hush/internal/vitals"
@@ -40,6 +41,8 @@ func main() {
 	backupStatusDir := flag.String("backup-status-dir", defaultBackupStatusDir, "directory of status files written by root-run convention backups (see docs/BACKUP-CONVENTION.md). Read-only; served on /backup-status")
 	duCacheTTL := flag.Duration("du-cache-ttl", time.Hour, "how long a /du sizing result stays fresh before it's recomputed on the next request (0 disables the cache — every /du re-walks)")
 	duRefresh := flag.Duration("du-refresh", time.Hour, "how often to re-size recently-viewed /du paths in the background so the treemap loads warm (0 disables background refresh)")
+	llmEndpoints := flag.String("llm-endpoints", strings.Join(llm.DefaultEndpoints, ","), "comma-separated addresses to probe for local LLM runtimes (llama-swap/OpenAI-compatible or Ollama), reported on /vitals. Empty disables LLM detection")
+	llmInterval := flag.Duration("llm-interval", 2*time.Minute, "how often to re-probe the LLM endpoints, so a hot-reloaded model catalogue doesn't go stale")
 	flag.Parse()
 
 	if *showVersion {
@@ -66,10 +69,22 @@ func main() {
 	duCache := browse.NewDuCache(*duCacheTTL, 0)
 	go duCache.StartRefresher(context.Background(), *duRefresh, duDeadline, duRefreshRetain)
 
+	// Local inference is detected in the background and reported on /vitals, so
+	// the console can show which boxes serve models — and, just as importantly,
+	// whether anything off-box can reach them. Probing is read-only HTTP against
+	// loopback plus a /proc read, so it needs no privilege and no new flag to be
+	// useful; an empty -llm-endpoints turns it off entirely, which leaves the
+	// field absent rather than reporting an empty catalogue.
+	if eps := splitList(*llmEndpoints); len(eps) > 0 {
+		llm.StartProbe(context.Background(), eps, *llmInterval)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/vitals", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(vitals.Collect()); err != nil {
+		snap := vitals.Collect()
+		snap.LLM = llm.Current()
+		if err := json.NewEncoder(w).Encode(snap); err != nil {
 			log.Printf("encode vitals: %v", err)
 		}
 	})
@@ -261,4 +276,17 @@ func restartService(ctx context.Context) error {
 		return nil // not installed as a service on this box
 	}
 	return fmt.Errorf("systemctl try-restart hush-agent.service: %v: %s", err, msg)
+}
+
+// splitList parses a comma-separated flag value into trimmed, non-empty
+// entries. An empty or all-whitespace value yields nothing, which callers read
+// as "this feature is off".
+func splitList(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

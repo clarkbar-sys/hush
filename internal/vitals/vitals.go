@@ -36,6 +36,66 @@ type Snapshot struct {
 	NetRx    int    `json:"netRx"`  // inbound bytes/sec, sampled over the prior ~1s (excludes loopback)
 	NetTx    int    `json:"netTx"`  // outbound bytes/sec, sampled over the prior ~1s (excludes loopback)
 	Status   string `json:"status"` // good | warn | crit
+	// LLM, when non-nil, reports the local LLM runtimes this box serves and how
+	// far each is reachable. It's capability metadata the agent fills in, not
+	// something Collect reads. Nil (the field is omitted) means an agent that
+	// doesn't report it — an older build, or detection turned off — which the
+	// console must not render as "no LLM here": those are different claims.
+	LLM *LLMCapability `json:"llm,omitempty"`
+}
+
+// Runtime kinds reported in LLMRuntime.Kind. OpenAI covers llama-swap and any
+// other server speaking the /v1/models API; they aren't distinguishable from
+// the outside, and the distinction wouldn't change what the console shows.
+const (
+	LLMKindOpenAI = "openai"
+	LLMKindOllama = "ollama"
+)
+
+// Bind scopes reported in LLMRuntime.Exposure, narrowest first. Unknown is
+// deliberately distinct from loopback: it means the agent could not read the
+// listener table, so "not exposed" was never verified and must not be claimed.
+const (
+	LLMExposureLoopback = "loopback"
+	LLMExposureTailnet  = "tailnet"
+	LLMExposureOpen     = "open"
+	LLMExposureUnknown  = "unknown"
+)
+
+// LLMRuntime is one detected LLM server on a box.
+type LLMRuntime struct {
+	Kind     string   `json:"kind"`             // openai | ollama
+	Addr     string   `json:"addr"`             // address the agent probed, e.g. 127.0.0.1:8091
+	Exposure string   `json:"exposure"`         // loopback | tailnet | open | unknown
+	Models   []string `json:"models,omitempty"` // model ids served, sorted
+}
+
+// LLMCapability is what /vitals advertises about a box's local inference: which
+// runtimes answer, and what each one serves.
+//
+// Reachability is carried per runtime rather than collapsed into a flag because
+// the two facts a console needs — "this box can run models" and "you can call
+// them from here" — come apart constantly. llama-swap and Ollama both bind
+// loopback by default, so a box routinely holds a full model catalogue that
+// nothing else on the fleet can reach. Publishing the catalogue without the
+// scope would read as an offer the box can't honour.
+type LLMCapability struct {
+	Runtimes []LLMRuntime `json:"runtimes,omitempty"`
+}
+
+// Reachable reports whether any detected runtime is bound past loopback — i.e.
+// whether another machine could actually call this box for inference. Unknown
+// exposure is not reachable: an unverified scope is not evidence of one.
+func (c *LLMCapability) Reachable() bool {
+	if c == nil {
+		return false
+	}
+	for _, r := range c.Runtimes {
+		if r.Exposure == LLMExposureTailnet || r.Exposure == LLMExposureOpen {
+			return true
+		}
+	}
+	return false
 }
 
 // --- CPU: sampled in the background so /vitals stays instant -----------------

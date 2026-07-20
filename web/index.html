@@ -301,6 +301,10 @@
      the sev tints above (warn/crit/run) for a troubled incoming upload. */
   .bkline.recv { margin-top:6px; border-style:dashed; }
   .bkline.recv .g { opacity:.75; }
+  /* local inference readout — same line idiom as backup posture. Untinted (the
+     "unknown" scope) inherits the neutral .bkline base. */
+  .bkline.llm { margin-top:6px; }
+  .bkline.llm .g { opacity:.9; }
 
   /* alert center — header bell + panel rows */
   .chip.alert-bell { cursor:pointer; font-weight:700; }
@@ -1193,6 +1197,52 @@
     return `<div class="bkline recv${tint}"><span class="g">↙</span><span class="t">${n} ${n===1?"box backs":"boxes back"} up here</span></div>`;
   }
 
+  /* ---------- local inference readout ----------
+     A box that serves models is only useful to the fleet if something off-box
+     can reach it, and the default for llama-swap and Ollama alike is a loopback
+     bind. So the line reports capability and reachability as one verdict rather
+     than listing models and letting the reader assume they're callable:
+
+       local    — runtimes are up but bound to loopback: models exist here, and
+                  nothing else on the fleet can use them. Yellow, because it's a
+                  live capability sitting idle, not a fault.
+       serving  — reachable over the tailnet. Green: this box can take work.
+       open     — bound to every interface, which for an unauthenticated
+                  inference API is wider than the tailnet. Red, on purpose.
+       unknown  — the agent couldn't read the listener table, so the scope was
+                  never verified. Muted; it must not read as "not exposed". */
+  const LLM_SCOPE = {
+    open:     { sev:"crit",  glyph:"◉", word:"open to all interfaces" },
+    tailnet:  { sev:"good",  glyph:"✓", word:"serving on tailnet" },
+    loopback: { sev:"warn",  glyph:"▲", word:"local only" },
+    unknown:  { sev:"",      glyph:"·", word:"reach unknown" },
+  };
+  // Widest scope wins: one runtime open to the world defines the box, even if
+  // the others are loopback-bound.
+  const llmScopeRank = { open:3, tailnet:2, unknown:1, loopback:0 };
+
+  function llmLine(m){
+    // Absent (older agent, or detection off) is not the same claim as "no LLM
+    // here", so an unreporting agent gets no line rather than a negative one.
+    const rts = (m.llm && m.llm.runtimes) || [];
+    if(!rts.length) return "";
+
+    const scope = rts.map(r=>r.exposure||"unknown")
+      .reduce((a,b)=> llmScopeRank[b]>llmScopeRank[a] ? b : a, "loopback");
+    const meta = LLM_SCOPE[scope] || LLM_SCOPE.unknown;
+
+    const models = [...new Set(rts.flatMap(r=>r.models||[]))].sort();
+    const n = models.length;
+    // Hover carries the full catalogue and per-runtime detail; the line itself
+    // stays one row so a dense fleet grid doesn't grow a paragraph per card.
+    const tip = rts.map(r=>`${r.kind==="ollama"?"ollama":"openai"} @ ${r.addr} (${r.exposure||"unknown"})`)
+      .concat(models).join("\n");
+    return `<div class="bkline llm ${meta.sev}" title="${esc(tip)}">`
+      + `<span class="g">${meta.glyph}</span>`
+      + `<span class="t">llm <span class="ar">·</span> ${meta.word}`
+      + `${n?` <span class="ar">·</span> ${n} model${n===1?"":"s"}`:""}</span></div>`;
+  }
+
   /* ---------- alert center: backups that need attention ----------
      A backup console's core job is to tell you when the nightly failed or a box
      drifted out of protection. Posture is aggregated into a ranked alert list,
@@ -1584,6 +1634,7 @@
         ${focus}
         ${backupLine(m)}
         ${receiveLine(m)}
+        ${llmLine(m)}
         <div class="foot">
           ${m.agentUpdateAvailable?`<span class="badge upd">⇧&nbsp;<span class="lbl">update</span></span>`:""}
           ${badge}
