@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>hush — fleet (condensed)</title>
+<style>
+  :root {
+    --ground: #eef2f2; --panel: #ffffff; --panel-2: #f6f9f9;
+    --border: #d6e0e0; --border-soft: #e4ebeb;
+    --text: #17242a; --muted: #5d7178; --faint: #90a4aa;
+    --accent: #0d9488; --accent-soft: #d4f0ec;
+    --cpu: #0d9488; --gpu: #6d5fd6; --net: #2b7fd4;
+    --good: #2f9e52; --good-soft: #d8efdf;
+    --warn: #b7791f; --warn-soft: #f5e8cd;
+    --crit: #c8443c; --crit-soft: #f5dad7;
+    --shadow: 0 1px 2px rgba(20,40,45,.06), 0 8px 24px rgba(20,40,45,.06);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --r: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0c1214; --panel: #131c1f; --panel-2: #182327;
+      --border: #26343a; --border-soft: #1e2c31;
+      --text: #dde7e9; --muted: #869aa1; --faint: #5e7178;
+      --accent: #2dd4bf; --accent-soft: #123632;
+      --cpu: #2dd4bf; --gpu: #9f92f2; --net: #5aa9f5;
+      --good: #56c26a; --good-soft: #12301c;
+      --warn: #e0a94b; --warn-soft: #322611;
+      --crit: #e5675e; --crit-soft: #371815;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #eef2f2; --panel: #ffffff; --panel-2: #f6f9f9;
+    --border: #d6e0e0; --border-soft: #e4ebeb;
+    --text: #17242a; --muted: #5d7178; --faint: #90a4aa;
+    --accent: #0d9488; --accent-soft: #d4f0ec;
+    --cpu: #0d9488; --gpu: #6d5fd6; --net: #2b7fd4;
+    --good: #2f9e52; --good-soft: #d8efdf;
+    --warn: #b7791f; --warn-soft: #f5e8cd;
+    --crit: #c8443c; --crit-soft: #f5dad7;
+    --shadow: 0 1px 2px rgba(20,40,45,.06), 0 8px 24px rgba(20,40,45,.06);
+  }
+  :root[data-theme="dark"] {
+    --ground: #0c1214; --panel: #131c1f; --panel-2: #182327;
+    --border: #26343a; --border-soft: #1e2c31;
+    --text: #dde7e9; --muted: #869aa1; --faint: #5e7178;
+    --accent: #2dd4bf; --accent-soft: #123632;
+    --cpu: #2dd4bf; --gpu: #9f92f2; --net: #5aa9f5;
+    --good: #56c26a; --good-soft: #12301c;
+    --warn: #e0a94b; --warn-soft: #322611;
+    --crit: #e5675e; --crit-soft: #371815;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--text);
+    font-family: var(--sans); -webkit-font-smoothing: antialiased; line-height: 1.4; }
+  .wrap { max-width: 480px; margin: 0 auto; min-height: 100vh; background: var(--ground);
+    display: flex; flex-direction: column; }
+  @media (min-width: 900px) { .wrap { max-width: 940px; } }
+
+  /* ---- top bar ---- */
+  header { position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    background: color-mix(in srgb, var(--ground) 82%, transparent);
+    backdrop-filter: blur(10px); border-bottom: 1px solid var(--border-soft); }
+  .brand { display: flex; align-items: baseline; gap: 8px; }
+  .brand b { font-size: 17px; letter-spacing: -.02em; font-weight: 700; }
+  .brand .dot-h { width:7px; height:7px; border-radius:50%; background:var(--accent);
+    display:inline-block; box-shadow:0 0 0 3px var(--accent-soft); align-self:center; }
+  .brand span { font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+    text-transform: uppercase; letter-spacing: .12em; }
+  .spacer { flex: 1; }
+  .chip { font-family: var(--mono); font-size: 11px; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px;
+    border: 1px solid var(--border); border-radius: 999px; background: var(--panel); white-space: nowrap; }
+  .chip .live { width:6px; height:6px; border-radius:50%; background:var(--warn); }
+  .iconbtn { background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 9px; width: 34px; height: 34px; font-size: 15px; cursor: pointer;
+    display: grid; place-items: center; }
+  .iconbtn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* ---- control strip ---- */
+  .strip { padding: 14px 16px 4px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .eyebrow { font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--faint); }
+  .h-title { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin: 2px 0 0; }
+  .summ { display:flex; gap: 10px; }
+  .summ .s { display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size: 12px; color: var(--muted); }
+  .summ .s b { color: var(--text); }
+  .swatch { width:8px; height:8px; border-radius:50%; }
+
+  .controls { padding: 6px 16px 2px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .ctl { font-family: var(--mono); font-size: 11px; color: var(--muted); cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px;
+    border: 1px solid var(--border); border-radius: 999px; background: var(--panel); user-select:none; }
+  .ctl:hover { border-color: var(--accent); color: var(--text); }
+  .ctl b { color: var(--text); font-weight: 600; }
+  .ctl .sw { width: 24px; height: 14px; border-radius: 999px; background: var(--border);
+    position: relative; transition: background .15s; flex:none; }
+  .ctl .sw::after { content:""; position:absolute; top:2px; left:2px; width:10px; height:10px;
+    border-radius:50%; background: var(--panel); transition: transform .15s; box-shadow:0 1px 2px rgba(0,0,0,.3); }
+  .ctl.on .sw { background: var(--accent); }
+  .ctl.on .sw::after { transform: translateX(10px); }
+  .ctl-note { font-family: var(--mono); font-size: 10.5px; color: var(--faint); margin-left: 2px; }
+
+  main { padding: 6px 16px 40px; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 8px; }
+  @media (min-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 900px) { .grid { grid-template-columns: 1fr 1fr 1fr; } }
+
+  /* ---- condensed node card ---- */
+  .node { position: relative; background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden;
+    display: flex; flex-direction: column; }
+  .node::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background: var(--sev); }
+  .node.s-good { --sev: var(--good); --sev-soft: var(--good-soft); }
+  .node.s-warn { --sev: var(--warn); --sev-soft: var(--warn-soft); }
+  .node.s-crit { --sev: var(--crit); --sev-soft: var(--crit-soft); }
+  .node.offline { opacity: .62; }
+
+  .hd { display:flex; align-items:center; gap:9px; padding: 11px 12px 9px; }
+  .aura { width:9px; height:9px; border-radius:50%; background:var(--sev);
+    box-shadow: 0 0 0 3px var(--sev-soft); flex:none; }
+  .host { font-family: var(--mono); font-weight: 700; font-size: 14.5px; letter-spacing: -.01em; }
+  .sub { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-top: 1px; }
+  .hd .role { font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing:.1em;
+    color: var(--accent); border:1px solid var(--border); padding: 2px 6px; border-radius: 6px; background: var(--panel-2); }
+  .st { margin-left: auto; font-family: var(--mono); font-size: 10px; font-weight: 600;
+    padding: 3px 8px; border-radius: 999px; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+  .st.good { color: var(--good); background: var(--good-soft); }
+  .st.warn { color: var(--warn); background: var(--warn-soft); }
+  .st.crit { color: var(--crit); background: var(--crit-soft); }
+
+  /* the always-on compact vitals bar: tiny labelled meters */
+  .mini { display:grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 2px 12px 11px; }
+  .mini.no-gpu { grid-template-columns: repeat(4, 1fr); }
+  .m { display:flex; flex-direction:column; gap:4px; }
+  .m .top { display:flex; justify-content:space-between; align-items:baseline; }
+  .m .k { font-family: var(--mono); font-size: 8.5px; letter-spacing:.08em; text-transform:uppercase; color: var(--faint); }
+  .m .v { font-family: var(--mono); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .m .bar { height: 4px; border-radius: 99px; background: var(--border); overflow: hidden; }
+  .m .bar > i { display:block; height:100%; border-radius:99px; background: var(--mc); width: var(--w); }
+  .m.hot .v { color: var(--sev); }
+  .m.cpu { --mc: var(--cpu); } .m.mem { --mc: var(--gpu); }
+  .m.disk { --mc: var(--muted); } .m.gpu { --mc: var(--gpu); } .m.net { --mc: var(--net); }
+  .m.hot .bar > i { background: var(--sev); }
+
+  /* focus panel — auto-unrolled "bad bits" only, for elevated nodes */
+  .focus { margin: 0 12px 11px; border: 1px solid var(--sev); border-radius: 10px;
+    background: color-mix(in srgb, var(--sev-soft) 55%, var(--panel)); overflow:hidden; }
+  .focus .fhead { display:flex; align-items:center; gap:7px; padding: 8px 10px 6px;
+    font-family: var(--mono); font-size: 11px; color: var(--sev); font-weight:600; }
+  .focus .fhead .why { color: var(--text); font-weight: 500; }
+  .focus .flines { padding: 0 10px 9px; display:flex; flex-direction:column; gap:8px; }
+
+  /* a single named load line */
+  .line { display:flex; align-items:center; gap:9px; }
+  .line .lk { font-family: var(--mono); font-size: 9px; letter-spacing:.08em; text-transform:uppercase;
+    color: var(--faint); width: 30px; flex:none; display:flex; align-items:center; gap:5px; }
+  .line .lk i { width:7px; height:7px; border-radius:2px; background: var(--lc); flex:none; }
+  .line.cpu { --lc: var(--cpu); } .line.gpu { --lc: var(--gpu); } .line.net { --lc: var(--net); }
+  .line .spark { flex:1; height: 22px; display:block; min-width:0; }
+  .line .lv { font-family: var(--mono); font-size: 10.5px; font-weight:600; font-variant-numeric: tabular-nums;
+    width: 44px; text-align:right; flex:none; color: var(--muted); }
+  .line .gtrack { flex:1; height: 7px; border-radius: 99px; background: var(--border); overflow:hidden; min-width:0; }
+  .line .gtrack > i { display:block; height:100%; border-radius:99px; }
+
+  /* collapsible drawers (rings + all load lines) */
+  .drawers { border-top: 1px solid var(--border-soft); display:flex; }
+  .dtoggle { flex:1; font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+    background: none; border: none; cursor: pointer; padding: 9px 10px;
+    display:flex; align-items:center; justify-content:center; gap:6px; }
+  .dtoggle + .dtoggle { border-left: 1px solid var(--border-soft); }
+  .dtoggle:hover { color: var(--text); background: var(--panel-2); }
+  .dtoggle .car { transition: transform .15s; font-size: 9px; color: var(--faint); }
+  .dtoggle.open .car { transform: rotate(90deg); }
+  .dtoggle[hidden] { display:none; }
+
+  .drawer { display:none; padding: 4px 12px 12px; border-top: 1px dashed var(--border-soft); }
+  .drawer.open { display:block; }
+
+  .rings { display:flex; gap: 6px; align-items:flex-start; justify-content:space-around; padding-top: 8px; }
+  .ring { display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .ring .rv { font-family: var(--mono); font-size: 11px; font-weight:600; font-variant-numeric: tabular-nums; margin-top:3px; }
+  .ring .rk { font-family: var(--mono); font-size: 8.5px; letter-spacing:.08em; text-transform:uppercase; color: var(--faint); }
+
+  .alllines { display:flex; flex-direction:column; gap: 9px; padding-top: 9px; }
+
+  .note { font-family:var(--mono); font-size:11px; color:var(--faint); text-align:center; padding: 18px; }
+  .legend { font-family: var(--mono); font-size: 10px; color: var(--faint);
+    padding: 4px 16px 0; display:flex; gap:14px; flex-wrap:wrap; align-items:center; }
+  .legend i { width:8px; height:8px; border-radius:2px; display:inline-block; margin-right:5px; vertical-align:middle; }
+  @media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><span class="dot-h"></span><b>hush</b><span>fleet · condensed</span></div>
+    <div class="spacer"></div>
+    <div class="chip"><span class="live"></span>demo data</div>
+    <button class="iconbtn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">◐</button>
+  </header>
+
+  <div class="strip">
+    <div style="flex:1">
+      <div class="eyebrow">tailnet · overview</div>
+      <div class="h-title">Fleet</div>
+    </div>
+    <div class="summ" id="summ"></div>
+  </div>
+
+  <div class="controls">
+    <div class="ctl" id="ctlRings" role="switch" tabindex="0"><span class="sw"></span>Rings <b>off</b></div>
+    <div class="ctl" id="ctlLines" role="switch" tabindex="0"><span class="sw"></span>Load lines <b>off</b></div>
+    <span class="ctl-note">healthy nodes stay rolled up · hot nodes auto-unroll the bad metric</span>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--cpu)"></i>cpu</span>
+    <span><i style="background:var(--gpu)"></i>gpu</span>
+    <span><i style="background:var(--net)"></i>net</span>
+  </div>
+
+  <main><div class="grid" id="grid"></div></main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const $ = (s,r=document)=>r.querySelector(s);
+  const HIST = 26;
+
+  /* theme */
+  const root = document.documentElement;
+  $("#themeBtn").addEventListener("click", ()=>{
+    const cur = root.getAttribute("data-theme");
+    const sysDark = matchMedia("(prefers-color-scheme: dark)").matches;
+    const now = cur ? cur : (sysDark ? "dark" : "light");
+    root.setAttribute("data-theme", now === "dark" ? "light" : "dark");
+  });
+
+  /* global drawer prefs — persisted in-page only */
+  const pref = { rings:false, lines:false };
+
+  /* ---- thresholds: what counts as a "bad bit" per metric ---- */
+  const HOT = {
+    cpu:  v => v>=80, mem: v => v>=90, disk: v => v>=85,
+    gpu:  v => v>=88, net: v => v>=80,
+  };
+  const METRIC_COL = { cpu:"cpu", mem:"gpu", disk:"disk", gpu:"gpu", net:"net" };
+
+  /* ---- svg helpers ---- */
+  function ring(pct, col, size){
+    const r = size/2 - 3, c = 2*Math.PI*r, off = c*(1-pct/100), cx = size/2;
+    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="var(--border)" stroke-width="3.2"/>
+      <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${col}" stroke-width="3.2"
+        stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
+        transform="rotate(-90 ${cx} ${cx})"/></svg>`;
+  }
+  function sparkline(data, col, w, h){
+    const n = data.length;
+    const pts = data.map((v,i)=>`${((i/(n-1))*w).toFixed(1)},${(h-2-(v/100)*(h-4)).toFixed(1)}`);
+    const last = pts[pts.length-1].split(",");
+    return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.7"
+        stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${last[0]}" cy="${last[1]}" r="2.2" fill="${col}"/></svg>`;
+  }
+
+  /* ---- which metrics are hot on this node ---- */
+  function hotMetrics(m){
+    const out = [];
+    if(!m.online) return out;
+    for(const k of ["cpu","mem","disk","gpu","net"]){
+      const v = m[k]; if(v==null) continue;
+      if(HOT[k](v)) out.push(k);
+    }
+    return out;
+  }
+  const LOADABLE = { cpu:1, gpu:1, net:1 }; // metrics we keep rolling history for
+
+  /* ---- render one card ---- */
+  function card(m){
+    const hot = hotMetrics(m);
+    const hasGpu = m.gpu!=null;
+    const st = !m.online ? `<span class="st crit">● offline</span>`
+      : m.status==="crit" ? `<span class="st crit">● critical</span>`
+      : m.status==="warn" ? `<span class="st warn">▲ elevated</span>`
+      : `<span class="st good">● nominal</span>`;
+
+    // compact meters (always on)
+    const metrics = ["cpu","mem","disk"].concat(hasGpu?["gpu"]:[]).concat(["net"]);
+    const mini = metrics.map(k=>{
+      const v = m[k]==null ? 0 : m[k];
+      const isHot = hot.includes(k);
+      const label = k==="net" ? `${v}%` : `${v}%`;
+      return `<div class="m ${k} ${isHot?"hot":""}">
+        <div class="top"><span class="k">${k}</span><span class="v">${label}</span></div>
+        <div class="bar"><i style="--w:${Math.min(100,v)}%"></i></div>
+      </div>`;
+    }).join("");
+
+    // focus panel: only the hot metrics (strategically unrolled bad bits) —
+    // loadable ones (cpu/gpu/net) get a sparkline, point-in-time ones (disk/mem) get a gauge
+    let focus = "";
+    if(hot.length){
+      const why = m.alert || `${hot.map(k=>k+" "+m[k]+"%").join(" · ")}`;
+      const rows = hot.map(k=> LOADABLE[k] ? lineRow(m,k) : gaugeRow(m,k)).join("");
+      focus = `<div class="focus">
+        <div class="fhead">${m.status==="crit"?"●":"▲"} why it's up<span class="why">— ${why}</span></div>
+        <div class="flines">${rows}</div>
+      </div>`;
+    }
+
+    // toggles row — hide the load-lines toggle's redundancy is fine; always offer both
+    const ringsOpen = pref.rings;
+    const linesOpen = pref.lines;
+
+    const ringsDrawer = `<div class="drawer rings-d ${ringsOpen?"open":""}">
+      <div class="rings">
+        <div class="ring">${ring(m.cpu, "var(--cpu)", 46)}<span class="rv">${m.cpu}%</span><span class="rk">cpu</span></div>
+        <div class="ring">${ring(m.mem, "var(--gpu)", 46)}<span class="rv">${m.mem}%</span><span class="rk">mem</span></div>
+        <div class="ring">${ring(m.disk, "var(--muted)", 46)}<span class="rv">${m.disk}%</span><span class="rk">disk</span></div>
+        ${hasGpu?`<div class="ring">${ring(m.gpu, "var(--gpu)", 46)}<span class="rv">${m.gpu}%</span><span class="rk">gpu</span></div>`:""}
+        <div class="ring">${ring(m.net, "var(--net)", 46)}<span class="rv">${m.net}%</span><span class="rk">net</span></div>
+      </div></div>`;
+
+    const linesDrawer = `<div class="drawer lines-d ${linesOpen?"open":""}">
+      <div class="alllines">
+        ${lineRow(m,"cpu")}
+        ${hasGpu?lineRow(m,"gpu"):""}
+        ${lineRow(m,"net")}
+      </div></div>`;
+
+    return `<div class="node s-${m.status} ${m.online?"":"offline"}" data-id="${m.id}">
+      <div class="hd">
+        <span class="aura"></span>
+        <div><div class="host">${m.id}</div><div class="sub">${m.os||"—"}${m.ip?" · "+m.ip:""}</div></div>
+        ${m.role?`<span class="role">${m.role}</span>`:""}
+        ${st}
+      </div>
+      <div class="mini ${hasGpu?"":"no-gpu"}">${mini}</div>
+      ${focus}
+      <div class="drawers">
+        <button class="dtoggle t-rings ${ringsOpen?"open":""}"><span class="car">▸</span>rings</button>
+        <button class="dtoggle t-lines ${linesOpen?"open":""}"><span class="car">▸</span>load lines</button>
+      </div>
+      ${ringsDrawer}
+      ${linesDrawer}
+    </div>`;
+  }
+
+  // gauge row for point-in-time hot metrics (disk, mem) — no time series to plot
+  function gaugeRow(m, k){
+    const col = k==="disk" ? "var(--sev)" : "var(--gpu)";
+    return `<div class="line ${k}" style="--lc:var(--sev)">
+      <span class="lk"><i></i>${k}</span>
+      <div class="gtrack"><i style="width:${Math.min(100,m[k])}%;background:var(--sev)"></i></div>
+      <span class="lv" style="color:var(--sev)">${m[k]}%</span>
+    </div>`;
+  }
+
+  function lineRow(m, k){
+    const hist = m.hist[k] || [m[k]||0, m[k]||0];
+    const isHot = HOT[k] ? HOT[k](m[k]) : false;
+    const col = `var(--${k})`;
+    const vcol = isHot ? "var(--sev)" : "var(--muted)";
+    return `<div class="line ${k}">
+      <span class="lk"><i></i>${k}</span>
+      ${sparkline(hist, col, 200, 22)}
+      <span class="lv" style="color:${vcol}">${m[k]}%</span>
+    </div>`;
+  }
+
+  /* ---- wire up a card's interactions ---- */
+  function wire(el){
+    const rd = el.querySelector(".rings-d"), ld = el.querySelector(".lines-d");
+    const tr = el.querySelector(".t-rings"), tl = el.querySelector(".t-lines");
+    tr.addEventListener("click", ()=>{ rd.classList.toggle("open"); tr.classList.toggle("open"); });
+    tl.addEventListener("click", ()=>{ ld.classList.toggle("open"); tl.classList.toggle("open"); });
+  }
+
+  function render(){
+    const grid = $("#grid");
+    const order = { crit:2, warn:1, good:0 };
+    grid.innerHTML = M.slice().sort((a,b)=>order[b.status]-order[a.status]).map(card).join("");
+    grid.querySelectorAll(".node").forEach(wire);
+    // summary
+    const c = s => M.filter(m=>m.status===s).length;
+    $("#summ").innerHTML =
+      `<span class="s"><span class="swatch" style="background:var(--good)"></span><b>${c("good")}</b> ok</span>
+       <span class="s"><span class="swatch" style="background:var(--warn)"></span><b>${c("warn")}</b> warn</span>
+       <span class="s"><span class="swatch" style="background:var(--crit)"></span><b>${c("crit")}</b> crit</span>`;
+  }
+
+  /* ---- global toggles: drop / reveal rings & lines across all cards ---- */
+  function bindCtl(id, key, cls){
+    const el = $("#"+id);
+    const apply = ()=>{
+      el.classList.toggle("on", pref[key]);
+      el.querySelector("b").textContent = pref[key] ? "on" : "off";
+      document.querySelectorAll(".drawer."+cls).forEach(d=>d.classList.toggle("open", pref[key]));
+      document.querySelectorAll(".dtoggle.t-"+(cls==="rings-d"?"rings":"lines"))
+        .forEach(t=>t.classList.toggle("open", pref[key]));
+    };
+    const flip = ()=>{ pref[key] = !pref[key]; apply(); };
+    el.addEventListener("click", flip);
+    el.addEventListener("keydown", e=>{ if(e.key===" "||e.key==="Enter"){ e.preventDefault(); flip(); }});
+    apply();
+  }
+
+  /* ---- demo fleet ---- */
+  function walk(n, base, amp){ const a=[]; let v=base;
+    for(let i=0;i<n;i++){ v+=(Math.random()-0.5)*amp; v=Math.max(2,Math.min(98,v)); a.push(Math.round(v)); } return a; }
+  function mk(o){
+    o.online = o.online!==false;
+    o.hist = {
+      cpu: walk(HIST, o.cpu, 10),
+      gpu: o.gpu!=null ? walk(HIST, o.gpu, 14) : null,
+      net: walk(HIST, o.net, 18),
+    };
+    return o;
+  }
+  const M = [
+    mk({ id:"citadel", os:"Debian 12", ip:"100.71.8.9", status:"good", cpu:23, mem:47, disk:38, gpu:18, net:12 }),
+    mk({ id:"nas", os:"TrueNAS · ZFS", ip:"100.71.4.2", role:"store", status:"good", cpu:11, mem:34, disk:81, gpu:null, net:22 }),
+    mk({ id:"forge", os:"Arch Linux", ip:"100.71.2.5", status:"warn", cpu:88, mem:71, disk:52, gpu:62, net:34,
+         alert:"cpu 88% · load 14.2 — CI backlog building" }),
+    mk({ id:"atlas", os:"Ubuntu 24.04", ip:"100.71.9.3", status:"crit", cpu:34, mem:22, disk:96, gpu:12, net:9,
+         alert:"disk 96% — I/O errors, check drive health" }),
+    mk({ id:"pi-gate", os:"Raspberry Pi OS", ip:"100.71.0.1", role:"gateway", status:"good", cpu:31, mem:58, disk:44, gpu:null, net:19 }),
+    mk({ id:"lab-01", os:"NixOS 24.05", ip:"100.71.5.7", status:"warn", cpu:41, mem:63, disk:33, gpu:93, net:88,
+         alert:"gpu 93% + net 88% — training run saturating the uplink" }),
+    mk({ id:"relay", os:"Alpine 3.20", ip:"100.71.6.4", status:"good", cpu:7, mem:15, disk:24, gpu:null, net:41 }),
+    mk({ id:"vault", os:"Debian 12", ip:"100.71.7.7", status:"good", cpu:14, mem:29, disk:57, gpu:null, net:6, online:false }),
+  ];
+
+  render();
+  bindCtl("ctlRings", "rings", "rings-d");
+  bindCtl("ctlLines", "lines", "lines-d");
+
+  /* gentle live jitter so the sparklines breathe */
+  setInterval(()=>{
+    M.forEach(m=>{
+      if(!m.online) return;
+      ["cpu","gpu","net"].forEach(k=>{
+        if(m[k]==null) return;
+        m[k] = Math.max(2, Math.min(99, m[k] + Math.round((Math.random()-0.5)*4)));
+        m.hist[k] = m.hist[k].slice(1).concat([m[k]]);
+      });
+      m.mem = Math.max(2, Math.min(99, m.mem + Math.round((Math.random()-0.5)*2)));
+    });
+    render();
+  }, 2500);
+})();
+</script>
+</body>
+</html>
