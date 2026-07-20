@@ -38,27 +38,28 @@ type Agent struct {
 
 // Machine is the shape the web UI consumes (one entry of /api/fleet).
 type Machine struct {
-	ID                   string `json:"id"`
-	AgentVersion         string `json:"agentVersion,omitempty"`
-	LatestVersion        string `json:"latestVersion,omitempty"`        // latest published release, when known
-	AgentUpdateAvailable bool   `json:"agentUpdateAvailable,omitempty"` // true when AgentVersion is older than LatestVersion
-	OS                   string `json:"os"`
-	IP                   string `json:"ip"`
-	Role                 string `json:"role"`
-	Status               string `json:"status"`
-	CPU                  int    `json:"cpu"`
-	Mem                  int    `json:"mem"`
-	Disk                 int    `json:"disk"`
-	GPU                  *int   `json:"gpu"`
-	VRAM                 *int   `json:"vram"`
-	GPUName              string `json:"gpuName,omitempty"`
-	VRAMText             string `json:"vramText,omitempty"`
-	Up                   string `json:"up"`
-	Load                 string `json:"load"`
-	NetRx                int    `json:"netRx"` // inbound bytes/sec
-	NetTx                int    `json:"netTx"` // outbound bytes/sec
-	Online               bool   `json:"online"`
-	Alert                string `json:"alert,omitempty"`
+	ID                   string                `json:"id"`
+	AgentVersion         string                `json:"agentVersion,omitempty"`
+	LatestVersion        string                `json:"latestVersion,omitempty"`        // latest published release, when known
+	AgentUpdateAvailable bool                  `json:"agentUpdateAvailable,omitempty"` // true when AgentVersion is older than LatestVersion
+	OS                   string                `json:"os"`
+	IP                   string                `json:"ip"`
+	Role                 string                `json:"role"`
+	Status               string                `json:"status"`
+	CPU                  int                   `json:"cpu"`
+	Mem                  int                   `json:"mem"`
+	Disk                 int                   `json:"disk"`
+	GPU                  *int                  `json:"gpu"`
+	VRAM                 *int                  `json:"vram"`
+	GPUName              string                `json:"gpuName,omitempty"`
+	VRAMText             string                `json:"vramText,omitempty"`
+	Up                   string                `json:"up"`
+	Load                 string                `json:"load"`
+	NetRx                int                   `json:"netRx"`         // inbound bytes/sec
+	NetTx                int                   `json:"netTx"`         // outbound bytes/sec
+	LLM                  *vitals.LLMCapability `json:"llm,omitempty"` // local inference runtimes and how far each is reachable; nil = agent doesn't report it
+	Online               bool                  `json:"online"`
+	Alert                string                `json:"alert,omitempty"`
 }
 
 // Report is the downloadable fleet snapshot served by /api/report: the same
@@ -647,6 +648,7 @@ func fetchOne(client *http.Client, a Agent, latest string) Machine {
 	m.CPU, m.Mem, m.Disk = s.CPU, s.Mem, s.Disk
 	m.NetRx, m.NetTx = s.NetRx, s.NetTx
 	m.GPU, m.VRAM, m.GPUName, m.VRAMText = s.GPU, s.VRAM, s.GPUName, s.VRAMText
+	m.LLM = s.LLM
 	return m
 }
 

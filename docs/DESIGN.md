@@ -288,6 +288,48 @@ in-console today, deliberately: the alert *model* (what's wrong, how it's ranked
 how it reads) is the load-bearing part, and out-of-band delivery (push, email) is
 a thin hop on top of it — the next slice, not a rebuild.
 
+## Local inference — capability *and* reach
+
+A box that can run models is a fleet resource, so the console says so. The agent
+probes a small list of loopback addresses (`-llm-endpoints`, default
+`127.0.0.1:8091,127.0.0.1:11434`) and reports what answers on `/vitals`: the
+runtime kind, its address, its model catalogue, and — the load-bearing part —
+how far it is reachable.
+
+Reachability is reported per runtime rather than implied, because the two facts
+a reader needs come apart constantly. llama-swap and Ollama both bind loopback
+by default, so the normal state of an inference box is *a full model catalogue
+that nothing else on the fleet can reach*. A card listing six models without
+that qualifier reads as an offer the box can't honour, and someone would go
+wire up a client against it.
+
+So the readout is one verdict, not a model list:
+
+- **local only** (yellow) — runtimes up, bound to loopback. A live capability
+  sitting idle; not a fault, which is why it's yellow rather than red.
+- **serving on tailnet** (green) — reachable; this box can take work.
+- **open to all interfaces** (red) — bound to `0.0.0.0`. For an unauthenticated
+  inference API that is wider than the tailnet, and it's flagged as such.
+- **reach unknown** (muted) — the agent couldn't read the listener table, so the
+  scope was never verified. Deliberately distinct from "loopback": an
+  unverified scope must never render as a safety claim.
+
+Scope comes from the kernel's own listener table (`/proc/net/tcp{,6}`), not from
+the probe succeeding — the probe always runs over loopback, so it can't tell the
+difference. Where a runtime binds several addresses, the widest wins: one
+interface open to the world defines the box.
+
+Detection re-runs on an interval (`-llm-interval`, default 2m) rather than once
+at boot, because llama-swap hot-reloads its config directory — models come and
+go with no restart to re-trigger a one-shot probe. `/vitals` serves the last
+completed pass, so a hung runtime can't stall a poll. An empty `-llm-endpoints`
+turns detection off, which omits the field entirely; the console reads a missing
+field as "this agent doesn't report LLM state", never as "this box has none".
+
+Probing is read-only HTTP against loopback plus a `/proc` read, so it needs no
+privilege and the agent never holds an inference credential — the same posture
+as `/backup-status`.
+
 ## Running it (dev)
 
 ```bash
