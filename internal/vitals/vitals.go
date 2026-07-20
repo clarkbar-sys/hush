@@ -22,7 +22,7 @@ import (
 // Snapshot is a single point-in-time reading of a machine.
 type Snapshot struct {
 	Host     string `json:"host"`
-	Version  string `json:"version"` // hush-agent build version, e.g. "v1.3.0" or "dev"
+	Version  string `json:"version"` // hush-agent build version, e.g. "v1.3.0", "dev-a1b2c3d4e5f6", or "dev"
 	OS       string `json:"os"`
 	Up       string `json:"up"`
 	CPU      int    `json:"cpu"`

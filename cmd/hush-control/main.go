@@ -666,7 +666,7 @@ func loadAgents(path string) []Agent {
 // VersionStatus is what /api/version returns, so the console can show the
 // running version and whether a newer release is available.
 type VersionStatus struct {
-	Current         string `json:"current"`             // running version, e.g. "v1.2.0" or "dev"
+	Current         string `json:"current"`             // running version, e.g. "v1.2.0", "dev-a1b2c3d4e5f6", or "dev"
 	Latest          string `json:"latest,omitempty"`    // latest released version, when the check succeeded
 	UpdateAvailable bool   `json:"updateAvailable"`     // true when Latest is newer than Current
 	CheckedAt       string `json:"checkedAt,omitempty"` // RFC3339 time of the last successful upstream check
