@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.0](https://github.com/clarkbar-sys/hush/compare/v2.4.1...v2.5.0) (2026-07-20)
+
+
+### Features
+
+* **web:** export an opencode.json from a machine's exposed LLM ([#181](https://github.com/clarkbar-sys/hush/issues/181)) ([a70ddb3](https://github.com/clarkbar-sys/hush/commit/a70ddb342d036596ac5d991efced7730f9383187))
+
 ## [2.4.1](https://github.com/clarkbar-sys/hush/compare/v2.4.0...v2.4.1) (2026-07-20)
 
 
