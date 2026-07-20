@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1](https://github.com/clarkbar-sys/hush/compare/v2.3.0...v2.3.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* **agent:** discover LLM runtimes at their bind address, not just loopback ([#174](https://github.com/clarkbar-sys/hush/issues/174)) ([9f1e020](https://github.com/clarkbar-sys/hush/commit/9f1e020268558ed90c8f38f904ec45d7a38ffe0d))
+
 ## [2.3.0](https://github.com/clarkbar-sys/hush/compare/v2.2.0...v2.3.0) (2026-07-20)
 
 
