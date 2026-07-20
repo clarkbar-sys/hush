@@ -18,6 +18,7 @@ instance. Nothing else, and no fleet-wide config to edit.
 /etc/restic/<name>.excludes                  what to skip      one pattern per line
 /var/lib/hush-backups/<name>.json            last-run status   0644, no secrets
 /var/lib/hush-backups/<name>.history.jsonl   past runs         0644, one per line
+/var/lib/hush-backups/<name>.progress.json   live progress     0644, only while running
 ```
 
 ```
@@ -81,6 +82,40 @@ how a status writer starts emitting malformed output.
 reparsed — no `jq` or `python` dependency on the box, and no chance of
 mangling it in shell. It carries `snapshot_id`, `files_new`, `data_added`,
 `total_duration` and friends.
+
+### Live progress
+
+While a run is in flight the runner also maintains `<name>.progress.json`,
+republished every few seconds and **deleted when the run ends**:
+
+```json
+{"name":"jaassh-nas","updated":"2026-07-19T15:12:04-04:00","percent_done":0.43,
+ "bytes_done":81604378624,"total_bytes":189799182336,"files_done":18402,
+ "total_files":42811,"seconds_remaining":4310}
+```
+
+The numbers are restic's own, lifted from the `--json` status line it emits
+throughout the run. Without this the console can only draw an indeterminate
+shuttle for a run in flight — which is honest, but useless on a first backup
+that runs for a day.
+
+**Numbers only, by design.** restic's status line also carries `current_files`,
+the absolute paths being read at that instant — considerably more revealing than
+the top-level `paths` list, and this file is world-readable for the same reason
+the status file is. The runner rebuilds the object from the numeric fields
+rather than passing the line through, which drops `current_files` and, as a
+bonus, needs no string escaping.
+
+Set `HUSH_BACKUP_PROGRESS_INTERVAL` to change the publish interval in seconds
+(default 5), or to `0` to switch live progress off. The console falls back to
+the indeterminate shuttle whenever the file is absent, which is also what it
+does for a box whose runner predates this.
+
+**A file can outlive its run.** A backup killed outright — OOM, reboot, power —
+never runs the cleanup that removes it. The agent therefore attaches progress
+only when systemd confirms the unit is running, and the console additionally
+discards any sample older than two minutes: a frozen percentage presented as
+live is worse than no percentage at all.
 
 **`incomplete` deserves its own field.** restic exits **3** when some source
 data could not be read: a snapshot exists, but it is missing files. That is
