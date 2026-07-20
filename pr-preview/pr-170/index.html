@@ -196,6 +196,75 @@
   .spark { width:100%; height: 26px; display:block; }
   .spark.netmini { height: 13px; margin-top: 3px; opacity: .85; }
 
+  /* ---- condensed fleet card ----
+     Rings and load lines roll up; a compact meter strip is always on, and an
+     elevated card auto-unrolls only its bad bits. */
+  .fleet-ctl { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    padding: 2px 0 2px; }
+  .ctl { font-family: var(--mono); font-size: 11px; color: var(--muted); cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px;
+    border: 1px solid var(--border); border-radius: 999px; background: var(--panel); user-select:none; }
+  .ctl:hover { border-color: var(--accent); color: var(--text); }
+  .ctl b { color: var(--text); font-weight: 600; }
+  .ctl .sw { width: 22px; height: 13px; border-radius: 999px; background: var(--border);
+    position: relative; transition: background .15s; flex:none; }
+  .ctl .sw::after { content:""; position:absolute; top:2px; left:2px; width:9px; height:9px;
+    border-radius:50%; background: var(--panel); transition: transform .15s; box-shadow:0 1px 2px rgba(0,0,0,.3); }
+  .ctl.on .sw { background: var(--accent); }
+  .ctl.on .sw::after { transform: translateX(9px); }
+  .ctl-note { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+
+  /* always-on compact meters */
+  .mini { display:flex; gap: 9px; align-items:flex-end; }
+  .mini .m { display:flex; flex-direction:column; gap:4px; flex:1; min-width:0; }
+  .mini .m.net { flex: 1.4; }
+  .mini .m .top { display:flex; justify-content:space-between; align-items:baseline; gap:4px; }
+  .mini .m .k { font-family: var(--mono); font-size: 8.5px; letter-spacing:.08em;
+    text-transform:uppercase; color: var(--faint); }
+  .mini .m .v { font-family: var(--mono); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .mini .m .bar { height: 4px; border-radius: 99px; background: var(--border); overflow: hidden; }
+  .mini .m .bar > i { display:block; height:100%; border-radius:99px; width: var(--w); background: var(--mc); }
+  .mini .m.cpu { --mc: var(--accent); } .mini .m.mem { --mc: var(--ring2); }
+  .mini .m.disk { --mc: var(--faint); } .mini .m.gpu { --mc: var(--accent); }
+  .mini .m.hot .v { color: var(--sev); } .mini .m.hot .bar > i { background: var(--sev); }
+  .mini .m.net .v { font-size: 10px; display:flex; gap:6px; }
+
+  /* focus panel — the "why it's up" strip, only the bad bits */
+  .focus { border: 1px solid var(--sev); border-radius: 10px;
+    background: color-mix(in srgb, var(--sev-soft) 55%, var(--panel)); overflow:hidden; }
+  .focus .fhead { display:flex; align-items:baseline; gap:7px; padding: 8px 10px 6px;
+    font-family: var(--mono); font-size: 11px; color: var(--sev); font-weight:600; }
+  .focus .fhead .why { color: var(--text); font-weight: 500; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .focus .flines { padding: 0 10px 9px; display:flex; flex-direction:column; gap:8px; }
+
+  /* one named load line (used in the focus strip and the load-lines drawer) */
+  .line { display:flex; align-items:center; gap:9px; }
+  .line .lk { font-family: var(--mono); font-size: 9px; letter-spacing:.08em; text-transform:uppercase;
+    color: var(--faint); width: 34px; flex:none; display:flex; align-items:center; gap:5px; }
+  .line .lk i { width:7px; height:7px; border-radius:2px; background: var(--lc); flex:none; }
+  .line.cpu { --lc: var(--accent); } .line.gpu { --lc: var(--ring2); } .line.net { --lc: var(--accent); }
+  .line .spark { flex:1; height: 22px; min-width:0; }
+  .line .lv { font-family: var(--mono); font-size: 10.5px; font-weight:600; font-variant-numeric: tabular-nums;
+    text-align:right; flex:none; color: var(--muted); white-space:nowrap; }
+  .line .gtrack { flex:1; height: 7px; border-radius: 99px; background: var(--border); overflow:hidden; min-width:0; }
+  .line .gtrack > i { display:block; height:100%; border-radius:99px; }
+  .line .nettxt { display:flex; gap:10px; }
+
+  /* roll-up drawers at the foot of the card */
+  .card-drawers { display:flex; border-top: 1px solid var(--border-soft); margin: 2px -13px -12px; }
+  .cd { flex:1; min-width:0; }
+  .cd + .cd { border-left: 1px solid var(--border-soft); }
+  .cd > summary { list-style:none; cursor:pointer; font-family: var(--mono); font-size: 10.5px;
+    color: var(--muted); padding: 9px 10px; display:flex; align-items:center; justify-content:center; gap:6px; }
+  .cd > summary::-webkit-details-marker { display:none; }
+  .cd > summary:hover { color: var(--text); background: var(--panel-2); }
+  .cd > summary .car { font-size: 9px; color: var(--faint); transition: transform .15s; }
+  .cd[open] > summary .car { transform: rotate(90deg); }
+  .cd .drawer-body { padding: 4px 12px 12px; border-top: 1px dashed var(--border-soft); }
+  .cd .rings { padding-top: 8px; }
+  .cd .alllines { display:flex; flex-direction:column; gap: 9px; padding-top: 9px; }
+
   .node .foot { display:flex; align-items:center; justify-content:space-between; gap:6px;
     flex-wrap: wrap; border-top: 1px solid var(--border-soft); padding-top: 9px; }
   .cons { font-family: var(--mono); font-size: 10.5px; color: var(--muted);
@@ -712,9 +781,16 @@
   let lostSince = 0;               // ms timestamp poll() started failing after being live
   const DOC_TITLE = document.title;
   const cpuHist = {};              // id -> rolling cpu samples (live mode)
+  const gpuHist = {};              // id -> rolling gpu-util samples (live mode)
   const netRxHist = {};            // id -> rolling inbound bytes/sec samples (live mode)
   const netTxHist = {};            // id -> rolling outbound bytes/sec samples (live mode)
-  const state = { view:"fleet", mid:null, summLegendOpen:false };
+  // Condensed fleet cards: rings and load lines are rolled up by default and
+  // only unrolled on demand. showRings/showLines are the global "unroll every
+  // card" toggles; openRings/openLines hold the ids a user opened one at a time.
+  // Both survive the 2.5s poll re-render because they live on `state`.
+  const state = { view:"fleet", mid:null, summLegendOpen:false,
+    showRings:false, showLines:false,
+    openRings:new Set(), openLines:new Set() };
   const byId = id => M.find(m=>m.id===id);
   let PENDING = [];                // machines just added via the UI, awaiting first check-in
   const JUST_ARRIVED = new Set();  // ids to pop-highlight for one render after their first check-in
@@ -751,7 +827,12 @@
         stroke-linecap="round" stroke-dasharray="${c2.toFixed(1)}" stroke-dashoffset="${o2.toFixed(1)}"
         transform="rotate(-90 ${cx} ${cx})"/></svg>`;
   }
-  function sparkline(data, w, h){
+  // sparkline draws a 0–100 series as a filled area line. `col` defaults to the
+  // teal accent so every existing call site keeps its look; the condensed load
+  // lines pass a per-metric colour (e.g. the GPU violet) to stay legible when
+  // cpu and gpu are stacked in the same drawer.
+  function sparkline(data, w, h, col){
+    col = col || "var(--accent)";
     const n = data.length;
     const pts = data.map((v,i)=>{
       const x=(i/(n-1))*w, y=h-3-(v/100)*(h-6);
@@ -762,13 +843,13 @@
     const gid = "g"+Math.floor(Math.random()*1e6);
     return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
       <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="var(--accent)" stop-opacity=".28"/>
-        <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
+        <stop offset="0" stop-color="${col}" stop-opacity=".28"/>
+        <stop offset="1" stop-color="${col}" stop-opacity="0"/>
       </linearGradient></defs>
       <polygon points="${area}" fill="url(#${gid})"/>
-      <polyline points="${pts.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="1.6"
+      <polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.6"
         stroke-linejoin="round" stroke-linecap="round"/>
-      <circle cx="${last[0]}" cy="${last[1]}" r="2.4" fill="var(--accent)"/></svg>`;
+      <circle cx="${last[0]}" cy="${last[1]}" r="2.4" fill="${col}"/></svg>`;
   }
   // netSpark draws rx/tx as two overlaid lines sharing one y-axis, scaled to
   // the loudest sample of either series (floored so an idle link isn't drawn
@@ -848,6 +929,11 @@
           </div>
         </details>
       </div>
+      ${M.length ? `<div class="strip" style="padding-top:0"><div class="fleet-ctl">
+        <span class="ctl${state.showRings?" on":""}" id="ctlRings" role="switch" tabindex="0" aria-checked="${state.showRings}"><span class="sw"></span>Rings <b>${state.showRings?"on":"off"}</b></span>
+        <span class="ctl${state.showLines?" on":""}" id="ctlLines" role="switch" tabindex="0" aria-checked="${state.showLines}"><span class="sw"></span>Load lines <b>${state.showLines?"on":"off"}</b></span>
+        <span class="ctl-note">healthy nodes stay rolled up · hot nodes auto-unroll the bad bit</span>
+      </div></div>` : ""}
       <main>
         <div class="grid">
           ${PENDING.map(pendingNodeCard).join("")}
@@ -871,8 +957,30 @@
     const summEl = app.querySelector("details.summ-wrap");
     if(summEl) summEl.addEventListener("toggle", ()=>{ state.summLegendOpen = summEl.open; });
     app.querySelectorAll(".node[data-id]").forEach(el=>{
-      el.addEventListener("click", ()=>enterMachine(el.dataset.id));
+      const go = e => { if(e.target.closest(".card-drawers")) return; enterMachine(el.dataset.id); };
+      el.addEventListener("click", go);
+      el.addEventListener("keydown", e=>{
+        if((e.key==="Enter"||e.key===" ") && !e.target.closest(".card-drawers")){ e.preventDefault(); enterMachine(el.dataset.id); }
+      });
+      // Per-card drawer open/close is remembered on `state` so the 2.5s poll
+      // re-render doesn't snap a drawer shut while it's being read.
+      const sync = (sel, set) => {
+        const d = el.querySelector(sel);
+        if(d) d.addEventListener("toggle", ()=>{ d.open ? set.add(el.dataset.id) : set.delete(el.dataset.id); });
+      };
+      sync(".rings-d", state.openRings);
+      sync(".lines-d", state.openLines);
     });
+    // Global toggles: unroll (or drop) rings / load lines across every card.
+    const bindCtl = (id, key) => {
+      const el = app.querySelector("#"+id);
+      if(!el) return;
+      const flip = ()=>{ state[key] = !state[key]; if(state[key]){ /* global open wins */ } render(); };
+      el.addEventListener("click", flip);
+      el.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); flip(); }});
+    };
+    bindCtl("ctlRings", "showRings");
+    bindCtl("ctlLines", "showLines");
     app.querySelectorAll(".bk-card[data-bkhost]").forEach(el=>{
       el.addEventListener("click", ()=>openBackupWatch(el.dataset.bkhost, el.dataset.bkname));
     });
@@ -1390,6 +1498,40 @@
       </div>`;
   }
 
+  // --- condensed fleet card helpers -----------------------------------------
+  // A metric is "hot" once it crosses these; only the hot ones auto-unroll on an
+  // elevated card. net is bytes/sec (unbounded), so it has no % threshold and is
+  // driven by the alert text instead.
+  const HOT = { cpu:80, mem:90, disk:85, gpu:88 };
+  const metricHot = (m,k)=> m[k]!=null && HOT[k]!=null && m[k]>=HOT[k];
+  const hotMetrics = m => (m.online ? ["cpu","mem","disk","gpu"].filter(k=>metricHot(m,k)) : []);
+  const cpuSeries = m => (m.loadHist && m.loadHist.length>1) ? m.loadHist : [m.cpu||0, m.cpu||0];
+  const gpuSeries = m => (m.gpuHist && m.gpuHist.length>1) ? m.gpuHist : [m.gpu||0, m.gpu||0];
+
+  // a loadable line (cpu/gpu) — a coloured sparkline with a labelled value
+  function loadLine(m, k){
+    const col = k==="gpu" ? "var(--ring2)" : "var(--accent)";
+    const series = k==="gpu" ? gpuSeries(m) : cpuSeries(m);
+    const vcol = metricHot(m,k) ? "var(--sev)" : "var(--muted)";
+    return `<div class="line ${k}"><span class="lk"><i></i>${k}</span>
+      ${sparkline(series, 200, 22, col)}
+      <span class="lv" style="color:${vcol}">${m[k]}%</span></div>`;
+  }
+  // the network line — rx/tx as a shared-axis dual spark, bytes read out at the end
+  function netLine(m){
+    const rxHist = (m.netRxHist && m.netRxHist.length>1) ? m.netRxHist : [m.netRx||0, m.netRx||0];
+    const txHist = (m.netTxHist && m.netTxHist.length>1) ? m.netTxHist : [m.netTx||0, m.netTx||0];
+    return `<div class="line net"><span class="lk"><i></i>net</span>
+      ${netSpark(rxHist, txHist, 200, 22, "spark")}
+      <span class="lv nettxt"><span style="color:var(--accent)">↓${fmtBytes(m.netRx||0)}</span><span style="color:var(--ring2)">↑${fmtBytes(m.netTx||0)}</span></span></div>`;
+  }
+  // a point-in-time metric (disk/mem) — no series to plot, so show a sev gauge
+  function gaugeLine(m, k){
+    return `<div class="line ${k}"><span class="lk">${k}</span>
+      <div class="gtrack"><i style="width:${Math.min(100,m[k])}%;background:var(--sev)"></i></div>
+      <span class="lv" style="color:var(--sev)">${m[k]}%</span></div>`;
+  }
+
   function nodeCard(m){
     const rolePill = m.role ? `<span class="role">${m.role}</span>` : "";
     let badge;
@@ -1397,13 +1539,40 @@
     else if(m.status==="crit") badge = `<span class="badge crit">●&nbsp;<span class="lbl">${(m.alert||"critical").split("—")[0].trim()}</span></span>`;
     else if(m.status==="warn") badge = `<span class="badge warn">▲&nbsp;<span class="lbl">${(m.alert||"elevated").split("·")[0].trim()}</span></span>`;
     else badge = `<span class="badge ok">●&nbsp;<span class="lbl">nominal</span></span>`;
+
+    // always-on compact meters
+    const meter = k => `<div class="m ${k} ${metricHot(m,k)?"hot":""}">
+        <div class="top"><span class="k">${k}</span><span class="v">${m[k]==null?"—":m[k]+"%"}</span></div>
+        <div class="bar"><i style="--w:${Math.min(100,m[k]||0)}%"></i></div></div>`;
+    const netMeter = `<div class="m net"><div class="top"><span class="k">net</span></div>
+        <span class="v"><span style="color:var(--accent)">↓${fmtBytes(m.netRx||0)}</span><span style="color:var(--ring2)">↑${fmtBytes(m.netTx||0)}</span></span></div>`;
+    const mini = `<div class="mini">${meter("cpu")}${meter("mem")}${meter("disk")}${m.gpu!=null?meter("gpu"):""}${netMeter}</div>`;
+
+    // strategic unroll: an elevated card opens a focus strip with only its bad
+    // bits — a sparkline for hot cpu/gpu, a gauge for hot disk/mem. Healthy
+    // cards (and healthy metrics) stay rolled up.
+    let focus = "";
+    const elevated = !m.online || m.status==="warn" || m.status==="crit";
+    if(elevated){
+      const hot = hotMetrics(m);
+      const why = m.alert || (!m.online ? "offline — last check-in stale"
+        : hot.length ? hot.map(k=>`${k} ${m[k]}%`).join(" · ") : "elevated");
+      const rows = hot.map(k=> (k==="cpu"||k==="gpu") ? loadLine(m,k) : gaugeLine(m,k)).join("");
+      focus = `<div class="focus">
+        <div class="fhead">${m.status==="crit"||!m.online?"●":"▲"}&nbsp;why<span class="why">— ${esc(why)}</span></div>
+        ${rows?`<div class="flines">${rows}</div>`:""}
+      </div>`;
+    }
+
+    // roll-up drawers — global toggle OR a per-card open both count
+    const ringsOpen = state.showRings || state.openRings.has(m.id);
+    const linesOpen = state.showLines || state.openLines.has(m.id);
     const gpuRing = m.gpu!=null ? `
           <div class="ring">${dualRing(m.gpu,m.vram,44)}<span class="v">${m.gpu}%</span><span class="k">gpu</span></div>` : "";
-    const hist = m.loadHist && m.loadHist.length>1 ? m.loadHist : [m.cpu||0, m.cpu||0];
-    const rxHist = m.netRxHist && m.netRxHist.length>1 ? m.netRxHist : [m.netRx||0, m.netRx||0];
-    const txHist = m.netTxHist && m.netTxHist.length>1 ? m.netTxHist : [m.netTx||0, m.netTx||0];
+
     return `
-      <button class="node s-${m.status} ${m.online?"":"offline"}${JUST_ARRIVED.has(m.id)?" new":""}" data-id="${m.id}">
+      <div class="node s-${m.status} ${m.online?"":"offline"}${JUST_ARRIVED.has(m.id)?" new":""}"
+           data-id="${m.id}" role="button" tabindex="0">
         <div class="hd">
           <div>
             <div class="host"><span class="aura"></span>${m.id}</div>
@@ -1411,22 +1580,33 @@
           </div>
           ${rolePill}
         </div>
-        <div class="rings">
-          <div class="ring">${dualRing(m.cpu,m.mem,44)}<span class="v">${m.cpu}%</span><span class="k">cpu</span></div>
-          <div class="ring">${ring(m.disk,44)}<span class="v">${m.disk}%</span><span class="k">disk</span></div>
-          ${gpuRing}
-        </div>
-        <div class="sparkwrap">
-          ${sparkline(hist, 200, 26)}
-          ${netSpark(rxHist, txHist, 200, 13, "spark netmini")}
-        </div>
+        ${mini}
+        ${focus}
         ${backupLine(m)}
         ${receiveLine(m)}
         <div class="foot">
           ${m.agentUpdateAvailable?`<span class="badge upd">⇧&nbsp;<span class="lbl">update</span></span>`:""}
           ${badge}
         </div>
-      </button>`;
+        <div class="card-drawers">
+          <details class="cd rings-d"${ringsOpen?" open":""}>
+            <summary><span class="car">▸</span>rings</summary>
+            <div class="drawer-body"><div class="rings">
+              <div class="ring">${dualRing(m.cpu,m.mem,44)}<span class="v">${m.cpu}%</span><span class="k">cpu</span></div>
+              <div class="ring">${ring(m.disk,44)}<span class="v">${m.disk}%</span><span class="k">disk</span></div>
+              ${gpuRing}
+            </div></div>
+          </details>
+          <details class="cd lines-d"${linesOpen?" open":""}>
+            <summary><span class="car">▸</span>load lines</summary>
+            <div class="drawer-body"><div class="alllines">
+              ${loadLine(m,"cpu")}
+              ${m.gpu!=null?loadLine(m,"gpu"):""}
+              ${netLine(m)}
+            </div></div>
+          </details>
+        </div>
+      </div>`;
   }
 
   function enterMachine(id){ state.view="machine"; state.mid=id; render(); scrollTop(); }
@@ -2031,6 +2211,12 @@
       h.push(m.cpu); while(h.length>HIST) h.shift();
       cpuHist[m.id] = h;
       m.loadHist = h.slice();
+      if(m.gpu!=null){
+        const gh = gpuHist[m.id] || Array(HIST).fill(m.gpu);
+        gh.push(m.gpu); while(gh.length>HIST) gh.shift();
+        gpuHist[m.id] = gh;
+        m.gpuHist = gh.slice();
+      }
       const rxh = netRxHist[m.id] || Array(HIST).fill(m.netRx);
       rxh.push(m.netRx); while(rxh.length>HIST) rxh.shift();
       netRxHist[m.id] = rxh;
@@ -2124,6 +2310,7 @@
     const mk = o => {
       o.online=true; o.backups=o.backups||[];
       o.loadHist=walk(HIST,o.cpu,12);
+      if(o.gpu!=null) o.gpuHist = walk(HIST, o.gpu, 14);
       o.netRx = Math.round(15000 + Math.random()*220000);
       o.netTx = Math.round(4000 + Math.random()*60000);
       o.netRxHist = walkBytes(HIST, o.netRx, o.netRx*0.35);
@@ -2212,7 +2399,8 @@
     M.forEach(m=>{
       const j = v => Math.max(2, Math.min(98, Math.round(v + (Math.random()-0.5)*(m.status==="warn"?7:4))));
       m.cpu = j(m.cpu); m.mem = Math.max(2,Math.min(98, m.mem + (((Math.random()-0.5)*2)|0)));
-      if(m.gpu!=null){ m.gpu = j(m.gpu); m.vram = Math.max(2,Math.min(99, m.vram + (((Math.random()-0.5)*2)|0))); }
+      if(m.gpu!=null){ m.gpu = j(m.gpu); m.vram = Math.max(2,Math.min(99, m.vram + (((Math.random()-0.5)*2)|0)));
+        m.gpuHist = (m.gpuHist||Array(HIST).fill(m.gpu)).slice(1).concat([m.gpu]); }
       m.loadHist = m.loadHist.slice(1).concat([m.cpu]);
       m.netRx = Math.max(0, Math.round(m.netRx + (Math.random()-0.5)*Math.max(2000,m.netRx*0.5)));
       m.netTx = Math.max(0, Math.round(m.netTx + (Math.random()-0.5)*Math.max(1000,m.netTx*0.5)));
