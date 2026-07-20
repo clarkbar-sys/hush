@@ -1,6 +1,6 @@
 // Command hush-agent runs on every machine in the fleet. It exposes the host's
 // vitals as JSON over the tailnet and serves a read-only view of the box —
-// /vitals, /top, /browse, /du, /file, and /backup-status.
+// /vitals, /top, /sessions, /browse, /du, /file, and /backup-status.
 //
 // Backups are set up on the box itself (root, over SSH — see
 // docs/BACKUP-CONVENTION.md); the agent only ever *reads* their status files and
@@ -29,6 +29,7 @@ import (
 
 	"github.com/clarkbar-sys/hush/internal/browse"
 	"github.com/clarkbar-sys/hush/internal/llm"
+	"github.com/clarkbar-sys/hush/internal/sessions"
 	"github.com/clarkbar-sys/hush/internal/updater"
 	"github.com/clarkbar-sys/hush/internal/version"
 	"github.com/clarkbar-sys/hush/internal/vitals"
@@ -44,6 +45,7 @@ func main() {
 	llmPorts := flag.String("llm-ports", strings.Join(llm.DefaultPorts, ","), "comma-separated ports to scan for local LLM runtimes (llama-swap/OpenAI-compatible or Ollama); whatever address a runtime is bound to on one of these is probed there. Empty disables discovery")
 	llmEndpoints := flag.String("llm-endpoints", "", "comma-separated host:port targets that replace -llm-ports discovery, for a runtime on a non-standard port. Empty means discover")
 	llmInterval := flag.Duration("llm-interval", 2*time.Minute, "how often to re-probe the LLM endpoints, so a hot-reloaded model catalogue doesn't go stale")
+	sessionProcs := flag.String("session-procs", strings.Join(sessions.DefaultProcs, ","), "comma-separated program names counted as coding-agent sessions on /sessions (matched against a process's argv[0]/comm). Empty disables session reporting")
 	flag.Parse()
 
 	if *showVersion {
@@ -106,6 +108,20 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(vitals.CollectTop(topProcLimit)); err != nil {
 			log.Printf("encode top: %v", err)
+		}
+	})
+	// /sessions lists the coding-agent processes (opencode, claude) running on
+	// this box, so the console can show what's live and offer to stop it. Like
+	// /top it's ungated read-only /proc telemetry — a process's argv and owner
+	// are world-readable, so it needs no privilege and holds no session state.
+	// hush never spawns or kills a session; both are sudo commands the operator
+	// runs over SSH (see docs/SESSIONS.md). Clearing -session-procs leaves the
+	// list empty rather than reporting a partial guess.
+	sessionProcList := splitList(*sessionProcs)
+	mux.HandleFunc("/sessions", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(sessions.Collect(sessionProcList)); err != nil {
+			log.Printf("encode sessions: %v", err)
 		}
 	})
 	mux.HandleFunc("/browse", handleBrowse)
