@@ -832,6 +832,13 @@
   </div>
 </div>
 
+<div class="scrim" id="userScrim">
+  <div class="sheet" role="dialog" aria-label="add a user">
+    <div class="grab"></div>
+    <div id="userSheetBody"></div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -1489,7 +1496,10 @@
     return `<div class="sec-title">Sessions${list.length?` <span class="n">${list.length}</span>`:""}</div>
       <div class="se-sec">
         ${body}
-        <button class="btn primary se-spawn" id="se-spawn">＋ Spawn a session</button>
+        <div class="sheet-actions">
+          <button class="btn primary se-spawn" id="se-spawn">＋ Spawn a session</button>
+          <button class="btn se-adduser" id="se-adduser">＋ Add a user</button>
+        </div>
       </div>`;
   }
 
@@ -1620,6 +1630,66 @@
     });
     $("#stClose").addEventListener("click", closeSpawn);
     spawnScrim.classList.add("open");
+  }
+
+  /* ---------- add-user command sheet ----------
+     Same posture as spawn/stop: hush never touches the box. You name a user and
+     it composes the one sudo command that creates them with a login shell and no
+     password — so `sudo su - <user>` drops you straight in. You copy it into a
+     root shell (JuiceSSH) and run it yourself. */
+  const userScrim = $("#userScrim");
+  const userBody = $("#userSheetBody");
+  let usrHost=null, usrName="";
+  function closeUser(){ userScrim.classList.remove("open"); }
+  userScrim.addEventListener("click", e=>{ if(e.target===userScrim) closeUser(); });
+
+  // buildUserCmd composes the create-user line: useradd -m -s /bin/bash gives a
+  // home dir and a real login shell, and `passwd -d` clears the password so the
+  // account has none — a locked/no password still lets root in via `su -`, so
+  // the workflow it's built for (`sudo su - <user>`) works either way.
+  function buildUserCmd(){
+    const u = usrName.trim();
+    if(!USER_RE.test(u)) return { cmd:"", err:"enter a Linux username to create" };
+    return { cmd:`sudo useradd -m -s /bin/bash ${u} && sudo passwd -d ${u}`, err:"" };
+  }
+
+  function openUserSheet(host){
+    usrHost = host; usrName = "";
+    renderUserSheet();
+    userScrim.classList.add("open");
+  }
+
+  function renderUserSheet(){
+    const { cmd, err } = buildUserCmd();
+    userBody.innerHTML = `
+      <h3>Add a user <span class="sd" style="font-family:var(--mono)">${esc(usrHost)}</span></h3>
+      <p class="sd">compose the command, then paste it into a root shell on ${esc(usrHost)} (JuiceSSH) — hush never runs it for you</p>
+      <div class="field">
+        <label for="usrName">new username</label>
+        <input id="usrName" type="text" autocapitalize="off" autocomplete="off" spellcheck="false"
+          placeholder="e.g. deploy" value="${esc(usrName)}">
+        <div class="hint">lowercase letters, digits, <span style="font-family:var(--mono)">_</span> and <span style="font-family:var(--mono)">-</span>; the command fails on its own if the user already exists</div>
+      </div>
+      <div class="cmdbox"><code id="usrCmd">${esc(cmd||err)}</code><button class="btn" id="usrCopy">Copy</button></div>
+      <div class="field-note">Creates <span style="font-family:var(--mono)">${esc(usrName.trim()||"the user")}</span> with a home directory, a <span style="font-family:var(--mono)">/bin/bash</span> login shell and no password. Then <span style="font-family:var(--mono)">sudo su - ${esc(usrName.trim()||"&lt;user&gt;")}</span> and you're in.</div>
+      <div class="sheet-actions"><button class="btn primary" id="usrClose" style="flex:1">Close</button></div>`;
+
+    const code = $("#usrCmd"), copy = $("#usrCopy");
+    const refresh = ()=>{ const r = buildUserCmd(); code.textContent = r.cmd || r.err; copy.disabled = !r.cmd;
+      const note = userBody.querySelector(".field-note"); if(note){
+        const nm = usrName.trim();
+        note.innerHTML = `Creates <span style="font-family:var(--mono)">${esc(nm||"the user")}</span> with a home directory, a <span style="font-family:var(--mono)">/bin/bash</span> login shell and no password. Then <span style="font-family:var(--mono)">sudo su - ${esc(nm||"&lt;user&gt;")}</span> and you're in.`;
+      } };
+    copy.disabled = !cmd;
+    const ni = $("#usrName");
+    ni.addEventListener("input", ()=>{ usrName = ni.value; refresh(); });
+    copy.addEventListener("click", async ()=>{
+      const r = buildUserCmd(); if(!r.cmd) return;
+      try { await navigator.clipboard.writeText(r.cmd); toast("copied — paste into JuiceSSH on "+usrHost); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
+    $("#usrClose").addEventListener("click", closeUser);
+    if(document.activeElement !== ni) ni.focus();
   }
 
   // demoSessions seeds the offline/file:// preview so the Sessions section, the
@@ -2181,6 +2251,8 @@
     if(ocx) ocx.addEventListener("click", ()=>openOcSheet(m.id));
     const spawn = $("#se-spawn");
     if(spawn) spawn.addEventListener("click", ()=>openSpawnSheet(m.id));
+    const adduser = $("#se-adduser");
+    if(adduser) adduser.addEventListener("click", ()=>openUserSheet(m.id));
     app.querySelectorAll(".se-stop").forEach(b=>{
       b.addEventListener("click", ()=>openStopSheet(m.id, {
         pid: +b.dataset.pid, user: b.dataset.user, tool: b.dataset.tool }));
