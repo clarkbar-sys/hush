@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.1](https://github.com/clarkbar-sys/hush/compare/v2.4.0...v2.4.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* **agent:** report disk usage from /home on immutable-root distros ([#179](https://github.com/clarkbar-sys/hush/issues/179)) ([213116b](https://github.com/clarkbar-sys/hush/commit/213116bf82635d45e114b039a32f65a24c050606))
+
 ## [2.4.0](https://github.com/clarkbar-sys/hush/compare/v2.3.1...v2.4.0) (2026-07-20)
 
 
