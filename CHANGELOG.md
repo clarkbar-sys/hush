@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0](https://github.com/clarkbar-sys/hush/compare/v2.2.0...v2.3.0) (2026-07-20)
+
+
+### Features
+
+* **agent:** disclose local LLM runtimes and how far they reach ([#172](https://github.com/clarkbar-sys/hush/issues/172)) ([f9d542a](https://github.com/clarkbar-sys/hush/commit/f9d542a52c61b3de8a795adf4d8e5f3f8541c34e))
+
 ## [2.2.0](https://github.com/clarkbar-sys/hush/compare/v2.1.0...v2.2.0) (2026-07-20)
 
 
