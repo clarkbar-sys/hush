@@ -1698,9 +1698,13 @@
   // Claude app. It degrades gracefully rather than failing the chain: an
   // account not yet signed in just gets a local session with a Remote Control
   // failure notice. CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX sets the session's
-  // auto-generated name to "<fleet machine>-adjective-noun" — Claude Code's own
-  // naming convention, prefixed with the box hush spawned it on instead of the
-  // box's raw OS hostname (which may not match). It also launches with
+  // auto-generated name to "<fleet machine>.<user>-adjective-noun" — Claude
+  // Code's own naming convention, prefixed with the box hush spawned it on
+  // (instead of the box's raw OS hostname, which may not match) and the user
+  // it's running as, so two operators spawning on the same box get
+  // distinguishable titles. A colon would read more like "host:user", but it's
+  // outside the sanitized charset below (and awkward in tmux/URL contexts), so
+  // a dot stands in for it. It also launches with
   // --dangerously-skip-permissions, since the session already sits behind
   // sudo -u <user> as the whole preflight — the operator chose this box and this
   // user before pasting the command, so a second per-tool-call prompt inside the
@@ -1719,7 +1723,7 @@
       }
       lines += `  exec tmux new-session -A -s hush-opencode opencode`;
     } else {
-      const prefix = String(spHost||"").replace(/[^a-zA-Z0-9._-]/g, "-");
+      const prefix = `${spHost||""}.${u}`.replace(/[^a-zA-Z0-9._-]/g, "-");
       lines += `  export CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX="${prefix}" &&\n`;
       lines += `  exec tmux new-session -A -s hush-claude claude --remote-control --dangerously-skip-permissions`;
     }
@@ -1772,7 +1776,7 @@
       ${targetField}
       ${notInstalledNote}
       <div class="cmdbox"><code id="spCmd">${esc(cmd||err)}</code><button class="btn" id="spCopy">Copy</button></div>
-      <div class="field-note">Launches in a tmux session named <span style="font-family:var(--mono)">hush-${esc(spTool)}</span> — detach with <span style="font-family:var(--mono)">Ctrl-b d</span> and it keeps running (hush will show it); re-run to reattach.${spTool==="claude"?` claude's own Remote Control session (separate from the tmux session) is named <span style="font-family:var(--mono)">${esc(spHost)}-adjective-noun</span>, matching Claude Code's own auto-naming convention, until you <span style="font-family:var(--mono)">/rename</span> it.`:""}</div>
+      <div class="field-note">Launches in a tmux session named <span style="font-family:var(--mono)">hush-${esc(spTool)}</span> — detach with <span style="font-family:var(--mono)">Ctrl-b d</span> and it keeps running (hush will show it); re-run to reattach.${spTool==="claude"?` claude's own Remote Control session (separate from the tmux session) is named <span style="font-family:var(--mono)">${esc(spHost)}.${esc(spUser.trim())}-adjective-noun</span>, matching Claude Code's own auto-naming convention, until you <span style="font-family:var(--mono)">/rename</span> it.`:""}</div>
       <div class="sheet-actions"><button class="btn primary" id="spClose" style="flex:1">Close</button></div>`;
 
     const code = $("#spCmd"), copy = $("#spCopy");
