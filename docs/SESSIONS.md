@@ -95,7 +95,6 @@ tailnet-reachable LLM boxes to point it at. The command, for `opencode` run as
 ```bash
 sudo -u josh -H bash -lc '
   command -v opencode >/dev/null 2>&1 || curl -fsSL https://opencode.ai/install | bash &&
-  command -v claude   >/dev/null 2>&1 || curl -fsSL https://claude.ai/install.sh | bash &&
   export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$PATH" &&
   mkdir -p "$HOME/.config/opencode" &&
   printf %s "<base64 opencode.json>" | base64 -d > "$HOME/.config/opencode/opencode.json" &&
@@ -107,9 +106,8 @@ Every part maps to a step of the workflow:
 - **Pick a user; fail if it doesn't exist.** `sudo -u josh` *is* the whole
   preflight — if `josh` isn't a user on the box, the command fails on its own,
   loudly, before doing anything. hush doesn't need to check first.
-- **Install if missing.** `command -v … || <installer>` installs opencode and
-  claude only when absent. Both are installed regardless of the chosen tool, so
-  the box is ready to switch either way — the workflow you asked for.
+- **Install if missing.** `command -v … || <installer>` installs the chosen
+  tool only when absent — opencode or claude, whichever you picked, not both.
 - **Refresh opencode's config from hush.** The chosen LLM box's `opencode.json`
   (the same one the [Inference section exports](./DESIGN.md#local-inference--capability-and-reach)
   — an OpenAI-compatible provider at the runtime's tailnet `baseURL`, its served

@@ -1524,18 +1524,19 @@
   // points it at one of these by writing that box's opencode.json.
   function spawnTargets(){ return M.filter(x=>ocReachable(x).length); }
 
-  // buildSpawnCmd composes the one &&-chained sudo command that: installs
-  // opencode and claude if missing (the workflow wants both present), writes the
-  // chosen LLM's opencode.json (base64-piped so the JSON can't collide with the
-  // command's own quoting), and launches the tool in a named tmux session you
-  // can attach to now and reattach to later. `sudo -u <user>` is the whole user
-  // preflight — it fails loudly on its own if the user doesn't exist.
+  // buildSpawnCmd composes the one &&-chained sudo command that: installs the
+  // chosen tool if missing (only opencode or only claude — not both), writes
+  // the chosen LLM's opencode.json (base64-piped so the JSON can't collide
+  // with the command's own quoting), and launches the tool in a named tmux
+  // session you can attach to now and reattach to later. `sudo -u <user>` is
+  // the whole user preflight — it fails loudly on its own if the user doesn't
+  // exist.
   function buildSpawnCmd(){
     const u = spUser.trim();
     if(!USER_RE.test(u)) return { cmd:"", err:"enter a Linux username to run as" };
-    let lines =
-      `  command -v opencode >/dev/null 2>&1 || curl -fsSL https://opencode.ai/install | bash &&\n` +
-      `  command -v claude   >/dev/null 2>&1 || curl -fsSL https://claude.ai/install.sh | bash &&\n`;
+    let lines = spTool==="opencode"
+      ? `  command -v opencode >/dev/null 2>&1 || curl -fsSL https://opencode.ai/install | bash &&\n`
+      : `  command -v claude   >/dev/null 2>&1 || curl -fsSL https://claude.ai/install.sh | bash &&\n`;
     if(spTool==="opencode"){
       lines += `  export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$PATH" &&\n`;
       const t = spTarget && byId(spTarget);
