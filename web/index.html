@@ -366,6 +366,20 @@
   .tl-fix { flex:none; }
   .tl-row.off .tl-fix { color:var(--warn); border-color:var(--warn-soft); }
   .tl-row.off .tl-fix:hover { border-color:var(--warn); background:var(--warn-soft); }
+  /* ---- users section (machine view): human accounts on the box ---- */
+  .us-sec { display:flex; flex-direction:column; gap:9px; }
+  .us-row { display:flex; align-items:center; gap:10px; padding:10px 12px;
+    border:1px solid var(--border); border-radius:10px; background:var(--panel); }
+  .us-gly { color:var(--muted); font-size:14px; flex:none; }
+  .us-main { min-width:0; flex:1; }
+  .us-top { display:flex; align-items:baseline; gap:8px; font-family:var(--mono); font-size:12.5px; }
+  .us-name { font-weight:700; color:var(--text); }
+  .us-uid { color:var(--faint); font-size:11px; }
+  .us-home { display:block; margin-top:3px; font-family:var(--mono); font-size:10.5px;
+    color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .us-tools { display:flex; gap:5px; flex:none; }
+  .us-tool-gly { font-size:14px; color:var(--accent); }
+  .us-adduser { align-self:flex-start; }
   /* fields inside the spawn sheet */
   .se-seg { display:flex; gap:6px; margin:2px 0 12px; }
   .se-seg button { flex:1; font-family:var(--mono); font-size:12px; padding:8px 6px;
@@ -1453,7 +1467,8 @@
      console composes for you to paste over SSH (JuiceSSH from a phone); control
      stays a pure visualisation. See docs/SESSIONS.md. */
   const SESSIONS = {};              // host -> { sessions:[…], loaded:true, err:"" }
-  const SESSIONS_POLL_MS = 6000;    // sessions change slowly; no need to ride the 2.5s fleet cadence
+  const USERS = {};                 // host -> { users:[…], loaded:true, err:"" }
+  const SESSIONS_POLL_MS = 6000;    // sessions/users change slowly; no need to ride the 2.5s fleet cadence
   const USER_RE = /^[a-z_][a-z0-9_-]*$/;   // a conservative POSIX login, to keep a typo out of the generated command
 
   function onMachine(id){ return state.view==="machine" && state.mid===id; }
@@ -1473,6 +1488,31 @@
       else { const data = await r.json(); SESSIONS[id] = { sessions:(data&&data.sessions)||[], installed:(data&&data.installed)||null, loaded:true, err:"" }; }
     } catch(e){ SESSIONS[id] = { sessions:[], loaded:true, err:"unreach" }; }
     if(onMachine(id)) renderMachine();
+  }
+
+  // fetchUsers refreshes one machine's human-account list into USERS, the same
+  // shape and cadence as fetchSessions — same demo fallback, same 404-means-
+  // "old agent" handling. Kept as its own poll (rather than folded into
+  // /sessions) because it reads a different agent endpoint.
+  async function fetchUsers(id){
+    if(MODE==="demo"){ USERS[id] = { users:demoUsers(id), loaded:true, err:"" }; if(onMachine(id)) renderMachine(); return; }
+    try {
+      const r = await fetch(`api/machines/${encodeURIComponent(id)}/users`, {cache:"no-store"});
+      if(!r.ok){ USERS[id] = { users:[], loaded:true, err:r.status===404?"old-agent":"unreach" }; }
+      else { const data = await r.json(); USERS[id] = { users:(data&&data.users)||[], loaded:true, err:"" }; }
+    } catch(e){ USERS[id] = { users:[], loaded:true, err:"unreach" }; }
+    if(onMachine(id)) renderMachine();
+  }
+
+  // userToolsFor returns the distinct coding-agent tools a named user has
+  // running on host, from the last /sessions read — the join that lets the
+  // Users list show a glyph next to anyone with a live session, without the
+  // /users endpoint itself needing to know about sessions.
+  function userToolsFor(host, name){
+    const list = (SESSIONS[host] && SESSIONS[host].sessions) || [];
+    const tools = [];
+    list.forEach(s=>{ if(s.user===name && tools.indexOf(s.tool)===-1) tools.push(s.tool); });
+    return tools;
   }
 
   function seGlyph(tool){ return tool==="claude" ? "✳" : "⌁"; }
@@ -1573,11 +1613,53 @@
         ${body}
         <div class="sheet-actions">
           <button class="btn primary se-spawn" id="se-spawn">＋ Spawn a session</button>
-          <button class="btn se-adduser" id="se-adduser">＋ Add a user</button>
         </div>
         ${list.length>=3?`<div class="sheet-actions">
           <button class="btn se-stop-all" id="se-stop-all">Stop all ${list.length}</button>
         </div>`:""}
+      </div>`;
+  }
+
+  // usersSection renders the machine view's Users block, directly under
+  // Sessions: the box's human login accounts (from /users), each with a glyph
+  // for every coding-agent tool it currently has a session running (the join
+  // against SESSIONS — see userToolsFor) so you can see who's active at a
+  // glance, and the ＋ Add a user button that opens the create-user command
+  // sheet.
+  function usersSection(m){
+    const st = USERS[m.id];
+    const list = (st&&st.users)||[];
+    let body;
+    if(!m.online && MODE!=="demo"){
+      body = `<div class="empty">machine unreachable — bring it online to see its users</div>`;
+    } else if(!st || !st.loaded){
+      body = `<div class="empty">reading…</div>`;
+    } else if(st.err==="old-agent"){
+      body = `<div class="empty">this agent is too old to report users — update hush-agent to see who's on this box</div>`;
+    } else if(st.err==="unreach"){
+      body = `<div class="empty">couldn't read users from this machine</div>`;
+    } else if(!list.length){
+      body = `<div class="empty">no user accounts found</div>`;
+    } else {
+      body = list.map(u=>{
+        const tools = userToolsFor(m.id, u.name);
+        return `<div class="us-row">
+          <span class="us-gly">◎</span>
+          <div class="us-main">
+            <div class="us-top"><span class="us-name">${esc(u.name)}</span>
+              <span class="us-uid">${u.uid}</span></div>
+            ${u.home?`<span class="us-home">${esc(u.home)}</span>`:""}
+          </div>
+          ${tools.length?`<div class="us-tools">${tools.map(t=>`<span class="us-tool-gly" title="${esc(t)} running">${seGlyph(t)}</span>`).join("")}</div>`:""}
+        </div>`;
+      }).join("");
+    }
+    return `<div class="sec-title">Users${list.length?` <span class="n">${list.length}</span>`:""}</div>
+      <div class="us-sec">
+        ${body}
+        <div class="sheet-actions">
+          <button class="btn us-adduser" id="us-adduser">＋ Add a user</button>
+        </div>
       </div>`;
   }
 
@@ -1862,6 +1944,20 @@
     ];
     if(id==="forge") return [
       { pid:11902, user:"ci", tool:"opencode", cmd:"opencode run --agent build", uptime:120 },
+    ];
+    return [];
+  }
+
+  // demoUsers seeds the Users section in the offline/file:// preview. The
+  // names overlap demoSessions' on purpose, so citadel's josh and ci show a
+  // running-tool glyph the same way a real box with active sessions would.
+  function demoUsers(id){
+    if(id==="citadel") return [
+      { name:"josh", uid:1000, home:"/home/josh", shell:"/bin/bash" },
+      { name:"ci",   uid:1001, home:"/home/ci",   shell:"/bin/bash" },
+    ];
+    if(id==="forge") return [
+      { name:"ci", uid:1000, home:"/home/ci", shell:"/bin/bash" },
     ];
     return [];
   }
@@ -2326,10 +2422,10 @@
   }
 
   function enterMachine(id){ state.view="machine"; state.mid=id; render(); scrollTop();
-    // Load this box's sessions once on entry; the slow interval refreshes after.
-    // Never fetch from within renderMachine — fetchSessions repaints on
-    // completion, which would recurse.
-    const m = byId(id); if(m && (m.online || MODE==="demo")) fetchSessions(id); }
+    // Load this box's sessions and users once on entry; the slow interval
+    // refreshes after. Never fetch from within renderMachine — fetchSessions/
+    // fetchUsers repaint on completion, which would recurse.
+    const m = byId(id); if(m && (m.online || MODE==="demo")) { fetchSessions(id); fetchUsers(id); } }
   function goFleet(){ state.view="fleet"; render(); scrollTop(); }
   function scrollTop(){ window.scrollTo({top:0,behavior:"instant"}); }
   function sevVar(s){ return s==="good"?"good":s==="warn"?"warn":"crit"; }
@@ -2405,6 +2501,8 @@
 
         ${sessionsSection(m)}
 
+        ${usersSection(m)}
+
         ${(()=>{ const h = hostBackupEntry(m.id); const bks = (h&&h.backups)||[];
           return `<div class="sec-title">Backups${bks.length?` <span class="n">${bks.length}</span>`:""}</div>
           <div class="wf-saved">${bks.length
@@ -2430,7 +2528,7 @@
     if(ocx) ocx.addEventListener("click", ()=>openOcSheet(m.id));
     const spawn = $("#se-spawn");
     if(spawn) spawn.addEventListener("click", ()=>openSpawnSheet(m.id));
-    const adduser = $("#se-adduser");
+    const adduser = $("#us-adduser");
     if(adduser) adduser.addEventListener("click", ()=>openUserSheet(m.id));
     app.querySelectorAll(".se-stop").forEach(b=>{
       b.addEventListener("click", ()=>openStopSheet(m.id, {
@@ -3664,7 +3762,7 @@
   setInterval(pollBackupStatus, 60000);
   // Refresh the open machine's session list on its own slow cadence — sessions
   // change far less often than vitals, and only the machine on screen is polled.
-  setInterval(()=>{ const id=state.mid; if(state.view==="machine" && byId(id) && (byId(id).online||MODE==="demo")) fetchSessions(id); }, SESSIONS_POLL_MS);
+  setInterval(()=>{ const id=state.mid; if(state.view==="machine" && byId(id) && (byId(id).online||MODE==="demo")) { fetchSessions(id); fetchUsers(id); } }, SESSIONS_POLL_MS);
 
   /* register the service worker so the console is installable and opens
      offline. Only works in a secure context (tsnet HTTPS or localhost);

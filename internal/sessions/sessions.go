@@ -20,6 +20,10 @@
 // the same rule: it looks a binary up, it never runs it, so there is still no
 // execution path here. A tool is only visible when installed somewhere the
 // unprivileged "hush" user can see, which is precisely a system-wide install.
+//
+// Finally it reports the box's human login accounts (see ListUsers, in
+// users.go), a plain read of /etc/passwd, so the console can show who's on the
+// box and pair each with any session they have running.
 package sessions
 
 import (
