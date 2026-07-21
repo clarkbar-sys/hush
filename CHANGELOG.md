@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.1](https://github.com/clarkbar-sys/hush/compare/v2.9.0...v2.9.1) (2026-07-21)
+
+
+### Bug Fixes
+
+* **web:** stop fleet cards reordering on live status changes ([#202](https://github.com/clarkbar-sys/hush/issues/202)) ([#203](https://github.com/clarkbar-sys/hush/issues/203)) ([0c91c78](https://github.com/clarkbar-sys/hush/commit/0c91c781696d90bbe92faf150371ceb2886e9c22))
+
 ## [2.9.0](https://github.com/clarkbar-sys/hush/compare/v2.8.0...v2.9.0) (2026-07-21)
 
 
