@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.0](https://github.com/clarkbar-sys/hush/compare/v2.6.0...v2.7.0) (2026-07-21)
+
+
+### Features
+
+* **web:** stop all sessions at once when a machine has 3+ ([#189](https://github.com/clarkbar-sys/hush/issues/189)) ([43bf33d](https://github.com/clarkbar-sys/hush/commit/43bf33d0b1f4f145d57bf5e193fc391c77ae480f))
+
 ## [2.6.0](https://github.com/clarkbar-sys/hush/compare/v2.5.0...v2.6.0) (2026-07-20)
 
 
