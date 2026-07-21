@@ -204,12 +204,16 @@ box, same as the Anthropic login above.
 user before pasting the command — so a second per-tool-call prompt inside the
 session is friction, not extra safety.
 
-The command also sets `CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX` to the fleet
-machine's hush name, so the session's auto-generated title follows Claude
+The command also sets `CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX` to
+`<fleet machine>.<user>`, so the session's auto-generated title follows Claude
 Code's own convention — `<prefix>-adjective-noun` (its docs' own example is
 `myhost-graceful-unicorn`) — prefixed with the name hush knows the box by
-rather than its raw OS hostname, which isn't always the same thing. Send a
-message and the title updates to reflect it, or `/rename` it yourself.
+(rather than its raw OS hostname, which isn't always the same thing) and the
+user it's running as, so two operators spawning on the same box end up with
+distinguishable titles instead of both starting with the same hostname. A
+colon (`host:user`) would read more naturally but isn't in the sanitized
+charset the prefix is built from, so a dot stands in for it. Send a message
+and the title updates to reflect it, or `/rename` it yourself.
 
 ## Stopping — another command you paste
 
