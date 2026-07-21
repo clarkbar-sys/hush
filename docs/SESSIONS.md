@@ -40,6 +40,9 @@ tool, the user it runs as, how long it's been up, and its command line. Each
 running session has a **Stop** button; a **＋ Spawn a session** button composes a
 new launch command. It all reads one agent endpoint, `/sessions`.
 
+Directly below it sits the **Users** section — the box's human accounts and a
+**＋ Add a user** button — covered on its own further down.
+
 ## Installed vs running — two reads, one endpoint
 
 The Sessions section answers two questions from the same `/sessions` snapshot:
@@ -223,6 +226,56 @@ sudo -u josh kill 48213
 hush never sends the signal — it hands you the line. Ending the agent closes its
 `tmux` session with it (the `exec`'d process was the session's only window), and
 it drops off the Sessions list on the next refresh.
+
+## The Users section — who's on the box, and adding one
+
+Directly below Sessions, the Machine view grows a **Users** section: the box's
+human login accounts, each with a glyph for every coding-agent tool that
+account currently has a session running — the same glyphs the Sessions list
+uses (✳ claude, ⌁ opencode) — so you can see who's active without cross-
+referencing the two lists yourself. A **＋ Add a user** button opens the
+create-user command sheet.
+
+It reads a second agent endpoint, `GET /users`:
+
+```json
+{
+  "host": "citadel",
+  "users": [
+    { "name": "josh", "uid": 1000, "home": "/home/josh", "shell": "/bin/bash" }
+  ]
+}
+```
+
+Like `/sessions`, this is a plain read with no privilege and no state: the
+agent parses `/etc/passwd` (world-readable) and keeps only accounts that look
+like real logins — `uid` at or above `1000` (the login-account floor Debian,
+Ubuntu and Fedora all use, and the same convention `useradd --system` sits
+below — see `scripts/install.sh`, which creates hush's own agent account that
+way) with a shell that isn't one of the no-login shells (`nologin`, `false`,
+or none). That's it: no hush-planted marker, no session state — just "is this
+an account a person could log into". `hush-control` proxies it at
+`/api/machines/{host}/users`, verbatim like `/sessions`; an agent too old to
+serve it answers `404`, and the section says so rather than showing an empty
+list.
+
+The Users list and the "which tool is this user running" glyphs are two
+independent reads (`/users` and `/sessions`) joined in the console, not a
+single combined endpoint — each already existed for its own section, and
+joining them client-side means neither has to know about the other.
+
+**Add a user** is the same "hush composes, you run" posture as Spawn and Stop:
+the sheet asks for a username and hands you
+
+```bash
+sudo useradd -m -s /bin/bash josh && sudo passwd -d josh
+```
+
+to paste over SSH. It creates a home directory and a `/bin/bash` login shell
+with no password set, so `sudo su - josh` drops you straight in — exactly the
+account Spawn then runs a session as. hush never runs `useradd` itself; the
+command fails loudly on its own (over SSH, as root) if the user already
+exists, the same honest failure mode Spawn and Stop rely on.
 
 ## Permissions — the open question
 

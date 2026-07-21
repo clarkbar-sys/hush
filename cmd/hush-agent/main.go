@@ -1,6 +1,6 @@
 // Command hush-agent runs on every machine in the fleet. It exposes the host's
 // vitals as JSON over the tailnet and serves a read-only view of the box —
-// /vitals, /top, /sessions, /browse, /du, /file, and /backup-status.
+// /vitals, /top, /sessions, /users, /browse, /du, /file, and /backup-status.
 //
 // Backups are set up on the box itself (root, over SSH — see
 // docs/BACKUP-CONVENTION.md); the agent only ever *reads* their status files and
@@ -125,6 +125,16 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(sessions.Collect(sessionProcList)); err != nil {
 			log.Printf("encode sessions: %v", err)
+		}
+	})
+	// /users lists the box's human login accounts (a plain /etc/passwd read,
+	// filtered to real accounts — see internal/sessions/users.go), so the
+	// console can show who's on the box next to who has a session running.
+	// Ungated read-only telemetry, same posture as /sessions.
+	mux.HandleFunc("/users", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(sessions.CollectUsers()); err != nil {
+			log.Printf("encode users: %v", err)
 		}
 	})
 	mux.HandleFunc("/browse", handleBrowse)
