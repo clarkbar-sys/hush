@@ -211,6 +211,17 @@ func buildMux(store *agentStore, discoverer *discoverer, dialer *agentDialer, we
 		}
 		proxySessions(w, r, client, a)
 	})
+	// /jobs is a directory read, cheaper than /sessions' /proc walk, so it rides
+	// the same fleet-poll client. Per-machine rather than a fleet rollup; see
+	// proxyJobs for why jobs are not shaped like backups.
+	mux.HandleFunc("/api/machines/{host}/jobs", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyJobs(w, r, client, a)
+	})
 	// Streaming a file can take far longer than the 2s fleet-poll budget (a
 	// whole video), so it rides its own client with no overall timeout.
 	streamClient := dialer.client(0)

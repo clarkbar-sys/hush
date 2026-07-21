@@ -1,0 +1,124 @@
+#!/usr/bin/env sh
+# Publishes the status of a long-running job where an unprivileged hush-agent
+# can read it. See docs/JOBS-CONVENTION.md.
+#
+#   hush-job-publish start    <name> [note]
+#   hush-job-publish progress <name> <bytes_done> <total_bytes> [note]
+#   hush-job-publish finish   <name> <exit_code> [note]
+#
+# Writes, in /var/lib/hush-jobs (override with HUSH_JOBS_DIR):
+#
+#   <name>.json            last-run status, world-readable
+#   <name>.progress.json   live sample, removed by `finish`
+#
+# hush executes nothing. A job is started by whoever owns it — a shell, a
+# systemd unit, a detached script — and this only records what that job says
+# about itself. Nothing here needs privilege beyond write access to the jobs
+# directory, which is the point: the console reports the job without being
+# granted the power to start one.
+#
+# No jq and no python. A status writer that has to parse JSON in POSIX shell is
+# exactly how malformed output starts, so this only ever *emits* JSON, built
+# from values it already holds. Callers pass numbers; the one free-text field is
+# escaped below.
+set -eu
+
+dir=${HUSH_JOBS_DIR:-/var/lib/hush-jobs}
+
+usage() {
+	sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+	exit 2
+}
+
+now() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
+
+# esc makes a string safe to sit inside a JSON double-quoted value.
+#
+# Backslash first — reversing the order would re-escape the backslashes this
+# very function introduces, turning \" into \\". Control characters are dropped
+# rather than encoded: a note is a one-line human sentence, and a job that puts
+# a newline in one is better served by losing it than by emitting a file the
+# agent will refuse to parse.
+esc() {
+	printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/[[:cntrl:]]//g'
+}
+
+# write_atomic replaces a file in one step, via a temp file in the same
+# directory and a rename.
+#
+# A reader polls this directory on a timer with no lock between them, so a
+# half-written file WILL eventually be read. rename(2) is atomic within a
+# filesystem, so a reader sees either the old file or the new one and never a
+# truncated one. Writing in place would show up as the occasional unexplained
+# parse error in the agent's log, which is the kind of bug nobody chases.
+write_atomic() {
+	_path=$1
+	_body=$2
+	_tmp="${_path}.tmp.$$"
+	printf '%s\n' "$_body" >"$_tmp"
+	chmod 0644 "$_tmp"
+	mv -f "$_tmp" "$_path"
+}
+
+[ $# -ge 2 ] || usage
+action=$1
+name=$2
+shift 2
+
+case "$action" in
+start)
+	note=$(esc "${1:-}")
+	write_atomic "$dir/$name.json" \
+		"{\"name\":\"$name\",\"started\":\"$(now)\",\"state\":\"running\",\"ok\":false,\"note\":\"$note\"}"
+	;;
+
+progress)
+	[ $# -ge 2 ] || usage
+	done_bytes=$1
+	total_bytes=$2
+	note=$(esc "${3:-}")
+
+	# percent_done is emitted only when it can be computed. A total of 0 means
+	# "unknown size", and a job of unknown size reporting 0% complete reads as
+	# stuck rather than as unmeasured — the console draws an indeterminate
+	# shuttle when the field is absent, which is the honest rendering.
+	pct=""
+	if [ "$total_bytes" -gt 0 ] 2>/dev/null; then
+		# Integer math only: no bc on a minimal box, and awk is not guaranteed
+		# either. Four decimal places is finer than any progress bar renders.
+		whole=$((done_bytes * 10000 / total_bytes))
+		pct=",\"percent_done\":0.$(printf '%04d' "$whole")"
+	fi
+	write_atomic "$dir/$name.progress.json" \
+		"{\"name\":\"$name\",\"updated\":\"$(now)\",\"bytes_done\":$done_bytes,\"total_bytes\":$total_bytes$pct,\"note\":\"$note\"}"
+	;;
+
+finish)
+	[ $# -ge 1 ] || usage
+	code=$1
+	note=$(esc "${2:-}")
+	ok=false
+	[ "$code" -eq 0 ] 2>/dev/null && ok=true
+
+	# started is carried across from the start marker so a finished job can say
+	# how long it took. Recovered with sed rather than a JSON parse, for the
+	# reason at the top of this file; a status file we cannot read this out of
+	# simply reports no start time.
+	started=""
+	if [ -f "$dir/$name.json" ]; then
+		started=$(sed -n 's/.*"started":"\([^"]*\)".*/\1/p' "$dir/$name.json" 2>/dev/null || true)
+	fi
+
+	write_atomic "$dir/$name.json" \
+		"{\"name\":\"$name\",\"started\":\"$started\",\"finished\":\"$(now)\",\"exit_code\":$code,\"ok\":$ok,\"note\":\"$note\"}"
+
+	# The progress file must go, or the job stays decorated with the percentage
+	# it died at. The agent withholds a stale sample anyway, but leaving it
+	# behind means every finished job leans on that safety net forever.
+	rm -f "$dir/$name.progress.json"
+	;;
+
+*)
+	usage
+	;;
+esac

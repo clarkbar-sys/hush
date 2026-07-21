@@ -40,6 +40,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "print the hush-agent version and exit")
 	selfUpdate := flag.Bool("self-update", false, "check for a newer release and replace this binary in place, then exit (run as root by hush-agent-update.service)")
 	backupStatusDir := flag.String("backup-status-dir", defaultBackupStatusDir, "directory of status files written by root-run convention backups (see docs/BACKUP-CONVENTION.md). Read-only; served on /backup-status")
+	jobsDir := flag.String("jobs-dir", defaultJobsDir, "directory of status files written by long-running jobs (see docs/JOBS-CONVENTION.md). Read-only; served on /jobs")
 	duCacheTTL := flag.Duration("du-cache-ttl", time.Hour, "how long a /du sizing result stays fresh before it's recomputed on the next request (0 disables the cache — every /du re-walks)")
 	duRefresh := flag.Duration("du-refresh", time.Hour, "how often to re-size recently-viewed /du paths in the background so the treemap loads warm (0 disables background refresh)")
 	llmPorts := flag.String("llm-ports", strings.Join(llm.DefaultPorts, ","), "comma-separated ports to scan for local LLM runtimes (llama-swap/OpenAI-compatible or Ollama); whatever address a runtime is bound to on one of these is probed there. Empty disables discovery")
@@ -131,6 +132,11 @@ func main() {
 	// neither runs restic nor exposes a secret, it just reads the status files a
 	// root-run backup left behind. See backupstatus.go and docs/BACKUP-CONVENTION.md.
 	mux.HandleFunc("/backup-status", handleConventionBackupStatus(*backupStatusDir))
+	// Ungated for the same reason /backup-status is: reading a status file that
+	// holds no secrets carries none of the risk that gating exists to manage,
+	// and a box should be able to report its jobs without also granting the
+	// agent the power to start one.
+	mux.HandleFunc("/jobs", handleJobs(*jobsDir))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})

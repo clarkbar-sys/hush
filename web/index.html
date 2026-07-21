@@ -347,6 +347,23 @@
     color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .se-stop { flex:none; }
   .se-spawn { align-self:flex-start; }
+  /* jobs (docs/JOBS-CONVENTION.md) — long-running work the box reports on */
+  .jb-sec { display:flex; flex-direction:column; gap:9px; }
+  .jb-row { display:flex; flex-direction:column; gap:6px; padding:10px 12px;
+    border:1px solid var(--border); border-radius:10px; background:var(--panel); }
+  .jb-top { display:flex; align-items:baseline; gap:8px; font-family:var(--mono); font-size:12.5px; }
+  .jb-name { font-weight:700; color:var(--text); }
+  .jb-state { font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; }
+  .jb-state.run { color:var(--accent); }
+  .jb-state.ok { color:var(--muted); }
+  .jb-state.bad, .jb-state.stale { color:var(--bad, #ff6b6b); }
+  .jb-when { color:var(--faint); margin-left:auto; font-size:11px; }
+  .jb-note { font-family:var(--mono); font-size:10.5px; color:var(--muted);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* The bar is drawn only for a determinate sample; a job of unknown size gets
+     the note alone rather than a bar stuck at zero. */
+  .jb-bar { height:4px; border-radius:3px; background:var(--border); overflow:hidden; }
+  .jb-fill { height:100%; background:var(--accent); transition:width .4s ease; }
   /* fields inside the spawn sheet */
   .se-seg { display:flex; gap:6px; margin:2px 0 12px; }
   .se-seg button { flex:1; font-family:var(--mono); font-size:12px; padding:8px 6px;
@@ -1430,6 +1447,8 @@
      scan — and never spawns or kills one. Both actions are sudo commands the
      console composes for you to paste over SSH (JuiceSSH from a phone); control
      stays a pure visualisation. See docs/SESSIONS.md. */
+  const JOBS = {};                  // host -> { jobs:[…], loaded:true, err:"" }
+  const JOBS_POLL_MS = 6000;        // matches the publisher's few-second heartbeat; well inside the agent's 2min staleness window
   const SESSIONS = {};              // host -> { sessions:[…], loaded:true, err:"" }
   const SESSIONS_POLL_MS = 6000;    // sessions change slowly; no need to ride the 2.5s fleet cadence
   const USER_RE = /^[a-z_][a-z0-9_-]*$/;   // a conservative POSIX login, to keep a typo out of the generated command
@@ -1457,6 +1476,80 @@
     if(sec<60) return sec+"s";
     const m=Math.round(sec/60); if(m<60) return m+"m";
     const h=Math.floor(m/60); return h<24 ? h+"h" : Math.floor(h/24)+"d";
+  }
+
+  // fetchJobs refreshes one machine's tracked jobs (docs/JOBS-CONVENTION.md).
+  // Same shape as fetchSessions, including the 404 → "old-agent" distinction, so
+  // a partial rollout says "update the agent" instead of "no jobs".
+  async function fetchJobs(id){
+    if(MODE==="demo"){ JOBS[id] = { jobs:demoJobs(id), loaded:true, err:"" }; if(onMachine(id)) renderMachine(); return; }
+    try {
+      const r = await fetch(`api/machines/${encodeURIComponent(id)}/jobs`, {cache:"no-store"});
+      if(!r.ok){ JOBS[id] = { jobs:[], loaded:true, err:r.status===404?"old-agent":"unreach" }; }
+      else { const data = await r.json(); JOBS[id] = { jobs:Array.isArray(data)?data:[], loaded:true, err:"" }; }
+    } catch(e){ JOBS[id] = { jobs:[], loaded:true, err:"unreach" }; }
+    if(onMachine(id)) renderMachine();
+  }
+
+  function fmtBytes(n){
+    if(!n && n!==0) return "";
+    const u=["B","KB","MB","GB","TB"]; let i=0, v=n;
+    while(v>=1024 && i<u.length-1){ v/=1024; i++; }
+    return (v>=10||i===0 ? Math.round(v) : v.toFixed(1))+" "+u[i];
+  }
+
+  // jobLabel is the job's state as the console words it.
+  //
+  // "stale" is the agent's verdict on a job that claims to be running but
+  // stopped publishing — it is surfaced as its own word rather than folded into
+  // "running", because the whole reason the agent computes it is that a job
+  // which went quiet is exactly what a reader needs to be told about.
+  function jobLabel(j){
+    if(j.state==="running") return {cls:"run", text:"running"};
+    if(j.state==="stale")   return {cls:"stale", text:"went quiet"};
+    if(j.finished)          return j.ok ? {cls:"ok", text:"done"} : {cls:"bad", text:`failed (${j.exit_code})`};
+    return {cls:"ok", text:""};
+  }
+
+  // jobsSection renders the machine view's Jobs block: long-running work the box
+  // reports via the jobs convention. Read-only by construction — there is no
+  // start button, because hush executes nothing and a job is started by whoever
+  // owns it. See docs/JOBS-CONVENTION.md.
+  function jobsSection(m){
+    const st = JOBS[m.id];
+    const list = (st&&st.jobs)||[];
+    let body;
+    if(!m.online && MODE!=="demo"){
+      body = `<div class="empty">machine unreachable — bring it online to see running jobs</div>`;
+    } else if(!st || !st.loaded){
+      body = `<div class="empty">reading…</div>`;
+    } else if(st.err==="old-agent"){
+      body = `<div class="empty">this agent is too old to report jobs — update hush-agent to see them</div>`;
+    } else if(st.err==="unreach"){
+      body = `<div class="empty">couldn't read jobs from this machine</div>`;
+    } else if(!list.length){
+      body = `<div class="empty">no tracked jobs</div>`;
+    } else {
+      body = list.map(j=>{
+        const lab = jobLabel(j);
+        const p = j.progress || null;
+        // Drawn only when the publisher could compute a fraction. A job of
+        // unknown total size omits percent_done, and a bar pinned at zero
+        // reads as stuck rather than as unmeasured.
+        const pct = p && typeof p.percent_done === "number" ? Math.max(0, Math.min(1, p.percent_done)) : null;
+        const note = (p && p.note) || j.note || "";
+        const bytes = p && p.total_bytes ? `${fmtBytes(p.bytes_done)} / ${fmtBytes(p.total_bytes)}` : "";
+        return `<div class="jb-row">
+          <div class="jb-top"><span class="jb-name">${esc(j.name)}</span>
+            <span class="jb-state ${lab.cls}">${esc(lab.text)}</span>
+            ${bytes?`<span class="jb-when">${esc(bytes)}</span>`:""}</div>
+          ${pct!==null?`<div class="jb-bar"><div class="jb-fill" style="width:${(pct*100).toFixed(1)}%"></div></div>`:""}
+          ${note?`<span class="jb-note">${esc(note)}</span>`:""}
+        </div>`;
+      }).join("");
+    }
+    return `<div class="sec-title">Jobs${list.length?` <span class="n">${list.length}</span>`:""}</div>
+      <div class="jb-sec">${body}</div>`;
   }
 
   // sessionsSection renders the machine view's Sessions block: the coding agents
@@ -1701,6 +1794,26 @@
     ];
     if(id==="forge") return [
       { pid:11902, user:"ci", tool:"opencode", cmd:"opencode run --agent build", uptime:120 },
+    ];
+    return [];
+  }
+
+  // demoJobs seeds the offline/file:// preview so the Jobs section renders
+  // without a live agent. Covers all four states the section can draw —
+  // determinate progress, a job of unknown size, a clean finish, and the
+  // "went quiet" verdict — since those are exactly what a preview is for.
+  function demoJobs(id){
+    const now = new Date().toISOString();
+    if(id==="citadel") return [
+      { name:"llama-models", state:"running", started:now,
+        progress:{ updated:now, bytes_done:19540000000, total_bytes:49300000000,
+                   percent_done:0.3963, note:"Qwen3-Coder-Next" } },
+      { name:"reindex", state:"running", started:now,
+        progress:{ updated:now, note:"walking /data — total unknown" } },
+    ];
+    if(id==="forge") return [
+      { name:"nightly-build", finished:now, ok:true, exit_code:0, note:"12m41s" },
+      { name:"mirror-sync", state:"stale", started:now, note:"last seen 40m ago" },
     ];
     return [];
   }
@@ -2150,7 +2263,7 @@
     // Load this box's sessions once on entry; the slow interval refreshes after.
     // Never fetch from within renderMachine — fetchSessions repaints on
     // completion, which would recurse.
-    const m = byId(id); if(m && (m.online || MODE==="demo")) fetchSessions(id); }
+    const m = byId(id); if(m && (m.online || MODE==="demo")){ fetchSessions(id); fetchJobs(id); } }
   function goFleet(){ state.view="fleet"; render(); scrollTop(); }
   function scrollTop(){ window.scrollTo({top:0,behavior:"instant"}); }
   function sevVar(s){ return s==="good"?"good":s==="warn"?"warn":"crit"; }
@@ -2224,7 +2337,8 @@
             </div>`;
         })()}
 
-        ${sessionsSection(m)}
+        ${jobsSection(m)}
+      ${sessionsSection(m)}
 
         ${(()=>{ const h = hostBackupEntry(m.id); const bks = (h&&h.backups)||[];
           return `<div class="sec-title">Backups${bks.length?` <span class="n">${bks.length}</span>`:""}</div>
@@ -3478,6 +3592,10 @@
   // Refresh the open machine's session list on its own slow cadence — sessions
   // change far less often than vitals, and only the machine on screen is polled.
   setInterval(()=>{ const id=state.mid; if(state.view==="machine" && byId(id) && (byId(id).online||MODE==="demo")) fetchSessions(id); }, SESSIONS_POLL_MS);
+  // Jobs move while you watch them (a download's percentage), so they refresh on
+  // their own interval rather than only on entry — same "only the machine on
+  // screen" restraint.
+  setInterval(()=>{ const id=state.mid; if(state.view==="machine" && byId(id) && (byId(id).online||MODE==="demo")) fetchJobs(id); }, JOBS_POLL_MS);
 
   /* register the service worker so the console is installable and opens
      offline. Only works in a secure context (tsnet HTTPS or localhost);
