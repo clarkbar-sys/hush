@@ -13,12 +13,20 @@
 // user's tmux socket or environment without being that user; what it can read,
 // honestly, is "a coding agent is running here, owned by this user", which is
 // the visualisation the console wants.
+//
+// The package also reports which of those tools are *installed* on the box (see
+// DetectInstalled), so the console can offer to install or update them. That is
+// presence only — a stat of the binary on the box's search list — and holds to
+// the same rule: it looks a binary up, it never runs it, so there is still no
+// execution path here. A tool is only visible when installed somewhere the
+// unprivileged "hush" user can see, which is precisely a system-wide install.
 package sessions
 
 import (
 	"os"
 	"os/user"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,12 +48,30 @@ type Session struct {
 	Uptime  int64  `json:"uptime,omitempty"`  // seconds it has been running, best-effort
 }
 
-// Snapshot is a single reading of a box's running coding-agent sessions, served
-// by the agent's /sessions endpoint.
+// InstalledTool reports whether a known coding-agent CLI is present on the box
+// and where its binary lives. It is presence only, by deliberate design: hush
+// *looks the binary up* (a stat of a path on the box's search list) but never
+// runs it, so this stays as read-only and privilege-free as the /proc scan and
+// the agent keeps its "no execution path" contract. Because detection walks a
+// shared search list (the box PATH plus the usual system bin dirs), a tool only
+// shows up when it's installed somewhere the unprivileged hush user can see —
+// which is precisely a system-wide install (e.g. /usr/local/bin), not a copy
+// tucked inside another user's home.
+type InstalledTool struct {
+	Tool    string `json:"tool"`           // the coding agent: "opencode", "claude", …
+	Present bool   `json:"present"`        // an executable of that name was found on the search list
+	Path    string `json:"path,omitempty"` // where it was found, for a glance at which install answered
+}
+
+// Snapshot is a single reading of a box's coding-agent state, served by the
+// agent's /sessions endpoint: the sessions running now, plus which of the known
+// tools are installed system-wide so the console can offer to install or update
+// them.
 type Snapshot struct {
-	Host     string    `json:"host"`
-	Sessions []Session `json:"sessions"`
-	Match    []string  `json:"match"` // the program names looked for, so the console can explain what "none" means
+	Host      string          `json:"host"`
+	Sessions  []Session       `json:"sessions"`
+	Match     []string        `json:"match"`               // the program names looked for, so the console can explain what "none" means
+	Installed []InstalledTool `json:"installed,omitempty"` // presence of each known tool on the box's search list; omitted (never a partial guess) when match is cleared
 }
 
 // userHZ is the kernel's clock-tick rate (USER_HZ), used to turn a process's
@@ -66,10 +92,84 @@ const cmdMax = 200
 func Collect(match []string) Snapshot {
 	host, _ := os.Hostname()
 	return Snapshot{
-		Host:     host,
-		Sessions: Detect("/proc", match, time.Now()),
-		Match:    match,
+		Host:      host,
+		Sessions:  Detect("/proc", match, time.Now()),
+		Match:     match,
+		Installed: DetectInstalled(match, binDirs()),
 	}
+}
+
+// systemBinDirs are the shared locations a system-wide install lands in (or that
+// a tool is commonly found in), searched in addition to the box's own PATH so a
+// tool installed to /usr/local/bin is seen even when the agent's PATH — as a
+// systemd unit's — is narrower than a login shell's.
+var systemBinDirs = []string{"/usr/local/bin", "/usr/bin", "/bin", "/usr/local/sbin", "/usr/sbin", "/opt/homebrew/bin"}
+
+// binDirs is the ordered, de-duplicated search list DetectInstalled walks: the
+// box PATH first (an operator's own choices win), then the system bin dirs.
+func binDirs() []string {
+	seen := make(map[string]struct{})
+	var dirs []string
+	add := func(d string) {
+		if d == "" {
+			return
+		}
+		if _, ok := seen[d]; ok {
+			return
+		}
+		seen[d] = struct{}{}
+		dirs = append(dirs, d)
+	}
+	for _, d := range filepath.SplitList(os.Getenv("PATH")) {
+		add(d)
+	}
+	for _, d := range systemBinDirs {
+		add(d)
+	}
+	return dirs
+}
+
+// DetectInstalled reports which of tools exist as an executable anywhere in
+// dirs. It is the presence half of the Snapshot: a stat and an executable-bit
+// check per candidate path, first hit wins — it never runs the binary, so it
+// asks for no privilege and mirrors the /proc scan's read-only posture. An
+// empty tool set returns nil, so clearing -session-procs disables installed
+// reporting exactly as it disables session reporting (the console reads the
+// absent field as "this agent doesn't report", never as "nothing installed").
+func DetectInstalled(tools, dirs []string) []InstalledTool {
+	seen := make(map[string]struct{}, len(tools))
+	var out []InstalledTool
+	for _, t := range tools {
+		t = strings.ToLower(strings.TrimSpace(t))
+		if t == "" {
+			continue
+		}
+		if _, ok := seen[t]; ok {
+			continue
+		}
+		seen[t] = struct{}{}
+		it := InstalledTool{Tool: t}
+		for _, d := range dirs {
+			p := path.Join(d, t)
+			if isExecutable(p) {
+				it.Present = true
+				it.Path = p
+				break
+			}
+		}
+		out = append(out, it)
+	}
+	return out
+}
+
+// isExecutable reports whether p is a regular file (symlinks are followed, so a
+// launcher symlinked into a bin dir counts) with any execute bit set.
+func isExecutable(p string) bool {
+	fi, err := os.Stat(p)
+	if err != nil || fi.IsDir() {
+		return false
+	}
+	return fi.Mode().Perm()&0o111 != 0
 }
 
 // Detect scans procRoot for coding-agent processes, resolving each to a
