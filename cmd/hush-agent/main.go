@@ -111,12 +111,15 @@ func main() {
 		}
 	})
 	// /sessions lists the coding-agent processes (opencode, claude) running on
-	// this box, so the console can show what's live and offer to stop it. Like
-	// /top it's ungated read-only /proc telemetry — a process's argv and owner
-	// are world-readable, so it needs no privilege and holds no session state.
-	// hush never spawns or kills a session; both are sudo commands the operator
-	// runs over SSH (see docs/SESSIONS.md). Clearing -session-procs leaves the
-	// list empty rather than reporting a partial guess.
+	// this box, so the console can show what's live and offer to stop it, and
+	// reports which of those tools are installed system-wide so the console can
+	// offer to install or update them. Like /top it's ungated read-only
+	// telemetry — a process's argv and owner are world-readable, and installed
+	// detection only stats binaries on the search list (never runs them) — so it
+	// needs no privilege and holds no session state. hush never spawns, kills, or
+	// installs; all of those are sudo commands the operator runs over SSH (see
+	// docs/SESSIONS.md). Clearing -session-procs leaves both the session list and
+	// the installed list empty rather than reporting a partial guess.
 	sessionProcList := splitList(*sessionProcs)
 	mux.HandleFunc("/sessions", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

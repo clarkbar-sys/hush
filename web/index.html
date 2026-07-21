@@ -349,6 +349,23 @@
   .se-spawn { align-self:flex-start; }
   .se-stop-all { color:var(--crit); border-color:var(--crit-soft); }
   .se-stop-all:hover { border-color:var(--crit); background:var(--crit-soft); }
+  /* installed-tools strip, above the running-session list */
+  .tl-strip { display:flex; flex-direction:column; gap:7px; margin-bottom:2px; }
+  .tl-row { display:flex; align-items:center; gap:10px; padding:8px 12px;
+    border:1px solid var(--border); border-radius:10px; background:var(--panel); }
+  .tl-gly { font-size:14px; flex:none; }
+  .tl-row.on  .tl-gly { color:var(--good); }
+  .tl-row.off .tl-gly { color:var(--warn); }
+  .tl-main { min-width:0; flex:1; }
+  .tl-top { display:flex; align-items:baseline; gap:8px; font-family:var(--mono); font-size:12.5px; }
+  .tl-tool { font-weight:700; color:var(--text); }
+  .tl-state { font-size:11px; color:var(--muted); }
+  .tl-row.off .tl-state { color:var(--warn); }
+  .tl-path { display:block; margin-top:3px; font-family:var(--mono); font-size:10.5px;
+    color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tl-fix { flex:none; }
+  .tl-row.off .tl-fix { color:var(--warn); border-color:var(--warn-soft); }
+  .tl-row.off .tl-fix:hover { border-color:var(--warn); background:var(--warn-soft); }
   /* fields inside the spawn sheet */
   .se-seg { display:flex; gap:6px; margin:2px 0 12px; }
   .se-seg button { flex:1; font-family:var(--mono); font-size:12px; padding:8px 6px;
@@ -1444,11 +1461,13 @@
   // /sessions handler) answers 404 — flagged distinctly so the section can say
   // "update the agent" rather than "nothing running".
   async function fetchSessions(id){
-    if(MODE==="demo"){ SESSIONS[id] = { sessions:demoSessions(id), loaded:true, err:"" }; if(onMachine(id)) renderMachine(); return; }
+    if(MODE==="demo"){ SESSIONS[id] = { sessions:demoSessions(id), installed:demoInstalled(id), loaded:true, err:"" }; if(onMachine(id)) renderMachine(); return; }
     try {
       const r = await fetch(`api/machines/${encodeURIComponent(id)}/sessions`, {cache:"no-store"});
       if(!r.ok){ SESSIONS[id] = { sessions:[], loaded:true, err:r.status===404?"old-agent":"unreach" }; }
-      else { const data = await r.json(); SESSIONS[id] = { sessions:(data&&data.sessions)||[], loaded:true, err:"" }; }
+      // installed is null when an agent serves /sessions but predates the field
+      // (an older new-agent) — the tools strip stays hidden rather than guessing.
+      else { const data = await r.json(); SESSIONS[id] = { sessions:(data&&data.sessions)||[], installed:(data&&data.installed)||null, loaded:true, err:"" }; }
     } catch(e){ SESSIONS[id] = { sessions:[], loaded:true, err:"unreach" }; }
     if(onMachine(id)) renderMachine();
   }
@@ -1461,9 +1480,59 @@
     const h=Math.floor(m/60); return h<24 ? h+"h" : Math.floor(h/24)+"d";
   }
 
-  // sessionsSection renders the machine view's Sessions block: the coding agents
-  // running now (each with a Stop button that opens its sudo kill command) and a
-  // Spawn button that composes the launch command. Spawn is always offered — the
+  // KNOWN_TOOLS are the coding agents the console can install system-wide, each
+  // mapped to its npm package. The install and update commands are the same
+  // idempotent line — `npm install -g <pkg>@latest` installs when absent and
+  // updates when present — so "always offer update" needs no version check.
+  const KNOWN_TOOLS = [
+    { tool:"opencode", pkg:"opencode-ai" },
+    { tool:"claude",   pkg:"@anthropic-ai/claude-code" },
+  ];
+  function toolInstallCmd(pkg){ return `sudo npm install -g ${pkg}@latest`; }
+
+  // toolInstalledOn reports a tool's installed state on a host from the last
+  // /sessions read: true (present), false (reported absent), or null (unknown —
+  // agent too old, offline, or not yet loaded). The spawn sheet uses it to warn
+  // before you paste a command that would fail on a missing binary.
+  function toolInstalledOn(host, tool){
+    const st = SESSIONS[host], inst = st && st.installed;
+    if(!inst) return null;
+    const rec = inst.find(i=>i.tool===tool);
+    return rec ? !!rec.present : null;
+  }
+
+  // toolsStrip renders, above the running-session list, which known coding
+  // agents are installed system-wide on the box — each with an Install (absent)
+  // or Update (present) button that opens the one npm command to fix it. It
+  // shows only when the agent actually reported installed state (a new-enough
+  // agent, online, no read error); otherwise it's silent and the session body
+  // below carries any "update the agent" / "unreachable" message on its own.
+  function toolsStrip(m){
+    const st = SESSIONS[m.id];
+    const inst = st && st.installed;      // array (reported) or null/undefined (unknown)
+    if(!inst || !inst.length) return "";
+    const byTool = {}; inst.forEach(i=>{ byTool[i.tool] = i; });
+    const rows = KNOWN_TOOLS.map(kt=>{
+      const rec = byTool[kt.tool];
+      if(!rec) return "";                 // this agent doesn't track that tool
+      const present = !!rec.present;
+      return `<div class="tl-row ${present?"on":"off"}">
+        <span class="tl-gly">${seGlyph(kt.tool)}</span>
+        <div class="tl-main">
+          <div class="tl-top"><span class="tl-tool">${esc(kt.tool)}</span>
+            <span class="tl-state">${present?"installed":"not installed"}</span></div>
+          ${present&&rec.path?`<span class="tl-path">${esc(rec.path)}</span>`:""}
+        </div>
+        <button class="btn tl-fix" data-tool="${esc(kt.tool)}" data-present="${present?1:0}">${present?"Update":"Install"}</button>
+      </div>`;
+    }).join("");
+    return rows ? `<div class="tl-strip">${rows}</div>` : "";
+  }
+
+  // sessionsSection renders the machine view's Sessions block: which coding
+  // agents are installed system-wide (the tools strip), the ones running now
+  // (each with a Stop button that opens its sudo kill command) and a Spawn
+  // button that composes the launch command. Spawn is always offered — the
   // command is text to paste, so it works even against an agent too old to
   // *report* sessions.
   function sessionsSection(m){
@@ -1497,6 +1566,7 @@
     }
     return `<div class="sec-title">Sessions${list.length?` <span class="n">${list.length}</span>`:""}</div>
       <div class="se-sec">
+        ${toolsStrip(m)}
         ${body}
         <div class="sheet-actions">
           <button class="btn primary se-spawn" id="se-spawn">＋ Spawn a session</button>
@@ -1524,36 +1594,37 @@
   // points it at one of these by writing that box's opencode.json.
   function spawnTargets(){ return M.filter(x=>ocReachable(x).length); }
 
-  // buildSpawnCmd composes the one &&-chained sudo command that: installs the
-  // chosen tool if missing (only opencode or only claude — not both), writes
-  // the chosen LLM's opencode.json (base64-piped so the JSON can't collide
-  // with the command's own quoting), and launches the tool in a named tmux
-  // session you can attach to now and reattach to later. `sudo -u <user>` is
-  // the whole user preflight — it fails loudly on its own if the user doesn't
+  // buildSpawnCmd composes the one &&-chained sudo command that (for opencode)
+  // writes the chosen LLM's opencode.json — base64-piped so the JSON can't
+  // collide with the command's own quoting — and launches the tool in a named
+  // tmux session you can attach to now and reattach to later. `sudo -u <user>`
+  // is the whole user preflight — it fails loudly on its own if the user doesn't
   // exist.
+  //
+  // The tool is expected to be installed system-wide (via the Sessions tools
+  // strip, which composes an `npm install -g` command) so it's already on the
+  // box PATH — the spawn command no longer self-installs into the user's home,
+  // so there's no per-user install and no `$HOME/.opencode/bin` PATH juggling.
+  // If the tool isn't installed the `exec` fails on its own, the same honest way
+  // `sudo -u` fails on a missing user; install it once from the strip first.
   //
   // claude launches with --remote-control so the session (typed into from
   // JuiceSSH, same as before) is also steerable from claude.ai/code or the
   // Claude app. It degrades gracefully rather than failing the chain: an
   // account not yet signed in just gets a local session with a Remote Control
-  // failure notice, same posture as the tool-missing/user-missing checks
-  // already in this command. CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX sets
-  // the session's auto-generated name to "<fleet machine>-adjective-noun" —
-  // Claude Code's own naming convention, prefixed with the box hush spawned it
-  // on instead of the box's raw OS hostname (which may not match). It also
-  // launches with --dangerously-skip-permissions, since the session already
-  // sits behind sudo -u <user> as the whole preflight — the operator chose
-  // this box and this user before pasting the command, so a second
-  // per-tool-call prompt inside the session is redundant friction, not
-  // additional safety.
+  // failure notice. CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX sets the session's
+  // auto-generated name to "<fleet machine>-adjective-noun" — Claude Code's own
+  // naming convention, prefixed with the box hush spawned it on instead of the
+  // box's raw OS hostname (which may not match). It also launches with
+  // --dangerously-skip-permissions, since the session already sits behind
+  // sudo -u <user> as the whole preflight — the operator chose this box and this
+  // user before pasting the command, so a second per-tool-call prompt inside the
+  // session is redundant friction, not additional safety.
   function buildSpawnCmd(){
     const u = spUser.trim();
     if(!USER_RE.test(u)) return { cmd:"", err:"enter a Linux username to run as" };
-    let lines = spTool==="opencode"
-      ? `  command -v opencode >/dev/null 2>&1 || curl -fsSL https://opencode.ai/install | bash &&\n`
-      : `  command -v claude   >/dev/null 2>&1 || curl -fsSL https://claude.ai/install.sh | bash &&\n`;
+    let lines = "";
     if(spTool==="opencode"){
-      lines += `  export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$PATH" &&\n`;
       const t = spTarget && byId(spTarget);
       if(t){
         const json = JSON.stringify(ocConfig(t, 0), null, 2);
@@ -1564,7 +1635,6 @@
       lines += `  exec tmux new-session -A -s hush-opencode opencode`;
     } else {
       const prefix = String(spHost||"").replace(/[^a-zA-Z0-9._-]/g, "-");
-      lines += `  export PATH="$HOME/.local/bin:$PATH" &&\n`;
       lines += `  export CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX="${prefix}" &&\n`;
       lines += `  exec tmux new-session -A -s hush-claude claude --remote-control --dangerously-skip-permissions`;
     }
@@ -1592,6 +1662,11 @@
          </div>`
       : `<div class="field-note">no tailnet-reachable LLM on the fleet — opencode will launch with whatever config already exists on the box. Expose a runtime (see a machine's Inference section) to point it at one.</div>`)
       : `<div class="field-note">claude uses its own Anthropic login (run <span style="font-family:var(--mono)">claude</span> once in the session to sign in) and launches with <span style="font-family:var(--mono)">--remote-control</span>, so once signed in it's also steerable from claude.ai/code or the Claude app — sign-in still happens on the box, hush doesn't hold a credential. Routing claude at a hush-net endpoint is a follow-up.</div>`;
+    // Warn (don't block) when the chosen tool is reported absent on this box —
+    // spawn no longer self-installs, so the command would fail on the exec.
+    const notInstalledNote = toolInstalledOn(spHost, spTool)===false
+      ? `<div class="field-note" style="color:var(--warn);border-color:var(--warn-soft)"><span style="font-family:var(--mono)">${esc(spTool)}</span> isn't installed on ${esc(spHost)} — this command will fail until it is. Install it system-wide from the Sessions list first.</div>`
+      : "";
     const { cmd, err } = buildSpawnCmd();
     spawnBody.innerHTML = `
       <h3>Spawn a session <span class="sd" style="font-family:var(--mono)">${esc(spHost)}</span></h3>
@@ -1610,6 +1685,7 @@
         </div>
       </div>
       ${targetField}
+      ${notInstalledNote}
       <div class="cmdbox"><code id="spCmd">${esc(cmd||err)}</code><button class="btn" id="spCopy">Copy</button></div>
       <div class="field-note">Launches in a tmux session named <span style="font-family:var(--mono)">hush-${esc(spTool)}</span> — detach with <span style="font-family:var(--mono)">Ctrl-b d</span> and it keeps running (hush will show it); re-run to reattach.${spTool==="claude"?` claude's own Remote Control session (separate from the tmux session) is named <span style="font-family:var(--mono)">${esc(spHost)}-adjective-noun</span>, matching Claude Code's own auto-naming convention, until you <span style="font-family:var(--mono)">/rename</span> it.`:""}</div>
       <div class="sheet-actions"><button class="btn primary" id="spClose" style="flex:1">Close</button></div>`;
@@ -1681,6 +1757,31 @@
       catch(e){ toast("couldn't copy — select and copy manually"); }
     });
     $("#stAllClose").addEventListener("click", closeSpawn);
+    spawnScrim.classList.add("open");
+  }
+
+  // openToolSheet composes the system-wide install/update command for one tool:
+  // a single idempotent `sudo npm install -g <pkg>@latest` you paste into a root
+  // shell on the box. Same posture as spawn/stop — hush hands you the line, you
+  // run it — but it targets the *system* (npm's global prefix, e.g.
+  // /usr/local/bin) so one copy serves every user and the unprivileged hush
+  // agent can see it, rather than a per-user install tucked inside a home dir.
+  function openToolSheet(host, tool, present){
+    const kt = KNOWN_TOOLS.find(k=>k.tool===tool); if(!kt) return;
+    const cmd = toolInstallCmd(kt.pkg);
+    const verb = present ? "Update" : "Install";
+    spHost = host;
+    spawnBody.innerHTML = `
+      <h3>${verb} <span class="sd" style="font-family:var(--mono)">${esc(tool)}</span> on <span class="sd" style="font-family:var(--mono)">${esc(host)}</span></h3>
+      <p class="sd">run this as root on ${esc(host)} (JuiceSSH) to ${verb.toLowerCase()} ${esc(tool)} system-wide — hush never runs it for you</p>
+      <div class="cmdbox"><code>${esc(cmd)}</code><button class="btn" id="tlCopy">Copy</button></div>
+      <div class="field-note">Installs into npm's global prefix (usually <span style="font-family:var(--mono)">/usr/local/bin</span>), so one copy serves every user on the box and hush can see it — a spawned session then just runs it, no per-user install. Needs Node/npm on ${esc(host)}; if it's missing the command says so and you install Node first. Re-run any time — it's idempotent, so the same line updates an existing install.</div>
+      <div class="sheet-actions"><button class="btn primary" id="tlClose" style="flex:1">Done</button></div>`;
+    $("#tlCopy").addEventListener("click", async ()=>{
+      try { await navigator.clipboard.writeText(cmd); toast("copied — paste into JuiceSSH on "+host); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
+    $("#tlClose").addEventListener("click", closeSpawn);
     spawnScrim.classList.add("open");
   }
 
@@ -1756,6 +1857,24 @@
       { pid:11902, user:"ci", tool:"opencode", cmd:"opencode run --agent build", uptime:120 },
     ];
     return [];
+  }
+
+  // demoInstalled seeds the tools strip in the offline/file:// preview: citadel
+  // has opencode system-wide but not claude (so both the Update and Install
+  // states render), forge has both, everything else has neither.
+  function demoInstalled(id){
+    if(id==="citadel") return [
+      { tool:"opencode", present:true, path:"/usr/local/bin/opencode" },
+      { tool:"claude",   present:false },
+    ];
+    if(id==="forge") return [
+      { tool:"opencode", present:true, path:"/usr/local/bin/opencode" },
+      { tool:"claude",   present:true, path:"/usr/local/bin/claude" },
+    ];
+    return [
+      { tool:"opencode", present:false },
+      { tool:"claude",   present:false },
+    ];
   }
 
   /* ---------- alert center: backups that need attention ----------
@@ -2309,6 +2428,9 @@
     app.querySelectorAll(".se-stop").forEach(b=>{
       b.addEventListener("click", ()=>openStopSheet(m.id, {
         pid: +b.dataset.pid, user: b.dataset.user, tool: b.dataset.tool }));
+    });
+    app.querySelectorAll(".tl-fix").forEach(b=>{
+      b.addEventListener("click", ()=>openToolSheet(m.id, b.dataset.tool, b.dataset.present==="1"));
     });
     const stopAll = $("#se-stop-all");
     if(stopAll) stopAll.addEventListener("click", ()=>{

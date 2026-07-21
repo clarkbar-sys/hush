@@ -128,6 +128,59 @@ func TestDetectEmptyMatchDisables(t *testing.T) {
 	}
 }
 
+func TestDetectInstalled(t *testing.T) {
+	// A shared bin dir holding an executable opencode, plus a claude that isn't
+	// executable (a stray non-binary of the same name mustn't count as installed)
+	// and a directory named like a tool (also must not count).
+	binA := t.TempDir()
+	binB := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binA, "opencode"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(binB, "claude"), []byte("not-a-binary"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(binB, "opencode.d"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := DetectInstalled([]string{"opencode", "claude"}, []string{binA, binB})
+	if len(got) != 2 {
+		t.Fatalf("want 2 tools, got %d: %+v", len(got), got)
+	}
+	if !got[0].Present || got[0].Tool != "opencode" || got[0].Path != filepath.Join(binA, "opencode") {
+		t.Errorf("opencode = %+v, want present at %s", got[0], filepath.Join(binA, "opencode"))
+	}
+	// claude exists but isn't executable — reported present:false, no path.
+	if got[1].Present || got[1].Tool != "claude" || got[1].Path != "" {
+		t.Errorf("claude = %+v, want not present", got[1])
+	}
+}
+
+func TestDetectInstalledFirstHitWins(t *testing.T) {
+	// PATH order matters: the earlier dir's binary is the one reported.
+	first := t.TempDir()
+	second := t.TempDir()
+	for _, d := range []string{first, second} {
+		if err := os.WriteFile(filepath.Join(d, "opencode"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := DetectInstalled([]string{"opencode"}, []string{first, second})
+	if len(got) != 1 || got[0].Path != filepath.Join(first, "opencode") {
+		t.Errorf("got %+v, want path in first dir %s", got, first)
+	}
+}
+
+func TestDetectInstalledEmptyDisables(t *testing.T) {
+	if got := DetectInstalled(nil, []string{t.TempDir()}); got != nil {
+		t.Errorf("empty tool set should report nothing, got %+v", got)
+	}
+	if got := DetectInstalled([]string{"  ", ""}, []string{t.TempDir()}); got != nil {
+		t.Errorf("all-blank tool set should report nothing, got %+v", got)
+	}
+}
+
 func TestSanitizeCmd(t *testing.T) {
 	if got := sanitizeCmd([]string{"opencode", "run", "--flag"}); got != "opencode run --flag" {
 		t.Errorf("got %q", got)

@@ -31,10 +31,28 @@ or agent.
 
 ## What you see — the Sessions section
 
-Every Machine view grows a **Sessions** section listing the coding agents
-running on that box: the tool, the user it runs as, how long it's been up, and
-its command line. Each has a **Stop** button; a **＋ Spawn a session** button
-composes a new launch command. It reads a new agent endpoint, `/sessions`.
+Every Machine view grows a **Sessions** section. It opens with a **tools strip**
+— one row per known coding agent (opencode, claude) showing whether it's
+**installed system-wide** on the box and where its binary lives, with an
+**Install** (absent) or **Update** (present) button that composes the one
+command to fix it. Below the strip is the list of agents **running now**: the
+tool, the user it runs as, how long it's been up, and its command line. Each
+running session has a **Stop** button; a **＋ Spawn a session** button composes a
+new launch command. It all reads one agent endpoint, `/sessions`.
+
+## Installed vs running — two reads, one endpoint
+
+The Sessions section answers two questions from the same `/sessions` snapshot:
+
+- **What's installed here?** — the tools strip, from the snapshot's `installed`
+  list. Presence only: the agent *looks the binary up* on the box's search list
+  (its `PATH` plus the usual system bin dirs) but **never runs it**, so this
+  stays as read-only and privilege-free as the `/proc` scan. A tool only shows
+  as installed when it lives somewhere the unprivileged `hush` user can see —
+  which is precisely a **system-wide** install (e.g. `/usr/local/bin`), not a
+  copy tucked inside another user's home. That's the point of installing to the
+  system: one copy serves every user *and* the agent can report it.
+- **What's running here?** — the session list, from the `/proc` scan below.
 
 ## The agent — `/sessions`, a read-only `/proc` scan
 
@@ -46,9 +64,24 @@ composes a new launch command. It reads a new agent endpoint, `/sessions`.
   "match": ["opencode", "claude"],
   "sessions": [
     { "pid": 48213, "user": "josh", "tool": "opencode", "cmd": "opencode", "uptime": 5400, "started": 1721470000 }
+  ],
+  "installed": [
+    { "tool": "opencode", "present": true, "path": "/usr/local/bin/opencode" },
+    { "tool": "claude", "present": false }
   ]
 }
 ```
+
+The `installed` list is presence only — `present` and, when found, the `path`
+that answered. There's no version field: reporting a version would mean *running*
+`opencode --version`, and the agent deliberately never executes anything (see the
+package doc). The console therefore doesn't distinguish "outdated" from
+"installed" — it always offers **Update**, since the install command is
+idempotent and re-running it updates in place. `installed` is populated from the
+same `match` set as sessions, so clearing `-session-procs` omits it entirely
+(the console reads the absent field as "this agent doesn't report", never as
+"nothing installed"). An agent old enough to serve `/sessions` but predating this
+field simply omits it, and the tools strip stays hidden.
 
 It is discovered the same way `/top` reads the process table: for each entry in
 `/proc`, the agent reads the world-readable `cmdline` and the directory's owning
@@ -85,17 +118,42 @@ session list rides through control like every other per-machine read. An agent
 too old to serve `/sessions` answers `404`, relayed as-is so the console says
 "update the agent" rather than showing an empty section.
 
+## Installing — one `sudo` command, once per box
+
+Install is now a **separate, one-time, system-wide** action, not something the
+spawn command does on every launch. The tools strip composes it: a single
+idempotent line that installs into npm's global prefix (usually `/usr/local/bin`,
+on every user's `PATH` and visible to the `hush` agent). For opencode:
+
+```bash
+sudo npm install -g opencode-ai@latest
+```
+
+and for claude, `sudo npm install -g @anthropic-ai/claude-code@latest`. The same
+line is **Install** when the tool is absent and **Update** when it's present —
+`@latest` makes it idempotent, so there's no separate update path and no version
+check to maintain. It needs Node/npm on the box; if that's missing the command
+says so and you install Node first — the same "fails loudly on its own" posture
+as a missing user in a spawn command.
+
+Why npm-global rather than each tool's own `curl … | install` one-liner: the
+official opencode and claude installers hardcode a **per-user** home target
+(`~/.opencode/bin`, `~/.local/bin`) with no system-prefix override, so running
+them as root just installs into `/root`'s home — still invisible to other users
+and to the agent. `npm install -g` is the portable way to land one shared binary
+in `/usr/local/bin`.
+
 ## Spawning — one `sudo` command you paste
 
 The **Spawn** sheet composes a single `sudo` command. You pick the **user** to
 run as and the **tool**; for opencode you also pick which of the fleet's
-tailnet-reachable LLM boxes to point it at. The command, for `opencode` run as
-`josh` pointed at `citadel`'s runtime:
+tailnet-reachable LLM boxes to point it at. It assumes the tool is already
+installed system-wide (above) — so it no longer self-installs, and just runs the
+binary that's on `PATH`. The command, for `opencode` run as `josh` pointed at
+`citadel`'s runtime:
 
 ```bash
 sudo -u josh -H bash -lc '
-  command -v opencode >/dev/null 2>&1 || curl -fsSL https://opencode.ai/install | bash &&
-  export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$PATH" &&
   mkdir -p "$HOME/.config/opencode" &&
   printf %s "<base64 opencode.json>" | base64 -d > "$HOME/.config/opencode/opencode.json" &&
   exec tmux new-session -A -s hush-opencode opencode'
@@ -106,8 +164,11 @@ Every part maps to a step of the workflow:
 - **Pick a user; fail if it doesn't exist.** `sudo -u josh` *is* the whole
   preflight — if `josh` isn't a user on the box, the command fails on its own,
   loudly, before doing anything. hush doesn't need to check first.
-- **Install if missing.** `command -v … || <installer>` installs the chosen
-  tool only when absent — opencode or claude, whichever you picked, not both.
+- **Assumes the tool is installed system-wide.** No `command -v … || <installer>`
+  line: install is a one-time system action from the tools strip, so the binary
+  is already on `PATH`. If it isn't, the `exec` fails on its own the same honest
+  way — and the Spawn sheet warns first when the agent has reported the tool
+  absent on this box.
 - **Refresh opencode's config from hush.** The chosen LLM box's `opencode.json`
   (the same one the [Inference section exports](./DESIGN.md#local-inference--capability-and-reach)
   — an OpenAI-compatible provider at the runtime's tailnet `baseURL`, its served
@@ -125,7 +186,8 @@ Every part maps to a step of the workflow:
 claude uses its own Anthropic login (run `claude` once in the session to sign
 in); routing claude at a hush-net endpoint is a follow-up (below). The command
 is one blob you copy into JuiceSSH — the `&&` chain stops at the first failed
-step, so a failed install never launches a half-configured agent.
+step, so a failed config write never launches a half-configured agent (and a
+tool that was never installed system-wide fails cleanly at the final `exec`).
 
 **claude launches with `--remote-control`.** The session you get in tmux over
 JuiceSSH is the same interactive session as before, but it's also steerable

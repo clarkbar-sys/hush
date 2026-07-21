@@ -31,6 +31,10 @@ func TestProxySessionsRelaysSnapshot(t *testing.T) {
 			Sessions: []sessions.Session{
 				{PID: 4821, User: "josh", Tool: "opencode", Cmd: "opencode", Uptime: 300},
 			},
+			Installed: []sessions.InstalledTool{
+				{Tool: "opencode", Present: true, Path: "/usr/local/bin/opencode"},
+				{Tool: "claude", Present: false},
+			},
 		})
 	})
 	mux, _ := sessionsFleet(t, agent)
@@ -51,6 +55,17 @@ func TestProxySessionsRelaysSnapshot(t *testing.T) {
 	}
 	if s := got.Sessions[0]; s.PID != 4821 || s.User != "josh" || s.Tool != "opencode" {
 		t.Fatalf("unexpected session: %+v", s)
+	}
+	// The installed-tools list must ride through the proxy verbatim too, so the
+	// console can show what's installed and offer to install/update it.
+	if len(got.Installed) != 2 {
+		t.Fatalf("installed = %+v, want 2 tools", got.Installed)
+	}
+	if it := got.Installed[0]; it.Tool != "opencode" || !it.Present || it.Path != "/usr/local/bin/opencode" {
+		t.Fatalf("unexpected installed[0]: %+v", it)
+	}
+	if it := got.Installed[1]; it.Tool != "claude" || it.Present {
+		t.Fatalf("unexpected installed[1]: %+v", it)
 	}
 }
 
