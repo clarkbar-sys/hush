@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.8.0](https://github.com/clarkbar-sys/hush/compare/v2.7.0...v2.8.0) (2026-07-21)
+
+
+### Features
+
+* **sessions:** report installed CLIs and install them system-wide ([#196](https://github.com/clarkbar-sys/hush/issues/196)) ([a2d9432](https://github.com/clarkbar-sys/hush/commit/a2d9432e357c7f0cbef3735d0bdfd4fcab15cfb6))
+* **web:** spawn claude sessions with Remote Control enabled ([#193](https://github.com/clarkbar-sys/hush/issues/193)) ([6371c23](https://github.com/clarkbar-sys/hush/commit/6371c23203b7ea1d50d94d2b9a3884eac6a37ec0))
+
 ## [2.7.0](https://github.com/clarkbar-sys/hush/compare/v2.6.0...v2.7.0) (2026-07-21)
 
 
