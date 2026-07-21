@@ -137,6 +137,11 @@ gets a plain local session with a Remote Control failure notice, not a failed
 chain. hush doesn't hold a credential for this — the sign-in happens on the
 box, same as the Anthropic login above.
 
+**claude also launches with `--dangerously-skip-permissions`.** `sudo -u
+<user>` is already the permission gate — the operator picked the box and the
+user before pasting the command — so a second per-tool-call prompt inside the
+session is friction, not extra safety.
+
 The command also sets `CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX` to the fleet
 machine's hush name, so the session's auto-generated title follows Claude
 Code's own convention — `<prefix>-adjective-noun` (its docs' own example is

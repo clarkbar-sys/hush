@@ -1540,7 +1540,12 @@
   // already in this command. CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX sets
   // the session's auto-generated name to "<fleet machine>-adjective-noun" —
   // Claude Code's own naming convention, prefixed with the box hush spawned it
-  // on instead of the box's raw OS hostname (which may not match).
+  // on instead of the box's raw OS hostname (which may not match). It also
+  // launches with --dangerously-skip-permissions, since the session already
+  // sits behind sudo -u <user> as the whole preflight — the operator chose
+  // this box and this user before pasting the command, so a second
+  // per-tool-call prompt inside the session is redundant friction, not
+  // additional safety.
   function buildSpawnCmd(){
     const u = spUser.trim();
     if(!USER_RE.test(u)) return { cmd:"", err:"enter a Linux username to run as" };
@@ -1561,7 +1566,7 @@
       const prefix = String(spHost||"").replace(/[^a-zA-Z0-9._-]/g, "-");
       lines += `  export PATH="$HOME/.local/bin:$PATH" &&\n`;
       lines += `  export CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX="${prefix}" &&\n`;
-      lines += `  exec tmux new-session -A -s hush-claude claude --remote-control`;
+      lines += `  exec tmux new-session -A -s hush-claude claude --remote-control --dangerously-skip-permissions`;
     }
     return { cmd:`sudo -u ${u} -H bash -lc '\n${lines}'`, err:"" };
   }
