@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.9.0](https://github.com/clarkbar-sys/hush/compare/v2.8.0...v2.9.0) (2026-07-21)
+
+
+### Features
+
+* **web:** add a Users section under Sessions in the machine view ([#198](https://github.com/clarkbar-sys/hush/issues/198)) ([c92aea9](https://github.com/clarkbar-sys/hush/commit/c92aea97ff437ef0e0ff7d0a389275f2eb765b3d))
+* **web:** include the user in the spawned claude session's name prefix ([#199](https://github.com/clarkbar-sys/hush/issues/199)) ([2d5ddc9](https://github.com/clarkbar-sys/hush/commit/2d5ddc94a0adc34aedd0ee2c5ab1c23b3c75bf72))
+
 ## [2.8.0](https://github.com/clarkbar-sys/hush/compare/v2.7.0...v2.8.0) (2026-07-21)
 
 
