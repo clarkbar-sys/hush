@@ -127,6 +127,23 @@ in); routing claude at a hush-net endpoint is a follow-up (below). The command
 is one blob you copy into JuiceSSH — the `&&` chain stops at the first failed
 step, so a failed install never launches a half-configured agent.
 
+**claude launches with `--remote-control`.** The session you get in tmux over
+JuiceSSH is the same interactive session as before, but it's also steerable
+from [claude.ai/code](https://claude.ai/code) or the Claude mobile app once
+you've signed in — pick up the conversation from your phone the way you'd
+reattach the tmux session from another terminal. This degrades the same way
+the rest of the command does: an account that hasn't run `/login` yet just
+gets a plain local session with a Remote Control failure notice, not a failed
+chain. hush doesn't hold a credential for this — the sign-in happens on the
+box, same as the Anthropic login above.
+
+The command also sets `CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX` to the fleet
+machine's hush name, so the session's auto-generated title follows Claude
+Code's own convention — `<prefix>-adjective-noun` (its docs' own example is
+`myhost-graceful-unicorn`) — prefixed with the name hush knows the box by
+rather than its raw OS hostname, which isn't always the same thing. Send a
+message and the title updates to reflect it, or `/rename` it yourself.
+
 ## Stopping — another command you paste
 
 Stop is the same shape. The **Stop** button opens the command for the process
