@@ -347,6 +347,8 @@
     color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .se-stop { flex:none; }
   .se-spawn { align-self:flex-start; }
+  .se-stop-all { color:var(--crit); border-color:var(--crit-soft); }
+  .se-stop-all:hover { border-color:var(--crit); background:var(--crit-soft); }
   /* fields inside the spawn sheet */
   .se-seg { display:flex; gap:6px; margin:2px 0 12px; }
   .se-seg button { flex:1; font-family:var(--mono); font-size:12px; padding:8px 6px;
@@ -1500,6 +1502,9 @@
           <button class="btn primary se-spawn" id="se-spawn">＋ Spawn a session</button>
           <button class="btn se-adduser" id="se-adduser">＋ Add a user</button>
         </div>
+        ${list.length>=3?`<div class="sheet-actions">
+          <button class="btn se-stop-all" id="se-stop-all">Stop all ${list.length}</button>
+        </div>`:""}
       </div>`;
   }
 
@@ -1632,6 +1637,35 @@
     spawnScrim.classList.add("open");
   }
 
+  // openStopAllSheet composes one chained command that kills every session
+  // currently listed for the machine, grouped by user so each sudo -u only
+  // names pids that actually belong to it. Same posture as openStopSheet:
+  // hush hands you the line, you run it.
+  function openStopAllSheet(host, sessions){
+    const groups = new Map(); // user ("" = unknown/default) -> pids
+    sessions.forEach(s=>{
+      const u = s.user && USER_RE.test(s.user) ? s.user : "";
+      if(!groups.has(u)) groups.set(u, []);
+      groups.get(u).push(s.pid);
+    });
+    const cmd = [...groups.entries()]
+      .map(([u, pids])=> u ? `sudo -u ${u} kill ${pids.join(" ")}` : `sudo kill ${pids.join(" ")}`)
+      .join("; ");
+    spHost = host;
+    spawnBody.innerHTML = `
+      <h3>Stop all sessions <span class="sd" style="font-family:var(--mono)">${esc(host)}</span></h3>
+      <p class="sd">run this as root on ${esc(host)} to stop all ${sessions.length} sessions — hush never kills a process itself</p>
+      <div class="cmdbox"><code>${esc(cmd)}</code><button class="btn" id="stAllCopy">Copy</button></div>
+      <div class="field-note">Ends every session listed above; each drops off the list on the next refresh.</div>
+      <div class="sheet-actions"><button class="btn primary" id="stAllClose" style="flex:1">Done</button></div>`;
+    $("#stAllCopy").addEventListener("click", async ()=>{
+      try { await navigator.clipboard.writeText(cmd); toast("copied — paste into JuiceSSH on "+host); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
+    $("#stAllClose").addEventListener("click", closeSpawn);
+    spawnScrim.classList.add("open");
+  }
+
   /* ---------- add-user command sheet ----------
      Same posture as spawn/stop: hush never touches the box. You name a user and
      it composes the one sudo command that creates them with a login shell and no
@@ -1698,6 +1732,7 @@
     if(id==="citadel") return [
       { pid:48213, user:"josh", tool:"opencode", cmd:"opencode", uptime:5400 },
       { pid:52140, user:"josh", tool:"claude",   cmd:"claude",   uptime:640 },
+      { pid:52881, user:"ci",   tool:"opencode", cmd:"opencode run --agent build", uptime:210 },
     ];
     if(id==="forge") return [
       { pid:11902, user:"ci", tool:"opencode", cmd:"opencode run --agent build", uptime:120 },
@@ -2256,6 +2291,11 @@
     app.querySelectorAll(".se-stop").forEach(b=>{
       b.addEventListener("click", ()=>openStopSheet(m.id, {
         pid: +b.dataset.pid, user: b.dataset.user, tool: b.dataset.tool }));
+    });
+    const stopAll = $("#se-stop-all");
+    if(stopAll) stopAll.addEventListener("click", ()=>{
+      const list = (SESSIONS[m.id]&&SESSIONS[m.id].sessions)||[];
+      if(list.length) openStopAllSheet(m.id, list);
     });
     // The CPU ring, cpu-trend spark and network box all open the live
     // htop-style panel. Demo mode has no agent, so it opens on synthetic data.
