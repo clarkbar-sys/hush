@@ -211,6 +211,17 @@ func buildMux(store *agentStore, discoverer *discoverer, dialer *agentDialer, we
 		}
 		proxySessions(w, r, client, a)
 	})
+	// /users is the same cheap read as /sessions (an /etc/passwd parse, not even
+	// a /proc walk), so it rides the same fleet-poll client. An agent too old to
+	// serve it answers 404, relayed as-is like every other proxy here.
+	mux.HandleFunc("/api/machines/{host}/users", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := store.find(r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyUsers(w, r, client, a)
+	})
 	// Streaming a file can take far longer than the 2s fleet-poll budget (a
 	// whole video), so it rides its own client with no overall timeout.
 	streamClient := dialer.client(0)
@@ -564,6 +575,31 @@ func proxySessions(w http.ResponseWriter, r *http.Request, client *http.Client, 
 	w.WriteHeader(resp.StatusCode)
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		log.Printf("proxy sessions %s: %v", a.Name, err)
+	}
+}
+
+// proxyUsers forwards a request to one agent's /users and relays its response
+// verbatim, the same shape as proxySessions.
+func proxyUsers(w http.ResponseWriter, r *http.Request, client *http.Client, a Agent) {
+	u := strings.TrimRight(a.Addr, "/") + "/users"
+	if q := r.URL.RawQuery; q != "" {
+		u += "?" + q
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, u, nil)
+	if err != nil {
+		http.Error(w, "bad upstream request", http.StatusInternalServerError)
+		return
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "agent unreachable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		log.Printf("proxy users %s: %v", a.Name, err)
 	}
 }
 
