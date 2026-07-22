@@ -1113,6 +1113,7 @@
     const nFail = post.filter(p=>p==="failed").length;
     const nNone = post.filter(p=>p==="none").length;
     const nRun  = post.filter(p=>p==="running").length;
+    const nPaused = post.filter(p=>p==="paused").length;
     // Backups are flattened across machines because the question is
     // fleet-shaped ("is everything backed up?"), not per-box.
     const bkAll = CONV_BACKUPS.flatMap(h => (h.backups||[]).map(b => ({host:h.host, b})));
@@ -1138,6 +1139,7 @@
             <span class="s"><span class="swatch" style="background:var(--good)"></span><b>${nProt}</b></span>
             ${nRun?`<span class="s"><span class="swatch" style="background:var(--accent)"></span><b>${nRun}</b></span>`:""}
             <span class="s"><span class="swatch" style="background:var(--warn)"></span><b>${nRisk}</b></span>
+            ${nPaused?`<span class="s" title="backups paused"><span class="swatch" style="background:var(--warn)"></span>⏸<b>${nPaused}</b></span>`:""}
             <span class="s"><span class="swatch" style="background:var(--faint)"></span><b>${nNone}</b></span>
             <span class="s"><span class="swatch" style="background:var(--crit)"></span><b>${nFail}</b></span>
           </summary>
@@ -1145,6 +1147,7 @@
             <span class="s"><span class="swatch" style="background:var(--good)"></span>protected</span>
             ${nRun?`<span class="s"><span class="swatch" style="background:var(--accent)"></span>backing up</span>`:""}
             <span class="s"><span class="swatch" style="background:var(--warn)"></span>at risk</span>
+            ${nPaused?`<span class="s"><span class="swatch" style="background:var(--warn)"></span>⏸ paused</span>`:""}
             <span class="s"><span class="swatch" style="background:var(--faint)"></span>unprotected</span>
             <span class="s"><span class="swatch" style="background:var(--crit)"></span>failed</span>
           </div>
@@ -1253,6 +1256,15 @@
   // treating it as a normal run would read the absent ok as a failure.
   function bkRunning(b){ return !!b && b.state === "running"; }
 
+  // bkPaused is true when a backup's timer has been deliberately switched off —
+  // the agent sets "paused":true from systemd (is-enabled) when the
+  // restic-backup@ timer is disabled or masked. It is the console's cue to stop
+  // treating a stopped schedule as trouble: a paused backup no longer ages into
+  // "at risk" the way a nightly that silently quit firing does, because someone
+  // turned it off on purpose. It never overrides a real fault, though — a paused
+  // backup whose last run actually failed is still read as failed below.
+  function bkPaused(b){ return !!b && b.paused === true; }
+
   // bkStalled catches the failure mode a "running" marker introduces: a run
   // killed mid-flight (OOM, reboot, power) leaves "state":"running" on disk
   // forever, and a permanently-"running" backup would otherwise read as
@@ -1336,15 +1348,28 @@
     return b.ok ? "good" : (b.incomplete ? "warn" : "crit");
   }
 
+  // bkPausedClean is a paused backup whose last real run was fine — the case the
+  // per-backup cards render as "paused" (a warn-tinted caution) instead of the
+  // green "complete" bkSeverity would give it. A paused backup whose last run
+  // failed or came back incomplete deliberately does NOT qualify: pausing the
+  // timer doesn't undo a broken snapshot, so those still show their fault. It is
+  // kept out of bkSeverity itself because that function also tints a backup's
+  // *destination* (receiveLine), and a paused source is not the vault's problem.
+  function bkPausedClean(b){ return bkPaused(b) && !bkRunning(b) && !!b.ok; }
+
   /* ---------- backup posture: the map's primary signal ----------
      hush is a backup console now, so a machine's place on the map is decided by
      "is this box protected?", not by CPU. Posture reads the same /api/backup-status
      feed the Backups section renders (seeded in demo mode by demoConvBackups), so
-     the map and the cards can never disagree. One of six states, worst-wins:
+     the map and the cards can never disagree. One of seven states, worst-wins:
        failed    — a run finished non-zero (restic couldn't write a snapshot)
        none      — reachable, but no backup configured (a total gap)
        risk      — a run was incomplete (exit 3), the newest snapshot is stale,
                     or a run has stalled mid-flight
+       paused    — the timer was deliberately stopped (disabled/masked). A caution,
+                    not a fault: it outranks a clean/stale/protected read so the
+                    box shows "backup paused" instead of aging into "at risk", but
+                    yields to a genuine failed/incomplete/stalled last run.
        running   — a run is in flight and healthy — working on it, not a verdict
        protected — every backup ran clean and recently
        unknown   — the box couldn't be asked (backup state genuinely unknown) */
@@ -1364,6 +1389,13 @@
     // It ranks below the clean/stale checks so a box whose other backups are
     // fine isn't dragged to "running" by one that happens to be mid-run.
     if(bks.some(b=>bkRunning(b))) return "running";
+    // Paused: the timer was switched off on purpose. Checked before the stale
+    // rule below precisely so a long-paused backup stops nagging as "at risk" —
+    // that is the whole point of the state — and before the clean/protected
+    // return so an intentionally-stopped backup reads as paused rather than
+    // quietly green. It sits *after* the failed/incomplete/stalled checks: a
+    // paused backup whose last real run broke is still broken.
+    if(bks.some(b=>bkPaused(b))) return "paused";
     // Stale: a nightly that missed a night. Newest run older than ~36h is the
     // cheapest honest "the schedule stopped firing" tell without per-box cadence.
     const newest = bks.reduce((t,b)=>Math.max(t, Date.parse(b.finished||b.started||"")||0), 0);
@@ -1374,15 +1406,19 @@
     failed:    { sev:"crit",  glyph:"✕", label:"backup failed" },
     none:      { sev:"warn",  glyph:"○", label:"no backup" },
     risk:      { sev:"warn",  glyph:"▲", label:"at risk" },
+    paused:    { sev:"warn",  glyph:"⏸", label:"backup paused" },
     running:   { sev:"run",   glyph:"⟳", label:"backing up" },
     protected: { sev:"good",  glyph:"✓", label:"protected" },
     unknown:   { sev:"muted", glyph:"·", label:"unknown" },
   };
   // Ordering for "trouble floats to the top" — a failed backup is the loudest,
   // then an outright gap, then an at-risk run, then boxes we couldn't ask. A
-  // healthy in-progress run sits just above protected: not trouble, but worth
-  // surfacing so someone watching a run can find it without hunting.
-  const postureRank = { failed:5, none:4, risk:3, unknown:2, running:1, protected:0 };
+  // paused backup sits below unknown (a deliberate stop is less alarming than a
+  // box we can't reach) but above a healthy run and protected, so a box someone
+  // switched off surfaces instead of hiding among the green. A healthy
+  // in-progress run sits just above protected: not trouble, but worth surfacing
+  // so someone watching a run can find it without hunting.
+  const postureRank = { failed:6, none:5, risk:4, unknown:3, paused:2, running:1, protected:0 };
 
   // backupPathsFor: every path any of a host's configured backups covers —
   // flattened across all its backup jobs, since a treemap cell's coverage
@@ -1408,15 +1444,18 @@
 
   // bkRank picks the backup that *defines* a host's posture so the node-card
   // line leads with the run that matters, not just the first. A stalled run is
-  // the loudest; then failed, then incomplete. A healthy in-flight run ranks
-  // just above a clean one, so on a box that's mid-run the line leads with
-  // "backing up" rather than yesterday's snapshot — but never outranks a real
+  // the loudest; then failed, then incomplete, then a healthy in-flight run,
+  // then a paused one. A healthy run ranks just above a paused or clean backup,
+  // so on a box that's mid-run the line leads with "backing up" rather than
+  // yesterday's snapshot; a paused job outranks only a clean one, so a box
+  // that's been switched off leads with "paused" — but never outranks a real
   // problem elsewhere on the box.
   function bkRank(b){
-    if(bkStalled(b)) return 4;
-    if(bkRunning(b)) return 1;
-    if(!b.ok && !b.incomplete) return 3;
-    if(b.incomplete) return 2;
+    if(bkStalled(b)) return 5;
+    if(!bkRunning(b) && !b.ok && !b.incomplete) return 4;
+    if(b.incomplete) return 3;
+    if(bkRunning(b)) return 2;
+    if(bkPaused(b)) return 1;
     return 0;
   }
 
@@ -1437,6 +1476,7 @@
       // "backing up · 4m ago" reads as "started 4m ago, still going".
       const word = p==="failed" ? "backup failed"
         : p==="running" ? "backing up"
+        : p==="paused" ? "paused"
         : p==="risk" ? (bkStalled(lead) ? "stalled" : lead.incomplete ? "incomplete" : "stale")
         : "protected";
       detail = `${word}${when?` · ${when}`:""}${tgt?` <span class="ar">→</span> ${esc(tgt)}`:""}`;
@@ -2160,8 +2200,9 @@
   // them — an older agent or a first run simply shows less, rather than the
   // console inventing a plausible number.
   function backupCard(host, b){
-    const sev = bkSeverity(b);
+    const sev = bkPausedClean(b) ? "warn" : bkSeverity(b);
     const label = bkRunning(b) ? (bkStalled(b) ? "stalled" : "backing up…")
+      : bkPausedClean(b) ? "paused"
       : b.ok ? "complete"
       : b.incomplete ? `incomplete · exit ${b.exit_code}`
       : `failed · exit ${b.exit_code}`;
@@ -2295,11 +2336,13 @@
       return;
     }
     const host = watchKey.host;
-    const sev = bkSeverity(b);
+    const paused = bkPausedClean(b);
+    const sev = paused ? "warn" : bkSeverity(b);
     const running = bkRunning(b), stalled = bkStalled(b);
     const target = backupTarget(b.repository);
     const s = b.summary || {};
     const label = running ? (stalled ? "stalled" : "backing up…")
+      : paused ? "paused"
       : b.ok ? "complete"
       : b.incomplete ? `incomplete · exit ${b.exit_code}`
       : `failed · exit ${b.exit_code}`;
@@ -3304,6 +3347,7 @@
       mk({ id:"lab-01", agentVersion:"v1.3.0", os:"NixOS 24.05", ip:"100.71.5.7", role:"", status:"good", cpu:9, mem:19, disk:12, up:"3d", load:"0.3",
         gpu:88, vram:91, gpuName:"RTX 4090", vramText:"21.8 / 24 GB",
         llm:{runtimes:[{kind:"ollama",addr:"0.0.0.0:11434",exposure:"open",models:["qwen2.5-coder:32b","deepseek-r1:14b"]}]} }),
+      mk({ id:"studio", agentVersion:"v1.3.0", os:"Debian 12", ip:"100.71.6.4", role:"", status:"good", cpu:14, mem:31, disk:57, up:"22d", load:"0.6", gpu:null }),
     ];
   }
   // demoConvBackups seeds the backup-first fleet story for MODE="demo": the
@@ -3318,6 +3362,7 @@
   //   pi-gate → nas   RUNNING     (nightly in flight — a run behind it in history)
   //   lab-01  → nas   at risk     (restic exit 3 — files it couldn't read)
   //   atlas   → nas   FAILED      (exit 1 — a healthy history that just broke)
+  //   studio  → nas   PAUSED      (timer disabled — a clean run, deliberately stopped)
   //   forge   —       unprotected (reachable, no backup configured)
   function demoConvBackups(){
     const ago = h => new Date(Date.now() - h*3600e3).toISOString();
@@ -3371,6 +3416,18 @@
         started:ago(2.1), finished:ago(2), exit_code:1, ok:false, incomplete:false, next_run:soon(22),
         summary:{ total_bytes_processed:GiB(0), data_added:GiB(0) },
         history:hist([{h:146,add:1.1},{h:122,add:0.9},{h:98,add:1.3},{h:74,add:1.0},{h:50,add:1.2},{h:26,add:0.8},{h:2,add:0,fail:true}]),
+      }]},
+      { host:"studio", reachable:true, backups:[{
+        // A paused backup: the last run was clean, but the timer has since been
+        // switched off (systemctl disable), so the agent reports "paused":true
+        // and there is no next_run. The last run is deliberately old — without
+        // the paused flag this would age past the 36h stale line and read as "at
+        // risk"; paused is exactly the state that keeps a box someone turned off
+        // on purpose from nagging as if it had silently broken.
+        name:"studio-projects", repository:"rest:http://nas:8000/studio", paths:["/home/studio/projects"],
+        started:ago(50.1), finished:ago(50), exit_code:0, ok:true, incomplete:false, paused:true,
+        summary:{ total_bytes_processed:GiB(72), data_added:GiB(1.2) },
+        history:hist([{h:170,add:1.4},{h:146,add:1.1},{h:122,add:1.3},{h:98,add:1.0},{h:74,add:1.2},{h:50,add:1.2}]),
       }]},
       { host:"forge", reachable:true, backups:[] },
     ];
