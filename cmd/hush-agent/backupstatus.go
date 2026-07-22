@@ -62,6 +62,22 @@ type conventionBackupStatus struct {
 	// wire shape identical to before for every box that isn't mid-run.
 	State string `json:"state,omitempty"`
 
+	// Paused is true when this backup's systemd timer has been deliberately
+	// stopped — disabled or masked — rather than left enabled and scheduled.
+	// It is the read side of "pause a backup": the convention
+	// (docs/BACKUP-CONVENTION.md) defines a live backup as its files plus one
+	// *enabled* timer, so `systemctl disable --now restic-backup@<name>.timer`
+	// is how you pause one, and this field is how the console learns of it.
+	//
+	// Like State, it is a *declared* field for a reason: the agent unmarshals
+	// and re-marshals this struct, so a field it does not know is dropped on the
+	// way through. Unlike State the runner never writes it — the agent fills it
+	// in from systemd (timerPaused), the same live-probe idiom as NextRun — so a
+	// paused backup is reported paused even by a runner too old to know the idea
+	// exists. omitempty keeps the wire shape identical for every box whose timer
+	// is enabled, which is every box that isn't paused.
+	Paused bool `json:"paused,omitempty"`
+
 	// Progress is how far the run in flight has got, read from the
 	// <name>.progress.json the runner maintains beside this file. Raw JSON, for
 	// the same reason Summary is: the agent stays ignorant of the schema, so a
@@ -173,6 +189,44 @@ func backupTimerUnit(name string) string { return "restic-backup@" + name + ".ti
 // backupTimerUnit. docs/BACKUP-CONVENTION.md already fixes both names, so
 // reading them here adds no coupling the convention did not have.
 func backupServiceUnit(name string) string { return "restic-backup@" + name + ".service" }
+
+// timerPaused reports whether this backup's timer has been deliberately stopped
+// — disabled or masked — as opposed to enabled and scheduled.
+//
+// Indirected through a variable, like runningBackups, so tests can drive the
+// paused path without a systemd whose timers match the test's fixtures.
+var timerPaused = systemdTimerPaused
+
+// systemdTimerPaused asks systemd whether the backup's timer is enabled.
+//
+// This is the read side of "pause a backup". docs/BACKUP-CONVENTION.md defines a
+// live backup as its files plus one *enabled* timer, so `systemctl disable
+// --now` (or `mask`) is how you pause one — and the console needs to tell that
+// deliberate stop apart from a nightly that silently quit firing. Without it a
+// paused backup ages past its schedule and reads as "at risk", exactly like a
+// broken one, so the operator is nagged about a box they turned off on purpose.
+//
+// Only a definite "disabled" or "masked" is treated as paused. Everything else —
+// enabled, a static timer, a systemd too old for the query, no such unit, or a
+// systemctl that times out — reports not-paused, because the safe default for a
+// backup console is to keep watching a backup, not to fall silent about one.
+//
+// is-enabled prints the state word to stdout and exits non-zero for a
+// disabled/masked unit, so the error is expected and ignored: the word is the
+// answer, the exit code merely echoes it.
+func systemdTimerPaused(name string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	out, _ := exec.CommandContext(ctx, "systemctl", "is-enabled",
+		backupTimerUnit(name), "--no-pager").Output()
+	switch strings.TrimSpace(string(out)) {
+	case "disabled", "masked":
+		return true
+	default:
+		return false
+	}
+}
 
 // runningBackups reports which convention backups are executing right now, as
 // name -> start time (RFC 3339, empty when systemd will not say).
@@ -433,6 +487,7 @@ func readConventionBackupStatuses(dir string) ([]conventionBackupStatus, error) 
 		}
 		s.History = readHistory(dir, strings.TrimSuffix(e.Name(), ".json"))
 		s.NextRun = nextRun(s.Name)
+		s.Paused = timerPaused(s.Name)
 		out = append(out, s)
 	}
 
@@ -448,6 +503,7 @@ func readConventionBackupStatuses(dir string) ([]conventionBackupStatus, error) 
 		s.Progress = readProgress(dir, name)
 		s.History = readHistory(dir, name)
 		s.NextRun = nextRun(name)
+		s.Paused = timerPaused(name)
 		out = append(out, s)
 	}
 

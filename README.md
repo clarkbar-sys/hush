@@ -177,8 +177,10 @@ hush **watches** your backups; it doesn't run them. A backup needs root and hold
 a repository credential — and `hush-agent` runs unprivileged and must never hold
 that — so backups are set up **on the box, over SSH**, and the console reports
 their status read-only. Every Machine view's **Backups** section shows that box's
-scheduled [restic](https://restic.net) backups: posture (protected / at risk /
-failed), the last run and where it ships to, and a strip of recent runs. The
+scheduled [restic](https://restic.net) backups: posture (protected / paused / at
+risk / failed), the last run and where it ships to, and a strip of recent runs.
+A backup you deliberately switch off (`systemctl disable` its timer) reads as
+**paused** rather than aging into *at risk*. The
 Fleet view rolls them all up and floats the box that isn't safe to the top, with
 a header **alert bell** for anything that needs attention.
 

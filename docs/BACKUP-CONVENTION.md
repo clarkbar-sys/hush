@@ -224,6 +224,36 @@ systemd only ever **adds** `running` here, never clears it. A backup run by hand
 mean "not running". Deciding that a `running` marker has been orphaned stays
 with the console, which ages it out against `next_run`.
 
+### Pausing a backup
+
+There is a third thing systemd can answer that the status file cannot: whether
+the timer is still **enabled**. The convention defines a live backup as its
+files plus one *enabled* timer, so pausing one is nothing more than switching
+that timer off:
+
+```
+sudo systemctl disable --now restic-backup@<name>.timer   # pause
+sudo systemctl enable  --now restic-backup@<name>.timer   # resume
+```
+
+(`mask` instead of `disable` for a harder stop that also refuses a manual
+start.) The files stay in place and the last snapshot stays restorable — the box
+simply stops taking new ones until you turn it back on.
+
+The agent reads this with `systemctl is-enabled` and reports a `disabled` or
+`masked` timer as `"paused":true`. This is the read side of an *intentional*
+stop, and it exists so the console can tell one apart from a schedule that
+silently quit firing. Without it, a paused backup ages past its schedule and
+reads as **at risk** — the console nagging about a box you turned off on purpose.
+With it, the box shows a distinct **paused** posture instead: still not green,
+because a paused backup is protecting nothing new, but not counted among the
+backups that need attention either. A pause never hides a real fault — a paused
+backup whose last run actually failed still reads as failed.
+
+Like `next_run`, this is queried live rather than recorded, so it is right the
+instant you enable or disable the timer, and it degrades to not-paused on any box
+without systemd.
+
 The console shows them in a **Backups** rollup on the fleet view, which opens
 itself when something is wrong. Each card reads `source → target`, the target
 being pulled from the redacted repository URL, with the last fortnight of runs

@@ -20,7 +20,25 @@ import (
 // about the probe stub it themselves via stubRunningBackups.
 func TestMain(m *testing.M) {
 	runningBackups = func() map[string]string { return nil }
+	// Neutralise the timer probe too: without a stub every status read shells
+	// out to `systemctl is-enabled`, so a test box whose systemctl answers
+	// differently (or has a matching unit) would flip Paused under tests that
+	// never meant to exercise it. Tests that care stub it via stubTimerPaused.
+	timerPaused = func(string) bool { return false }
 	os.Exit(m.Run())
+}
+
+// stubTimerPaused makes the timer probe report the given names as paused for
+// one test, restoring the previous probe afterwards.
+func stubTimerPaused(t *testing.T, paused ...string) {
+	t.Helper()
+	set := make(map[string]bool, len(paused))
+	for _, n := range paused {
+		set[n] = true
+	}
+	prev := timerPaused
+	timerPaused = func(name string) bool { return set[name] }
+	t.Cleanup(func() { timerPaused = prev })
 }
 
 // stubRunningBackups makes the systemd probe answer with a fixed set for one
@@ -279,6 +297,57 @@ func TestStatusCarriesPaths(t *testing.T) {
 	}
 	if len(got[0].Paths) != 2 || got[0].Paths[0] != "/etc" {
 		t.Fatalf("paths lost: %+v", got[0].Paths)
+	}
+}
+
+func TestPausedBackupReportsPausedAndSurvivesRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	// A clean, finished run — the shape a paused backup carries: its last run
+	// was fine, the timer is just switched off now. The status file itself says
+	// nothing about pausing (the runner never writes it); the agent learns it
+	// from systemd, so a "paused":true must appear on the wire even though the
+	// file on disk has none.
+	writeStatus(t, dir, "vault.json", `{"name":"vault","ok":true}`)
+	stubTimerPaused(t, "vault")
+
+	got, err := readConventionBackupStatuses(dir)
+	if err != nil {
+		t.Fatalf("readConventionBackupStatuses: %v", err)
+	}
+	if len(got) != 1 || !got[0].Paused {
+		t.Fatalf("Paused not set: %+v", got)
+	}
+
+	// The console reads the re-marshalled JSON, not the struct — an unknown
+	// field would be dropped there. Confirm "paused":true reaches the wire.
+	b, err := json.Marshal(got[0])
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(b), `"paused":true`) {
+		t.Fatalf("paused missing from wire JSON: %s", b)
+	}
+}
+
+func TestEnabledBackupOmitsPaused(t *testing.T) {
+	dir := t.TempDir()
+	writeStatus(t, dir, "vault.json", `{"name":"vault","ok":true}`)
+	// timerPaused defaults to false via TestMain — an enabled timer.
+
+	got, err := readConventionBackupStatuses(dir)
+	if err != nil {
+		t.Fatalf("readConventionBackupStatuses: %v", err)
+	}
+	if got[0].Paused {
+		t.Fatalf("Paused set for an enabled timer: %+v", got[0])
+	}
+	// omitempty keeps the wire shape identical for the common (enabled) case.
+	b, err := json.Marshal(got[0])
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(b), "paused") {
+		t.Fatalf("paused should be omitted when false: %s", b)
 	}
 }
 
