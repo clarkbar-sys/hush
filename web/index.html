@@ -2338,6 +2338,17 @@
     const host = watchKey.host;
     const paused = bkPausedClean(b);
     const sev = paused ? "warn" : bkSeverity(b);
+    // Pause/resume is offered as a command to copy, not a button that acts:
+    // hush reads the fleet and never runs anything on it, so the console's job
+    // is to compose the exact `systemctl` line and hand it over — the same
+    // read-only, copy-into-SSH idiom as spawning a session or updating an agent.
+    // The direction follows the timer's actual state (bkPaused), not
+    // bkPausedClean, so a paused backup whose last run failed still offers
+    // "resume" rather than pretending it isn't paused.
+    const bkName = b.name || (watchKey ? watchKey.name : "") || "";
+    const bkPausedNow = bkPaused(b);
+    const pauseResumeCmd = "sudo systemctl " + (bkPausedNow ? "enable" : "disable") +
+      " --now restic-backup@" + bkName + ".timer";
     const running = bkRunning(b), stalled = bkStalled(b);
     const target = backupTarget(b.repository);
     const s = b.summary || {};
@@ -2435,8 +2446,20 @@
       <div class="bk-metrics" style="border-radius:8px;overflow:hidden">${metrics || `<div class="bk-m"><div class="bk-mk">status</div><div class="bk-mv">${esc(label)}</div></div>`}</div>
       ${histBlock}
       ${paths}
+      ${bkName ? `<div style="margin-top:16px">
+        <div class="bk-mk" style="margin-bottom:6px">${bkPausedNow ? "resume this backup" : "pause this backup"}</div>
+        <div class="cmdbox"><code id="wtPauseCmd">${esc(pauseResumeCmd)}</code><button class="btn" id="wtPauseCopy">Copy</button></div>
+        <div class="field-note">Run it over SSH as root — hush only reads your fleet, so it hands you the command rather than running it. ${bkPausedNow
+          ? "This re-enables the timer; the next scheduled run resumes."
+          : "This stops the schedule until you resume; the repository and last snapshot are untouched, so posture reads <b>paused</b> instead of aging into <b>at&nbsp;risk</b>."}</div>
+      </div>` : ""}
       <div class="sheet-actions" style="margin-top:16px"><button class="btn primary" id="wtClose" style="flex:1">Close</button></div>`;
     $("#wtClose").addEventListener("click", closeBackupWatch);
+    const wtPauseCopy = $("#wtPauseCopy");
+    if(wtPauseCopy) wtPauseCopy.addEventListener("click", async ()=>{
+      try { await navigator.clipboard.writeText(pauseResumeCmd); toast("copied — paste into JuiceSSH on "+host); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
   }
 
   // A machine just added through "Add machine", shown until its first real
