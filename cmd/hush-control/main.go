@@ -247,6 +247,24 @@ func buildMux(store *agentStore, discoverer *discoverer, dialer *agentDialer, we
 		}
 		proxyFile(w, r, streamClient, a)
 	})
+	// The chat proxy dials the runtime directly (control → runtime, not the
+	// agent), so it resolves the box's detected runtimes from the fleet snapshot
+	// rather than store.find alone, and rides the no-timeout streamClient like
+	// /file — a completion must not be cut off mid-stream. It's the one route
+	// here that makes a box do work; see llmchat.go for why that stays within the
+	// read-only spirit.
+	mux.HandleFunc("/api/machines/{host}/llm/chat", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		m, ok := resolveMachine(fc, store, client, r.PathValue("host"))
+		if !ok {
+			http.Error(w, "unknown machine", http.StatusNotFound)
+			return
+		}
+		proxyLLMChat(w, r, streamClient, m)
+	})
 	mux.HandleFunc("/api/agents", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
