@@ -106,6 +106,12 @@
   .chip.ver.avail { color: var(--good); border-color: var(--good-soft); cursor: pointer; }
   .chip.ver .up { width:6px; height:6px; border-radius:50%; background:var(--good);
     box-shadow:0 0 0 0 var(--good); animation: pulse 2.4s infinite; }
+  .chip.ver.build-sha { color: var(--warn); border-color: var(--warn-soft); cursor: default;
+    text-shadow: 0 0 4px var(--warn); animation: sha-glow 2.4s ease-in-out infinite; }
+  @keyframes sha-glow {
+    0%,100% { text-shadow: 0 0 3px var(--warn); }
+    50% { text-shadow: 0 0 9px var(--warn), 0 0 16px var(--warn); }
+  }
 
   .cmdbox { display:flex; align-items:center; gap:8px; margin: 4px 0 14px;
     background: var(--panel-2); border:1px solid var(--border); border-radius: 8px;
@@ -1099,6 +1105,11 @@
 
   /* ---------- state ---------- */
   const sevRank = { crit:2, warn:1, good:0 };
+
+  // BUILD_SHA is stamped in by scripts/build-web-preview.sh for static builds
+  // (GitHub Pages / PR previews) that have no hush-control backend and thus no
+  // api/version. Left blank here for real deployments.
+  const BUILD_SHA = "";
 
   let M = [];                      // current fleet
   let MODE = "connecting";         // connecting | live | demo | lost
@@ -3921,12 +3932,22 @@
       return v;
     } catch(e){
       lastVersion = null;
-      chip.hidden = true; // no server-side version (demo / file://) — say nothing
+      if(BUILD_SHA){
+        // No hush-control here to ask (static demo build) — show the commit
+        // this bundle was built from instead of just hiding the chip.
+        chip.className = "chip ver build-sha";
+        chip.innerHTML = BUILD_SHA;
+        chip.title = "No hush-control backend here — static demo build, shown at the commit it was built from.";
+        chip.hidden = false;
+      } else {
+        chip.hidden = true; // no server-side version (demo / file://) — say nothing
+      }
       return null;
     }
   }
 
   $("#verChip").addEventListener("click", ()=>{
+    if($("#verChip").classList.contains("build-sha")) return;
     if(lastVersion && lastVersion.updateAvailable && lastVersion.latest){
       openUpdateSheet();
     } else {

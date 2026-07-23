@@ -39,4 +39,10 @@ sed -i \
   -e 's#"src": "/icon-#"src": "icon-#g' \
   "$out/manifest.webmanifest"
 
+# Stamp the commit this bundle was built from into the version chip's
+# BUILD_SHA constant, so a preview with no hush-control backend (api/version
+# 404s) shows the git hash it was built from instead of hiding the chip.
+sha="$(git rev-parse --short=7 HEAD 2>/dev/null || echo unknown)"
+sed -i "s#const BUILD_SHA = \"\";#const BUILD_SHA = \"$sha\";#" "$out/index.html"
+
 echo "staged web preview -> $out/"
