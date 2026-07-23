@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.0](https://github.com/clarkbar-sys/hush/compare/v2.9.1...v2.10.0) (2026-07-23)
+
+
+### Features
+
+* **backup:** report a deliberately-paused backup as its own posture ([#206](https://github.com/clarkbar-sys/hush/issues/206)) ([b30d878](https://github.com/clarkbar-sys/hush/commit/b30d8787778215c3fdeab270f90bcd923a94adc4))
+
 ## [2.9.1](https://github.com/clarkbar-sys/hush/compare/v2.9.0...v2.9.1) (2026-07-21)
 
 
