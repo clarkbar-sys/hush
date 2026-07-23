@@ -657,6 +657,12 @@
   .scrim { position: fixed; inset:0; background: rgba(6,12,14,.5); z-index: 40;
     display:none; align-items:flex-end; justify-content:center; }
   .scrim.open { display:flex; }
+  /* The version chip lives in the launcher header (#homeScreen, z-index:490),
+     so its sheet must sit above the launcher — otherwise "Check for updates
+     now?" opens hidden behind the home screen and only becomes visible once
+     you tap into the console, making the update check feel like it lives on
+     the hush page. Above the payphone (495) too, below the boot screen (500). */
+  #updateScrim { z-index: 496; }
   .sheet { width:100%; max-width: 480px; background: var(--panel);
     border-top-left-radius: 18px; border-top-right-radius: 18px;
     border:1px solid var(--border); border-bottom:none; padding: 8px 16px 24px;
