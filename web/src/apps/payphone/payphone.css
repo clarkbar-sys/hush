@@ -64,6 +64,12 @@
   .aim-bname { overflow:hidden; text-overflow:ellipsis; }
   .aim-idle { color:#909090; font-size:11px; font-style:italic; }
   .aim-bnew { margin-left:auto; color:#c00000; font-weight:700; font-size:11px; }
+  /* the little × that forgets a saved chat, tucked at the end of a session row */
+  .aim-bx { margin-left:auto; padding:0 4px; color:#a0a0a0; font-weight:700; cursor:pointer;
+    border-radius:2px; flex:0 0 auto; }
+  .aim-bx:hover { color:#c00000; background:#f3d6d6; }
+  .aim-buddy.sel .aim-bx { color:#dbe4ff; }
+  .aim-buddy.sel .aim-bx:hover { color:#fff; background:rgba(255,255,255,.25); }
   .aim-blfoot { display:flex; align-items:center; gap:8px; padding:4px 7px;
     border-top:1px solid #808080; box-shadow: inset 0 1px 0 #fff; }
   .aim-blfoot .aim-me { flex:1; font-size:11px; color:#000; overflow:hidden;
@@ -183,6 +189,29 @@
   .pay-sm-item u { text-underline-offset:2px; }
   .pay-sm-sep { height:0; margin:3px 3px 3px 33px; border-top:1px solid #808080;
     box-shadow:0 1px 0 #fff; }
+
+  /* ---- payphone → "start a new session?" dialog ----------------------------
+     A classic Win95 message box centred over the teal desktop, asking before a
+     click on a live model opens a fresh chat. Reuses the beige bevel and the
+     blue .aim-tbar the buddy windows already use. */
+  .pay-dialog { position:absolute; inset:0; z-index:8; display:flex;
+    align-items:center; justify-content:center; padding:16px;
+    background:rgba(0,0,0,.28); font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .pay-dialog[hidden] { display:none; }
+  .pay-dlg-win { width:min(340px,92vw); background:#c0c0c0; border:2px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #dfdfdf,
+      inset -2px -2px 0 #000, inset 2px 2px 0 #fff, 3px 3px 0 rgba(0,0,0,.5); }
+  .pay-dlg-body { display:flex; align-items:center; gap:12px; padding:16px 14px 10px; }
+  .pay-dlg-ico { font-size:30px; line-height:1; flex:0 0 auto; }
+  .pay-dlg-msg { font-size:13px; color:#000; line-height:1.35; }
+  .pay-dlg-btns { display:flex; justify-content:flex-end; gap:8px; padding:6px 12px 14px; }
+  .pay-dlg-btn { min-width:82px; padding:4px 12px; cursor:pointer; font-size:12px; color:#000;
+    font-family:"MS Sans Serif", Tahoma, sans-serif; background:#c0c0c0; border:2px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .pay-dlg-btn:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .pay-dlg-btn.def { font-weight:700; }
+  .pay-dlg-btn:focus-visible { outline:1px dotted #000; outline-offset:2px; }
+  .pay-dlg-btn[hidden] { display:none; }
 
   @media (max-width:560px){
     .aim-stage { width:100%; height:100%; }
