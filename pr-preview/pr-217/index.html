@@ -905,10 +905,6 @@
   .home-app:focus-visible .home-icon { box-shadow: 0 0 0 2px var(--accent), 0 6px 18px rgba(0,0,0,.5); outline:none; }
   .home-label { font-size:11px; letter-spacing:.02em; color:var(--muted); }
   .home-app:active .home-label, .home-app:focus-visible .home-label { color:var(--text); }
-  /* footer hint */
-  .home-hint { text-align:center; font-family:var(--mono); font-size:10px; letter-spacing:.18em;
-    text-transform:uppercase; color:var(--faint); padding:0 16px;
-    animation: blink 2.2s step-end infinite; }
 </style>
 </head>
 <body>
@@ -945,7 +941,6 @@
         <span class="home-label">hush</span>
       </button>
     </div>
-    <div class="home-hint">tap hush to enter</div>
   </div>
 </div>
 <div class="lostbar" id="lostBar" hidden>
@@ -1109,7 +1104,7 @@
   // BUILD_SHA is stamped in by scripts/build-web-preview.sh for static builds
   // (GitHub Pages / PR previews) that have no hush-control backend and thus no
   // api/version. Left blank here for real deployments.
-  const BUILD_SHA = "f74bb2e";
+  const BUILD_SHA = "ed49897";
 
   let M = [];                      // current fleet
   let MODE = "connecting";         // connecting | live | demo | lost
