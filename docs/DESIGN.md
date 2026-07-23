@@ -54,12 +54,13 @@ what's left is a backup console over a read-only view of the fleet.
 
 One canvas, three depths. You never navigate away, you get closer. Phone-first.
 
-- **Fleet** — every machine as a node, sorted by **backup posture** so an
-  unprotected or failing box floats to the top. The summary counts protected / at
-  risk / unprotected / failed; each card carries an always-on backup line (posture
-  + last run + where it ships to). Live dual-ring vitals, a load sparkline, and a
-  status badge still colour each card — vitals just no longer decide the fleet's
-  verdict. Backup problems also aggregate into the header's **alert bell**.
+- **Fleet** — every machine as a node, sorted **alphabetically by name** — the
+  sole sort order, so a machine's card is always where you expect it. The
+  summary counts protected / at risk / unprotected / failed; each card carries
+  an always-on backup line (posture + last run + where it ships to). Live
+  dual-ring vitals, a load sparkline, and a status badge still colour each
+  card. Backup problems aggregate into the header's **alert bell**, which is
+  still ranked worst-first.
 - **Machine** — "enter the building": header (OS, tailnet IP, uptime, GPU),
   full-size vitals, and its Backups. Tapping
   the CPU ring or the network panel opens a live **htop-style** read of the box —

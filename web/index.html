@@ -1410,7 +1410,6 @@
   githubApp.addEventListener("keydown", e => { if(e.key === "Escape"){ e.stopPropagation(); closeGithub(); } });
 
   /* ---------- state ---------- */
-  const sevRank = { crit:2, warn:1, good:0 };
 
   // BUILD_SHA is stamped in by scripts/build-web-preview.sh for static builds
   // (GitHub Pages / PR previews) that have no hush-control backend and thus no
@@ -1432,7 +1431,7 @@
   // Both survive the 2.5s poll re-render because they live on `state`.
   const state = { view:"fleet", mid:null, summLegendOpen:false,
     showRings:false, showLines:false,
-    openRings:new Set(), openLines:new Set(), fleetOrder:[] };
+    openRings:new Set(), openLines:new Set() };
   const byId = id => M.find(m=>m.id===id);
   let PENDING = [];                // machines just added via the UI, awaiting first check-in
   const JUST_ARRIVED = new Set();  // ids to pop-highlight for one render after their first check-in
@@ -1524,22 +1523,11 @@
     if(watchOpen) renderBackupWatch();
   }
 
-  // orderedFleet pins each machine's grid position once it's placed, so a
-  // transient posture/severity flip on a 2.5s poll can't reshuffle cards out
-  // from under a tap in flight (#202 — that reshuffling was landing clicks on
-  // the wrong machine). Newcomers still slot in worst-first among the
-  // existing cards; nothing already on screen moves because of a status
-  // change, only additions/removals touch the order.
+  // orderedFleet sorts the grid alphabetically by machine name — the sole
+  // sort order. Unlike a posture/severity rank, a name doesn't flip mid-poll,
+  // so no pinning is needed to keep cards from reshuffling under a tap.
   function orderedFleet(){
-    const ids = new Set(M.map(m=>m.id));
-    state.fleetOrder = state.fleetOrder.filter(id => ids.has(id));
-    const known = new Set(state.fleetOrder);
-    const newcomers = M.filter(m => !known.has(m.id)).sort((a,b)=>{
-      const pr = postureRank[backupPosture(b.id)] - postureRank[backupPosture(a.id)];
-      return pr || (sevRank[b.status]-sevRank[a.status]);
-    });
-    for(const m of newcomers) state.fleetOrder.push(m.id);
-    return state.fleetOrder.map(byId).filter(Boolean);
+    return [...M].sort((a,b)=> a.id.localeCompare(b.id, undefined, {sensitivity:"base", numeric:true}));
   }
 
   function renderFleet(){
