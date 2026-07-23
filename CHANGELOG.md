@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.11.0](https://github.com/clarkbar-sys/hush/compare/v2.10.0...v2.11.0) (2026-07-23)
+
+
+### Features
+
+* Move version chip from dashboard header to launcher ([#212](https://github.com/clarkbar-sys/hush/issues/212)) ([54bdcad](https://github.com/clarkbar-sys/hush/commit/54bdcad53a5c03927f5a115fcf96dd44635754ad))
+
+
+### Continuous Integration
+
+* make PR title Conventional Commits lint blocking ([#222](https://github.com/clarkbar-sys/hush/issues/222)) ([76a298f](https://github.com/clarkbar-sys/hush/commit/76a298fe06c990b6b975ec7a2a5337d4a8510efb))
+
 ## [2.10.0](https://github.com/clarkbar-sys/hush/compare/v2.9.1...v2.10.0) (2026-07-23)
 
 
