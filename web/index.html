@@ -930,7 +930,7 @@
     align-content:start; justify-items:center; gap:20px 0; padding:22px 12px 6px; }
   .home-app { -webkit-tap-highlight-color:transparent; appearance:none; background:none; border:0;
     padding:0; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px;
-    color:#fff; font-family:inherit; }
+    color:#fff; font-family:inherit; text-decoration:none; }
   .home-icon { position:relative; width:57px; height:57px; border-radius:12px;
     overflow:hidden; background:#0d0f13;
     box-shadow: 0 1px 2px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06);
@@ -957,6 +957,12 @@
   #homeGithub .home-icon { background:linear-gradient(#33373d,#0f1114); }
   #homeGithub .home-icon svg { position:absolute; inset:0; margin:auto;
     width:34px; height:34px; color:#fff; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  /* tally — a wood-grain tile with pale tally-mark strokes (four verticals +
+     the crossing fifth), hands off to the tally node on the tailnet. */
+  #homeTally .home-icon { background:linear-gradient(#8a5a34,#4a2f1c); }
+  #homeTally .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:32px; height:32px; color:#fce8c9; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
 
   /* ---- github app: tapping the octocat tile no longer jumps straight to one
      repo. It opens this panel over the springboard listing the clarkbar.sys
@@ -1203,6 +1209,13 @@
           <span class="home-icon"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></span>
           <span class="home-label">github</span>
         </button>
+        <a class="home-app" id="homeTally" href="https://tally/" target="_blank" rel="noopener" aria-label="Open tally">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 4v16M10 4v16M14 4v16M18 4v16"></path>
+            <path d="M3 15 21 7"></path>
+          </svg></span>
+          <span class="home-label">tally</span>
+        </a>
       </div>
       <div class="home-dots" aria-hidden="true"><i class="on"></i></div>
       <div class="gh-app" id="githubApp" role="dialog" aria-label="clarkbar.sys on GitHub" aria-modal="true">
@@ -1848,6 +1861,18 @@
   $("#homeGithub").addEventListener("click", openGithub);
   $("#githubBack").addEventListener("click", closeGithub);
   githubApp.addEventListener("keydown", e => { if(e.key === "Escape"){ e.stopPropagation(); closeGithub(); } });
+
+  /* tally tile — a plain hand-off to the tally node on the tailnet, no
+     in-app overlay. hush and tally each join the tailnet as their own tsnet
+     node ("hush", "tally"), so swapping the leading label of hush's own
+     hostname gives tally's MagicDNS name without hardcoding the tailnet.
+     Falls back to the bare "tally" node name when hush isn't served from a
+     "hush.…" host (local dev, GitHub Pages preview). */
+  (function(){
+    const host = location.hostname;
+    const tallyHost = host.startsWith("hush.") ? "tally." + host.slice("hush.".length) : "tally";
+    $("#homeTally").href = `https://${tallyHost}/`;
+  })();
 
   /* ---------- state ---------- */
 
