@@ -905,6 +905,66 @@
   .home-app:focus-visible .home-icon { box-shadow: 0 0 0 2px var(--accent), 0 6px 18px rgba(0,0,0,.5); outline:none; }
   .home-label { font-size:11px; letter-spacing:.02em; color:var(--muted); }
   .home-app:active .home-label, .home-app:focus-visible .home-label { color:var(--text); }
+  /* payphone icon gets a warm amber wash so it reads as the odd one out on the
+     neon grid — the retro app hiding among the HUD tiles. */
+  #homePayphone .home-icon::before {
+    background:linear-gradient(160deg, color-mix(in srgb, var(--warn) 16%, transparent), transparent 55%); }
+  #homePayphone .home-icon svg { width:38px; height:38px; color:var(--warn);
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--warn) 55%, transparent)); }
+
+  /* ---- payphone app: a deliberate 1990s "gateway" page — the joke is you tap
+     a neon HUD tile and fall through 30 years into a beige Netscape-era
+     under-construction screen. Owns its own retro palette on purpose. ---- */
+  #payphoneScreen { position:fixed; inset:0; z-index:495; display:none;
+    align-items:center; justify-content:center; padding:16px;
+    background:#008080;  /* the one true teal desktop */
+    font-family:"Times New Roman", Times, serif; }
+  #payphoneScreen.on { display:flex; }
+  .pay-win { width:min(340px,90vw); max-height:88vh; overflow:auto;
+    background:#c0c0c0; border:2px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff, 3px 3px 0 rgba(0,0,0,.5); }
+  .pay-title { display:flex; align-items:center; gap:6px; padding:3px 4px;
+    background:linear-gradient(90deg,#000080,#1084d0); color:#fff;
+    font-family:"MS Sans Serif", Tahoma, Geneva, sans-serif; font-size:12px; font-weight:700; }
+  .pay-title .pay-t-ico { width:14px; height:14px; flex:0 0 auto; }
+  .pay-title .spacer { flex:1; }
+  .pay-title .pay-x { width:16px; height:14px; display:grid; place-items:center;
+    background:#c0c0c0; color:#000; border:1px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff;
+    font-family:"MS Sans Serif", Tahoma, sans-serif; font-size:11px; font-weight:700;
+    cursor:pointer; line-height:1; }
+  .pay-x:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .pay-body { padding:16px 14px 18px; text-align:center; color:#000;
+    background:#c0c0c0; }
+  .pay-const { display:inline-block; margin:2px auto 10px; padding:3px 10px;
+    background:#ffff00; color:#000; border:2px solid #000; font-weight:700;
+    font-family:"Courier New", monospace; font-size:12px; letter-spacing:.06em;
+    transform:rotate(-3deg); }
+  .pay-soon { margin:8px 0 4px; font-size:30px; font-weight:700; line-height:1;
+    color:#000080; text-shadow: 1px 1px 0 #fff, 2px 2px 0 #808080; }
+  .pay-blink { animation: pay-blink 1s steps(1,end) infinite; }
+  @keyframes pay-blink { 50% { opacity:0; } }
+  .pay-rule { height:0; border:0; border-top:2px groove #fff; margin:12px 0; }
+  .pay-marquee { overflow:hidden; white-space:nowrap; border:2px inset #fff;
+    background:#000; color:#00ff00; font-family:"Courier New", monospace;
+    font-size:12px; padding:4px 0; }
+  .pay-marquee b { display:inline-block; padding-left:100%;
+    animation: pay-scroll 12s linear infinite; }
+  @keyframes pay-scroll { to { transform:translateX(-100%); } }
+  .pay-lead { font-size:14px; margin:10px 6px; line-height:1.5; }
+  .pay-lead a { color:#0000ee; }
+  .pay-counter { display:inline-flex; gap:2px; margin:6px 0 2px; padding:3px;
+    background:#000; border:1px solid #444; }
+  .pay-counter i { font-family:"Courier New", monospace; font-style:normal;
+    font-size:15px; font-weight:700; color:#00ff00; background:#001a00;
+    padding:1px 3px; border:1px solid #003300; }
+  .pay-small { font-size:11px; color:#333; margin-top:4px;
+    font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .pay-hang { margin-top:14px; padding:5px 16px; cursor:pointer;
+    font-family:"MS Sans Serif", Tahoma, sans-serif; font-size:13px; color:#000;
+    background:#c0c0c0; border:2px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .pay-hang:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
 </style>
 </head>
 <body>
@@ -940,6 +1000,37 @@
         <span class="home-icon"><img src="/icon-192.png" alt="" width="60" height="60" draggable="false"></span>
         <span class="home-label">hush</span>
       </button>
+      <button class="home-app" id="homePayphone" type="button" aria-label="Open payphone">
+        <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="5" y="2" width="14" height="20" rx="1"></rect>
+          <rect x="7.5" y="4" width="9" height="5" rx="1"></rect>
+          <circle cx="9" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle>
+          <circle cx="9" cy="15" r="1"></circle><circle cx="12" cy="15" r="1"></circle><circle cx="15" cy="15" r="1"></circle>
+          <path d="M8.5 18.5h7"></path>
+        </svg></span>
+        <span class="home-label">payphone</span>
+      </button>
+    </div>
+  </div>
+</div>
+<!-- payphone app: a 1990s "gateway" under-construction page (see launcher JS) -->
+<div id="payphoneScreen" role="dialog" aria-label="payphone — coming soon" aria-modal="true">
+  <div class="pay-win">
+    <div class="pay-title">
+      <svg class="pay-t-ico" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="1"></rect><rect x="8" y="4" width="8" height="4"></rect></svg>
+      <span>PAYPHONE.EXE</span>
+      <span class="spacer"></span>
+      <span class="pay-x" id="payClose" role="button" tabindex="0" aria-label="Close">×</span>
+    </div>
+    <div class="pay-body">
+      <div class="pay-const">⚠ UNDER CONSTRUCTION ⚠</div>
+      <div class="pay-soon"><span class="pay-blink">COMING</span> SOON</div>
+      <hr class="pay-rule">
+      <div class="pay-marquee"><b>*** NOW CONNECTING TO THE INFORMATION SUPERHIGHWAY *** PLEASE DEPOSIT 25¢ *** THIS SITE IS BEST VIEWED IN NETSCAPE NAVIGATOR 3.0 AT 800x600 ***</b></div>
+      <p class="pay-lead">Thank you for calling the <b>payphone</b> gateway.<br>Our operators are still stringing the copper.<br>Check back <a href="#" onclick="return false">real soon</a>!</p>
+      <div class="pay-counter" aria-label="visitor counter"><i>0</i><i>0</i><i>0</i><i>0</i><i>4</i><i>2</i></div>
+      <div class="pay-small">You are visitor no. 000042 since 1997</div>
+      <button class="pay-hang" id="payHang" type="button">◄ Hang up</button>
     </div>
   </div>
 </div>
@@ -1097,6 +1188,18 @@
   }
 
   $("#homeHush").addEventListener("click", enterApp);
+
+  /* payphone app — the launcher's other tile. It doesn't leave the home
+     screen (no console to zoom into); it just overlays a 1990s gateway
+     "coming soon" page on top, and hanging up dismisses it. */
+  const payScreen = $("#payphoneScreen");
+  function openPayphone(){ payScreen.classList.add("on"); try { $("#payHang").focus({ preventScroll:true }); } catch(_){} }
+  function closePayphone(){ payScreen.classList.remove("on"); try { $("#homePayphone").focus({ preventScroll:true }); } catch(_){} }
+  $("#homePayphone").addEventListener("click", openPayphone);
+  $("#payHang").addEventListener("click", closePayphone);
+  $("#payClose").addEventListener("click", closePayphone);
+  $("#payClose").addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); closePayphone(); } });
+  payScreen.addEventListener("keydown", e => { if(e.key === "Escape") closePayphone(); });
 
   /* ---------- state ---------- */
   const sevRank = { crit:2, warn:1, good:0 };
