@@ -24,6 +24,7 @@ sed -i \
   -e 's#href="/manifest.webmanifest"#href="manifest.webmanifest"#' \
   -e 's#href="/icon-512.png"#href="icon-512.png"#' \
   -e 's#href="/apple-touch-icon.png"#href="apple-touch-icon.png"#' \
+  -e 's#src="/icon-192.png"#src="icon-192.png"#' \
   "$out/index.html"
 
 # Disable the service worker in the preview: its precache list is root-absolute
