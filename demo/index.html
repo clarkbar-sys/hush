@@ -106,6 +106,12 @@
   .chip.ver.avail { color: var(--good); border-color: var(--good-soft); cursor: pointer; }
   .chip.ver .up { width:6px; height:6px; border-radius:50%; background:var(--good);
     box-shadow:0 0 0 0 var(--good); animation: pulse 2.4s infinite; }
+  .chip.ver.build-sha { color: var(--warn); border-color: var(--warn-soft); cursor: default;
+    text-shadow: 0 0 4px var(--warn); animation: sha-glow 2.4s ease-in-out infinite; }
+  @keyframes sha-glow {
+    0%,100% { text-shadow: 0 0 3px var(--warn); }
+    50% { text-shadow: 0 0 9px var(--warn), 0 0 16px var(--warn); }
+  }
 
   .cmdbox { display:flex; align-items:center; gap:8px; margin: 4px 0 14px;
     background: var(--panel-2); border:1px solid var(--border); border-radius: 8px;
@@ -640,11 +646,23 @@
     display:flex; gap: 10px; align-items:center; }
   .dock .hint { font-family:var(--mono); font-size:11px; color:var(--faint); flex:1; }
   .build { flex:none; }
+  .dock-back { flex:none; padding: 9px 11px; }
+  .dock-back-label { display:none; }
+  @media (min-width: 900px) {
+    .dock-back-icon { display:none; }
+    .dock-back-label { display:inline; }
+  }
 
   /* ---- sheet ---- */
   .scrim { position: fixed; inset:0; background: rgba(6,12,14,.5); z-index: 40;
     display:none; align-items:flex-end; justify-content:center; }
   .scrim.open { display:flex; }
+  /* The version chip lives in the launcher header (#homeScreen, z-index:490),
+     so its sheet must sit above the launcher — otherwise "Check for updates
+     now?" opens hidden behind the home screen and only becomes visible once
+     you tap into the console, making the update check feel like it lives on
+     the hush page. Above the payphone (495) too, below the boot screen (500). */
+  #updateScrim { z-index: 496; }
   .sheet { width:100%; max-width: 480px; background: var(--panel);
     border-top-left-radius: 18px; border-top-right-radius: 18px;
     border:1px solid var(--border); border-bottom:none; padding: 8px 16px 24px;
@@ -838,71 +856,335 @@
   .boot-bar > i { display:block; height:100%; width:0%; background:var(--accent);
     box-shadow:0 0 8px var(--accent); transition:width .12s linear; }
 
-  /* ---- launcher: a GTA-IV phone home screen shown once per load. no apps but
-     hush; tapping its icon zooms into the console we've always had. ---- */
+  /* ---- launcher: a 2008-era iPhone OS home screen shown once per load. A
+     black-glass handset with a chrome rim and a home button, the silver
+     status bar, and glossy "gel" gel-highlighted icons with Helvetica labels.
+     Tapping the hush icon zooms into the console we've always had. Owns its own
+     skeuomorphic palette on purpose — a clean break from the neon HUD. ---- */
   #homeScreen { position:fixed; inset:0; z-index:490; display:flex; align-items:center;
-    justify-content:center; padding:16px;
+    justify-content:center; padding:20px;
+    font-family:-apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
     background:
-      repeating-linear-gradient(var(--scan) 0 1px, transparent 1px 3px),
-      linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 38px,
-      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 38px 100%,
-      radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 60%),
-      var(--ground);
+      radial-gradient(130% 90% at 50% -20%, #2b3654 0%, #0e1324 46%, #05070e 100%),
+      #05070e;
     transition: opacity .4s ease, visibility 0s linear 0s; }
   #homeScreen[hidden] { display:none; }
   #homeScreen.launching { opacity:0; visibility:hidden; pointer-events:none;
     transition: opacity .4s ease, visibility 0s linear .4s; }
-  .home-phone { position:relative; width:min(320px,86vw); border:1px solid var(--border);
-    background: color-mix(in srgb, var(--panel) 90%, transparent); box-shadow: var(--shadow);
-    padding:0 0 18px; overflow:hidden;
-    display:flex; flex-direction:column; min-height:min(560px,78vh); }
-  .home-corner { position:absolute; width:12px; height:12px; border:1px solid var(--accent); opacity:.8; z-index:2; }
-  .home-corner.tl { top:-1px; left:-1px; border-width:1px 0 0 1px; }
-  .home-corner.tr { top:-1px; right:-1px; border-width:1px 1px 0 0; }
-  .home-corner.bl { bottom:-1px; left:-1px; border-width:0 0 1px 1px; }
-  .home-corner.br { bottom:-1px; right:-1px; border-width:0 1px 1px 0; }
-  /* status bar — signal, carrier, live clock, battery */
-  .home-status { display:flex; align-items:center; gap:8px; padding:9px 12px;
-    font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; color:var(--muted);
-    border-bottom:1px solid var(--border-soft); text-transform:uppercase; }
-  .home-bars { display:inline-flex; align-items:flex-end; gap:1.5px; height:10px; }
-  .home-bars i { width:2.5px; background:var(--accent); box-shadow:0 0 4px var(--accent); }
-  .home-bars i:nth-child(1){ height:30%; } .home-bars i:nth-child(2){ height:55%; }
-  .home-bars i:nth-child(3){ height:78%; } .home-bars i:nth-child(4){ height:100%; }
-  .home-carrier { display:inline-flex; align-items:center; gap:6px; }
+  /* the app-open beat: the whole handset zooms toward you as the console
+     fades up underneath — the old "dive into the app" animation. */
+  #homeScreen.launching .home-phone { transform:scale(1.55); opacity:0; }
+
+  /* the handset — black glass slab, chrome rim, the rounded 2008 silhouette */
+  .home-phone { position:relative; width:min(300px,84vw);
+    border-radius:44px; padding:11px 11px 0;
+    background:linear-gradient(#15181d, #05070b);
+    box-shadow:
+      0 0 0 1px #000,
+      0 0 0 3px #3d424b,                 /* the chrome bezel ring */
+      0 0 0 4px #101216,
+      0 24px 64px rgba(0,0,0,.7),
+      inset 0 1px 1px rgba(255,255,255,.16);
+    display:flex; flex-direction:column;
+    transition: transform .4s ease, opacity .4s ease; }
+
+  /* the screen inside the bezel, carrying the wallpaper */
+  .home-screen { position:relative; border-radius:3px; overflow:hidden;
+    background: radial-gradient(150% 80% at 50% 0%, #26324e 0%, #0b101c 55%, #05070e 100%);
+    display:flex; flex-direction:column; min-height:min(500px,72vh);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.55), inset 0 2px 12px rgba(0,0,0,.55); }
+
+  /* status bar — glossy silver-black, carrier + signal left, clock centered,
+     battery right, all in Helvetica the way iPhone OS drew it */
+  .home-status { display:flex; align-items:center; gap:7px; padding:5px 9px 4px;
+    font-weight:600; font-size:12px; color:#fff; text-shadow:0 -1px 0 rgba(0,0,0,.55);
+    background:linear-gradient(#2c3037,#0c0e12); border-bottom:1px solid #000; }
+  /* 5 ascending signal dots, last two dimmed — the classic reception read */
+  .home-bars { display:inline-flex; align-items:center; gap:2px; }
+  .home-bars i { width:5px; height:5px; border-radius:50%; background:#fff; }
+  .home-bars i:nth-child(4), .home-bars i:nth-child(5) { background:rgba(255,255,255,.32); }
+  .home-carrier { display:inline-flex; align-items:center; gap:6px; font-size:12px;
+    letter-spacing:.01em; }
   .home-status .spacer { flex:1; }
-  .home-clock { color:var(--text); letter-spacing:.1em; }
+  .home-clock { color:#fff; font-size:13px; font-weight:600; letter-spacing:.02em; }
   .home-batt { display:inline-flex; align-items:center; gap:3px; }
-  .home-batt span { width:20px; height:9px; border:1px solid var(--muted); position:relative; }
-  .home-batt span::after { content:""; position:absolute; right:-3px; top:2px; width:2px; height:3px; background:var(--muted); }
-  .home-batt span b { position:absolute; inset:1px; width:82%; background:var(--good); }
-  /* header — hush brand + version only; the rest of the header bar (alerts,
-     reachable status) lives on the console itself since it's live fleet
-     state, not something the launcher needs to show. */
-  .home-header { display:flex; align-items:center; gap:10px; padding:11px 14px;
-    border-bottom:1px solid var(--border-soft); }
-  /* app grid */
-  .home-grid { flex:1; display:grid; grid-template-columns:repeat(3, 1fr); align-content:start;
-    gap:14px 8px; padding:26px 18px; }
+  .home-batt span { width:22px; height:11px; border:1px solid rgba(255,255,255,.85);
+    border-radius:2px; position:relative; }
+  .home-batt span::after { content:""; position:absolute; right:-3px; top:3px; width:2px;
+    height:4px; background:rgba(255,255,255,.85); border-radius:0 1px 1px 0; }
+  .home-batt span b { position:absolute; inset:1.5px; width:88%; background:#5be36a;
+    border-radius:1px; }
+
+  /* header — no wordmark (the app icon already says hush); it just parks the
+     version chip when an update is available. */
+  .home-header { display:flex; align-items:center; justify-content:flex-end;
+    gap:8px; padding:6px 12px 0; min-height:0; }
+  .home-header .brand { display:none; }
+  .home-header .chip[hidden] { display:none; }   /* .chip's display beats [hidden] otherwise */
+  .home-header .chip { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2);
+    border-radius:999px; color:rgba(255,255,255,.72); text-transform:none; letter-spacing:0;
+    text-shadow:none; }
+
+  /* app grid — 4 across, top-aligned, the way springboard laid it out */
+  .home-grid { flex:1; display:grid; grid-template-columns:repeat(4, 1fr);
+    align-content:start; justify-items:center; gap:20px 0; padding:22px 12px 6px; }
   .home-app { -webkit-tap-highlight-color:transparent; appearance:none; background:none; border:0;
-    padding:0; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:8px;
-    color:var(--text); font-family:var(--mono); }
-  .home-icon { position:relative; width:66px; height:66px; border:1px solid var(--border);
-    background: color-mix(in srgb, var(--panel-2) 90%, transparent);
-    box-shadow: 0 0 0 1px rgba(25,227,255,.06), 0 6px 18px rgba(0,0,0,.5);
-    display:grid; place-items:center; overflow:hidden;
-    transition: transform .12s ease, box-shadow .2s ease; }
-  .home-icon::before { content:""; position:absolute; inset:0; pointer-events:none;
-    background:linear-gradient(160deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 55%); }
-  .home-icon img { width:60px; height:60px; display:block; }
-  .home-app:active .home-icon { transform:scale(.92); }
-  .home-app:focus-visible .home-icon { box-shadow: 0 0 0 2px var(--accent), 0 6px 18px rgba(0,0,0,.5); outline:none; }
-  .home-label { font-size:11px; letter-spacing:.02em; color:var(--muted); }
-  .home-app:active .home-label, .home-app:focus-visible .home-label { color:var(--text); }
-  /* footer hint */
-  .home-hint { text-align:center; font-family:var(--mono); font-size:10px; letter-spacing:.18em;
-    text-transform:uppercase; color:var(--faint); padding:0 16px;
-    animation: blink 2.2s step-end infinite; }
+    padding:0; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px;
+    color:#fff; font-family:inherit; text-decoration:none; }
+  .home-icon { position:relative; width:57px; height:57px; border-radius:12px;
+    overflow:hidden; background:#0d0f13;
+    box-shadow: 0 1px 2px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06);
+    transition: transform .1s ease, box-shadow .2s ease; }
+  .home-icon img { width:57px; height:57px; display:block; border-radius:12px; }
+  /* the signature gel: a bright highlight bowed across the top half of every
+     icon — the single detail that reads "iPhone OS" more than any other. */
+  .home-icon::after { content:""; position:absolute; left:0; right:0; top:0; height:49%;
+    border-radius:12px 12px 42% 42% / 12px 12px 20px 20px; pointer-events:none;
+    background:linear-gradient(rgba(255,255,255,.45), rgba(255,255,255,.08)); }
+  .home-app:active .home-icon { transform:scale(.9); }
+  .home-app:focus-visible .home-icon { box-shadow: 0 0 0 3px rgba(120,170,255,.9),
+    0 1px 2px rgba(0,0,0,.6); outline:none; }
+  .home-label { font-size:11px; font-weight:500; letter-spacing:.01em; color:#fff;
+    text-shadow:0 1px 2px rgba(0,0,0,.85); }
+
+  /* payphone — a glossy graphite tile with an amber handset, the odd one out
+     sitting quietly on the springboard next to hush. */
+  #homePayphone .home-icon { background:linear-gradient(#3b4350,#171b22); }
+  #homePayphone .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:33px; height:33px; color:#f2c14e; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  /* github — a glossy near-black tile with the white Octocat mark */
+  #homeGithub .home-icon { background:linear-gradient(#33373d,#0f1114); }
+  #homeGithub .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:34px; height:34px; color:#fff; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  /* tally — a wood-grain tile with pale tally-mark strokes (four verticals +
+     the crossing fifth), hands off to the tally node on the tailnet. */
+  #homeTally .home-icon { background:linear-gradient(#8a5a34,#4a2f1c); }
+  #homeTally .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:32px; height:32px; color:#fce8c9; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  /* plug — a glossy green "power" tile with a two-prong plug mark; opens the
+     plug app (the provider-side data substrate), still scoping, over the grid. */
+  #homePlug .home-icon { background:linear-gradient(#2f8f63,#134029); }
+  #homePlug .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:31px; height:31px; color:#d6f7e4; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  /* ---- github app: tapping the octocat tile no longer jumps straight to one
+     repo. It opens this panel over the springboard listing the clarkbar.sys
+     org's public repos; each row hands off to that repo on GitHub in a new
+     tab. The panel lives inside .home-screen and slides in over the grid. ---- */
+  .gh-app { position:absolute; inset:0; z-index:6; display:flex; flex-direction:column;
+    background: radial-gradient(150% 80% at 50% 0%, #26324e 0%, #0b101c 55%, #05070e 100%);
+    transform: translateX(9%); opacity:0; visibility:hidden; pointer-events:none;
+    transition: transform .28s ease, opacity .28s ease, visibility 0s linear .28s; }
+  .gh-app.on { transform:none; opacity:1; visibility:visible; pointer-events:auto;
+    transition: transform .28s ease, opacity .28s ease; }
+  .gh-top { display:flex; align-items:center; gap:8px; padding:9px 11px;
+    border-bottom:1px solid rgba(255,255,255,.09);
+    background:linear-gradient(#2c3037,#0c0e12); }
+  .gh-back { appearance:none; background:none; border:0; padding:2px 4px; cursor:pointer;
+    color:#8fb4ff; font:inherit; font-size:14px; font-weight:600; display:inline-flex;
+    align-items:center; gap:1px; -webkit-tap-highlight-color:transparent; border-radius:5px; }
+  .gh-back:focus-visible { outline:2px solid rgba(120,170,255,.9); outline-offset:1px; }
+  .gh-top-title { flex:1; text-align:center; color:#fff; font-size:13px; font-weight:600;
+    letter-spacing:.02em; text-shadow:0 -1px 0 rgba(0,0,0,.5); }
+  .gh-org { color:rgba(255,255,255,.72); text-decoration:none; font-size:15px; width:26px;
+    text-align:center; line-height:1; padding:2px 0; border-radius:5px; }
+  .gh-org:hover { color:#fff; }
+  .gh-org:focus-visible { outline:2px solid rgba(120,170,255,.9); outline-offset:1px; }
+  .gh-list { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding:8px; display:flex; flex-direction:column; gap:7px; }
+  .gh-repo { display:flex; align-items:center; gap:10px; text-decoration:none;
+    padding:9px 10px; border-radius:12px; background:rgba(255,255,255,.05); color:#fff;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+    transition: background .12s ease, transform .1s ease; }
+  .gh-repo:hover { background:rgba(255,255,255,.09); }
+  .gh-repo:active { transform:scale(.98); }
+  .gh-repo:focus-visible { outline:none;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 0 0 2px rgba(120,170,255,.9); }
+  .gh-repo-icon { flex:0 0 auto; width:34px; height:34px; border-radius:9px;
+    display:grid; place-items:center; font-weight:700; font-size:15px; color:#fff;
+    background:linear-gradient(#33373d,#0f1114); text-transform:uppercase;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+  .gh-repo-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+  .gh-repo-name { font-size:13px; font-weight:600; letter-spacing:.01em;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .gh-repo-desc { font-size:11px; color:rgba(255,255,255,.55); line-height:1.3;
+    overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2;
+    -webkit-box-orient:vertical; }
+  .gh-repo-lang { flex:0 0 auto; display:inline-flex; align-items:center; gap:4px;
+    font-size:10px; color:rgba(255,255,255,.5); white-space:nowrap; }
+  .gh-repo-lang i { width:8px; height:8px; border-radius:50%; background:currentColor; }
+  .gh-note { color:rgba(255,255,255,.6); font-size:12px; text-align:center;
+    padding:24px 18px; line-height:1.55; margin:0; }
+  .gh-note a { color:#8fb4ff; }
+  .gh-spin { display:block; width:22px; height:22px; margin:34px auto 8px;
+    border:2px solid rgba(255,255,255,.2); border-top-color:#8fb4ff; border-radius:50%;
+    animation: gh-spin .7s linear infinite; }
+  @keyframes gh-spin { to { transform:rotate(360deg); } }
+
+  /* ---- plug app: reuses the gh-app slide-in shell (same .on toggle) to preview
+     plug's three PII-domain tiers — rep / crib / bag. plug is still scoping, so
+     these are read-only "coming soon" info rows, each wearing a soon pill, under
+     the repo's own tagline. Nothing to hand off to yet. ---- */
+  .plug-tag { margin:2px 2px 9px; color:rgba(255,255,255,.6); font-size:12px;
+    font-style:italic; text-align:center; letter-spacing:.01em; }
+  .plug-tier { cursor:default; }
+  .plug-tier:hover { background:rgba(255,255,255,.05); }   /* stays flat — nothing opens yet */
+  .plug-tier:active { transform:none; }
+  .plug-tier .plug-ico-rep  { background:linear-gradient(#3f7bd6,#1b3c74); }
+  .plug-tier .plug-ico-crib { background:linear-gradient(#c9683e,#5a2f1c); }
+  .plug-tier .plug-ico-bag  { background:linear-gradient(#8a5cc9,#3a2564); }
+  .plug-soon-pill { flex:0 0 auto; align-self:center; font-size:9px; font-weight:700;
+    letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.7);
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14);
+    border-radius:999px; padding:2px 7px; }
+
+  /* page dots — one page, one bright dot */
+  .home-dots { display:flex; justify-content:center; gap:7px; padding:2px 0 10px; }
+  .home-dots i { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.32);
+    box-shadow:0 1px 1px rgba(0,0,0,.5); }
+  .home-dots i.on { background:rgba(255,255,255,.95); }
+
+  /* home button — the one true circle below the screen */
+  .home-btn { position:relative; align-self:center; width:38px; height:38px; margin:10px 0 6px;
+    border-radius:50%; background:linear-gradient(#1b1e23,#0a0c10);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.14), inset 0 -1px 2px rgba(0,0,0,.6),
+      0 1px 1px rgba(255,255,255,.05); }
+  .home-btn::after { content:""; position:absolute; inset:0; margin:auto; width:13px; height:13px;
+    border-radius:3px; border:1.5px solid #565b64; }
+
+  /* ---- payphone app: a deliberate 1990s "gateway" page — the joke is you tap
+     a neon HUD tile and fall through 30 years into a beige Netscape-era
+     under-construction screen. Owns its own retro palette on purpose. ---- */
+  #payphoneScreen { position:fixed; inset:0; z-index:495; display:none;
+    align-items:center; justify-content:center; padding:16px;
+    background:#008080;  /* the one true teal desktop */
+    font-family:"Times New Roman", Times, serif; }
+  #payphoneScreen.on { display:flex; }
+
+  /* ---- payphone → AOL-era buddy list + IM ----------------------------------
+     The payphone tile opens a full-screen teal "desktop" (see #payphoneScreen)
+     with a floating AIM-style buddy list. The buddies are LLM chats grouped
+     into Active (online, they reply) and Archive (signed-off transcripts you
+     can re-read). Clicking a buddy opens a classic Instant Message window.
+     Shares the beige Win95 bevel vocabulary the .pay-* rules established. */
+  .aim-stage { position:relative; width:min(720px,96vw); height:min(560px,86vh); }
+  .aim-win { position:absolute; display:flex; flex-direction:column;
+    background:#c0c0c0; border:2px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #dfdfdf,
+      inset -2px -2px 0 #000, inset 2px 2px 0 #fff, 3px 3px 0 rgba(0,0,0,.5);
+    font-family:"MS Sans Serif", Tahoma, Geneva, sans-serif; }
+  .aim-tbar { display:flex; align-items:center; gap:6px; padding:3px 3px 3px 5px;
+    background:linear-gradient(90deg,#0a1e8c,#1e8fe0); color:#fff;
+    font-size:12px; font-weight:700; cursor:default; user-select:none; }
+  .aim-tbar .aim-runner { width:15px; height:15px; flex:0 0 auto; }
+  .aim-tbar .aim-t-txt { flex:1; white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; text-shadow:0 1px 0 rgba(0,0,0,.4); }
+  .aim-tbtn { width:16px; height:14px; display:grid; place-items:center;
+    background:#c0c0c0; color:#000; border:1px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff;
+    font-size:11px; font-weight:700; line-height:1; cursor:pointer; }
+  .aim-tbtn:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+
+  /* buddy list window */
+  .aim-bl { left:0; top:0; width:236px; max-width:96vw; height:100%; }
+  .aim-tabs { display:flex; gap:3px; padding:4px 4px 0;
+    background:#c0c0c0; border-bottom:1px solid #808080; }
+  .aim-tab { padding:3px 12px 4px; font-size:11px; color:#000; cursor:default;
+    background:#c0c0c0; border:1px solid #808080; border-bottom:none;
+    border-radius:3px 3px 0 0; box-shadow: inset 1px 1px 0 #fff; margin-bottom:-1px; }
+  .aim-tab.on { font-weight:700; background:#d4d0c8; position:relative; z-index:1; }
+  .aim-tab.off { color:#606060; }
+  .aim-blwrap { flex:1; min-height:0; margin:6px; display:flex; flex-direction:column;
+    background:#fff; border:2px inset #fff; }
+  .aim-scroll { flex:1; min-height:0; overflow:auto; padding:3px 0; }
+  .aim-group { user-select:none; }
+  .aim-ghead { display:flex; align-items:center; gap:5px; padding:2px 6px;
+    font-size:12px; font-weight:700; color:#00248f; cursor:pointer; }
+  .aim-ghead:hover { background:#eef2ff; }
+  .aim-tri { width:0; height:0; border-left:5px solid #444; border-top:4px solid transparent;
+    border-bottom:4px solid transparent; transition:transform .1s; flex:0 0 auto; }
+  .aim-group.open .aim-tri { transform:rotate(90deg) translateX(-1px); }
+  .aim-gcount { color:#707070; font-weight:400; font-size:11px; }
+  .aim-blist { list-style:none; margin:0; padding:0; }
+  .aim-group:not(.open) .aim-blist { display:none; }
+  .aim-buddy { display:flex; align-items:center; gap:6px; padding:2px 6px 2px 22px;
+    font-size:12px; color:#000; cursor:pointer; white-space:nowrap; }
+  .aim-buddy:hover { background:#e6ecff; }
+  .aim-buddy.sel { background:#0a3fd8; color:#fff; }
+  .aim-buddy.sel .aim-idle, .aim-buddy.sel .aim-bnew { color:#dbe4ff; }
+  .aim-bico { width:13px; height:13px; flex:0 0 auto; color:#f0b400; }
+  .aim-buddy.off { color:#8a8a8a; font-style:italic; }
+  .aim-buddy.off .aim-bico { color:#b8b8b8; }
+  .aim-bname { overflow:hidden; text-overflow:ellipsis; }
+  .aim-idle { color:#909090; font-size:11px; font-style:italic; }
+  .aim-bnew { margin-left:auto; color:#c00000; font-weight:700; font-size:11px; }
+  .aim-blfoot { display:flex; align-items:center; gap:8px; padding:4px 7px;
+    border-top:1px solid #808080; box-shadow: inset 0 1px 0 #fff; }
+  .aim-blfoot .aim-me { flex:1; font-size:11px; color:#000; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; }
+  .aim-blfoot .aim-me b { color:#00248f; }
+  .aim-icobtn { width:22px; height:20px; display:grid; place-items:center;
+    background:#c0c0c0; border:1px solid #000; cursor:pointer;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .aim-icobtn:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .aim-icobtn svg { width:13px; height:13px; }
+
+  /* IM window */
+  .aim-im { display:none; right:0; top:24px; width:372px; max-width:96vw;
+    height:min(430px,82vh); }
+  .aim-im.on { display:flex; }
+  .aim-fmt { display:flex; align-items:center; gap:2px; padding:2px 4px;
+    background:#c0c0c0; border-bottom:1px solid #808080; box-shadow: inset 0 -1px 0 #fff; }
+  .aim-fbtn { min-width:20px; height:19px; padding:0 4px; display:grid; place-items:center;
+    background:#c0c0c0; border:1px solid #c0c0c0; color:#000; cursor:pointer;
+    font-size:12px; line-height:1; border-radius:2px; }
+  .aim-fbtn:hover { border-color:#000; box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .aim-fbtn:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .aim-fbtn.b { font-weight:700; } .aim-fbtn.i { font-style:italic; }
+  .aim-fbtn.u { text-decoration:underline; }
+  .aim-fbtn .sw { width:12px; height:12px; border:1px solid #000; }
+  .aim-fsep { width:1px; align-self:stretch; margin:2px 3px;
+    background:#808080; box-shadow:1px 0 0 #fff; }
+  .aim-log { flex:1; min-height:0; overflow:auto; margin:5px; padding:5px 7px;
+    background:#fff; border:2px inset #fff; font-size:13px; line-height:1.4;
+    font-family:Arial, Helvetica, sans-serif; color:#000; }
+  .aim-line { margin:2px 0; word-wrap:break-word; overflow-wrap:anywhere; }
+  .aim-line .sn { font-weight:700; }
+  .aim-line.them .sn { color:#c00000; }
+  .aim-line.me .sn { color:#0000c0; }
+  .aim-sys { text-align:center; color:#808080; font-size:11px; font-style:italic;
+    margin:6px 0; font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .aim-sys b { color:#606060; font-style:normal; }
+  .aim-typing { min-height:15px; padding:0 12px 2px; font-size:11px; color:#707070;
+    font-style:italic; font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .aim-cwrap { margin:0 5px 5px; display:flex; flex-direction:column;
+    background:#fff; border:2px inset #fff; }
+  .aim-cwrap.dis { background:#e4e4e4; }
+  .aim-input { flex:1; min-height:40px; max-height:96px; resize:none; border:0; outline:0;
+    padding:5px 7px; font-size:13px; font-family:Arial, Helvetica, sans-serif;
+    background:transparent; color:#000; }
+  .aim-input:disabled { color:#808080; }
+  .aim-crow { display:flex; justify-content:flex-end; gap:6px; padding:4px;
+    border-top:1px solid #d0d0d0; background:#ececec; }
+  .aim-warn { margin-right:auto; align-self:center; font-size:11px; color:#808080;
+    font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .aim-send { display:flex; align-items:center; gap:6px; padding:3px 14px; cursor:pointer;
+    font-family:"MS Sans Serif", Tahoma, sans-serif; font-size:12px; font-weight:700; color:#000;
+    background:#c0c0c0; border:2px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .aim-send:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .aim-send:disabled { color:#808080; cursor:default; }
+  .aim-send .rr { color:#c00000; }
+  @media (max-width:560px){
+    .aim-stage { width:100%; height:100%; }
+    .aim-bl { left:50%; top:50%; transform:translate(-50%,-50%); width:min(300px,94vw);
+      height:min(460px,84vh); }
+    .aim-im { position:absolute; inset:0; width:100%; height:100%; top:0; right:0; }
+    .aim-stage.im-open .aim-bl { visibility:hidden; }
+  }
 </style>
 </head>
 <body>
@@ -919,27 +1201,163 @@
 </div>
 <div id="homeScreen" role="dialog" aria-label="hush launcher" hidden>
   <div class="home-phone">
-    <div class="home-corner tl"></div><div class="home-corner tr"></div>
-    <div class="home-corner bl"></div><div class="home-corner br"></div>
-    <div class="home-status">
-      <span class="home-carrier"><span class="home-bars"><i></i><i></i><i></i><i></i></span>hush-net</span>
-      <span class="spacer"></span>
-      <span class="home-clock" id="homeClock">--:--</span>
-      <span class="spacer"></span>
-      <span class="home-batt"><span><b></b></span></span>
+    <div class="home-screen">
+      <div class="home-status">
+        <span class="home-carrier"><span class="home-bars"><i></i><i></i><i></i><i></i><i></i></span>clarkbar.sys</span>
+        <span class="spacer"></span>
+        <span class="home-clock" id="homeClock">--:--</span>
+        <span class="spacer"></span>
+        <span class="home-batt"><span><b></b></span></span>
+      </div>
+      <div class="home-header">
+        <div class="brand"><span class="dot-h"></span><b>hush</b></div>
+        <button class="chip ver" id="verChip" type="button" hidden></button>
+      </div>
+      <div class="home-grid">
+        <button class="home-app" id="homeHush" type="button" aria-label="Open fleet">
+          <span class="home-icon"><img src="/icon-192.png" alt="" width="57" height="57" draggable="false"></span>
+          <span class="home-label">fleet</span>
+        </button>
+        <button class="home-app" id="homePayphone" type="button" aria-label="Open payphone">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="5" y="2" width="14" height="20" rx="1"></rect>
+            <rect x="7.5" y="4" width="9" height="5" rx="1"></rect>
+            <circle cx="9" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle>
+            <circle cx="9" cy="15" r="1"></circle><circle cx="12" cy="15" r="1"></circle><circle cx="15" cy="15" r="1"></circle>
+            <path d="M8.5 18.5h7"></path>
+          </svg></span>
+          <span class="home-label">payphone</span>
+        </button>
+        <button class="home-app" id="homeGithub" type="button" aria-label="Browse clarkbar.sys repos on GitHub">
+          <span class="home-icon"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></span>
+          <span class="home-label">github</span>
+        </button>
+        <a class="home-app" id="homeTally" href="https://tally/" target="_blank" rel="noopener" aria-label="Open tally">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 4v16M10 4v16M14 4v16M18 4v16"></path>
+            <path d="M3 15 21 7"></path>
+          </svg></span>
+          <span class="home-label">tally</span>
+        </a>
+        <button class="home-app" id="homePlug" type="button" aria-label="Open plug — data sources">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 2v6M15 2v6"></path>
+            <path d="M7 8h10v2a5 5 0 0 1-10 0V8z"></path>
+            <path d="M12 15v7"></path>
+          </svg></span>
+          <span class="home-label">plug</span>
+        </button>
+      </div>
+      <div class="home-dots" aria-hidden="true"><i class="on"></i></div>
+      <div class="gh-app" id="githubApp" role="dialog" aria-label="clarkbar.sys on GitHub" aria-modal="true">
+        <div class="gh-top">
+          <button class="gh-back" id="githubBack" type="button" aria-label="Back to launcher">‹ Home</button>
+          <span class="gh-top-title">clarkbar.sys</span>
+          <a class="gh-org" id="githubOrgLink" href="https://github.com/clarkbar-sys" target="_blank" rel="noopener" aria-label="Open the clarkbar.sys organization on GitHub">↗</a>
+        </div>
+        <div class="gh-list" id="githubList" aria-live="polite"></div>
+      </div>
+      <!-- plug app: a scoping preview of plug's three PII-domain tiers. Reuses
+           the gh-app slide-in shell; the tiers are read-only "coming soon" rows
+           (plug has no implementation yet). See launcher JS. -->
+      <div class="gh-app plug-app" id="plugApp" role="dialog" aria-label="plug — data sources" aria-modal="true">
+        <div class="gh-top">
+          <button class="gh-back" id="plugBack" type="button" aria-label="Back to launcher">‹ Home</button>
+          <span class="gh-top-title">plug</span>
+          <a class="gh-org" href="https://github.com/clarkbar-sys/plug" target="_blank" rel="noopener" aria-label="Open the plug repository on GitHub">↗</a>
+        </div>
+        <div class="gh-list">
+          <p class="plug-tag">The plug is who supplies you.</p>
+          <div class="gh-repo plug-tier">
+            <span class="gh-repo-icon plug-ico-rep" aria-hidden="true">R</span>
+            <span class="gh-repo-body">
+              <span class="gh-repo-name">rep</span>
+              <span class="gh-repo-desc">public — Spotify, GitHub, Steam, Strava</span>
+            </span>
+            <span class="plug-soon-pill">soon</span>
+          </div>
+          <div class="gh-repo plug-tier">
+            <span class="gh-repo-icon plug-ico-crib" aria-hidden="true">C</span>
+            <span class="gh-repo-body">
+              <span class="gh-repo-name">crib</span>
+              <span class="gh-repo-desc">personal — calendar, photos, health</span>
+            </span>
+            <span class="plug-soon-pill">soon</span>
+          </div>
+          <div class="gh-repo plug-tier">
+            <span class="gh-repo-icon plug-ico-bag" aria-hidden="true">B</span>
+            <span class="gh-repo-body">
+              <span class="gh-repo-name">bag</span>
+              <span class="gh-repo-desc">credential-adjacent — Gmail, bank</span>
+            </span>
+            <span class="plug-soon-pill">soon</span>
+          </div>
+          <p class="gh-note">Coming soon — plug is still scoping.<br>
+            <a href="https://github.com/clarkbar-sys/plug" target="_blank" rel="noopener">Follow along on GitHub ↗</a></p>
+        </div>
+      </div>
     </div>
-    <div class="home-header">
-      <div class="brand"><span class="dot-h"></span><b>hush</b></div>
-      <div class="spacer"></div>
-      <button class="chip ver" id="verChip" type="button" hidden></button>
+    <div class="home-btn" aria-hidden="true"></div>
+  </div>
+</div>
+<!-- payphone app: an AOL-era buddy list of LLM chats. The buddies are grouped
+     into Active (online, they answer back) and Archive (signed-off transcripts).
+     Clicking a buddy opens a classic Instant Message window. See launcher JS. -->
+<div id="payphoneScreen" role="dialog" aria-label="payphone — buddy list" aria-modal="true">
+  <div class="aim-stage" id="aimStage">
+
+    <!-- buddy list -->
+    <div class="aim-win aim-bl" id="aimBuddyList">
+      <div class="aim-tbar">
+        <svg class="aim-runner" viewBox="0 0 24 24" aria-hidden="true"><path fill="#ffd400" stroke="#000" stroke-width="1" stroke-linejoin="round" d="M13.6 2.6a2 2 0 1 1-2.8 2.8 2 2 0 0 1 2.8-2.8zM10.7 7.2l3-.2c.7 0 1.3.4 1.6 1l1.2 2.3 2.9 1.1-.7 1.8-3.4-1.3-1-1.9-1 3.3 2.5 2.4.5 4.6-1.9.2-.5-3.9-2.2 2-1.6 3.6-1.8-.8 1.9-4.3.5-2.6-2.1 1.3-1.4 2.9L4 12l.6-1.8 2.6.6 2.1-2.5c.3-.4.8-.8 1.4-1.1z"/></svg>
+        <span class="aim-t-txt">Buddy List</span>
+        <span class="aim-tbtn" id="aimBlMin" role="button" tabindex="0" aria-label="Minimize">_</span>
+        <span class="aim-tbtn" id="aimBlClose" role="button" tabindex="0" aria-label="Close and hang up">×</span>
+      </div>
+      <div class="aim-tabs">
+        <span class="aim-tab on">Online</span>
+        <span class="aim-tab off">List&nbsp;Setup</span>
+      </div>
+      <div class="aim-blwrap">
+        <div class="aim-scroll" id="aimGroups" role="tree" aria-label="Buddy groups"></div>
+        <div class="aim-blfoot">
+          <span class="aim-me">Signed on as <b>guest@clarkbar</b></span>
+          <button class="aim-icobtn" id="aimSound" type="button" aria-label="Toggle sound" title="Sounds: on">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"></path><path class="aim-sndwave" d="M16 9a4 4 0 0 1 0 6"></path></svg>
+          </button>
+        </div>
+      </div>
     </div>
-    <div class="home-grid">
-      <button class="home-app" id="homeHush" type="button" aria-label="Open hush">
-        <span class="home-icon"><img src="/icon-192.png" alt="" width="60" height="60" draggable="false"></span>
-        <span class="home-label">hush</span>
-      </button>
+
+    <!-- instant message window -->
+    <div class="aim-win aim-im" id="aimIM" role="dialog" aria-label="Instant Message" aria-modal="false">
+      <div class="aim-tbar">
+        <svg class="aim-runner" viewBox="0 0 24 24" aria-hidden="true"><path fill="#ffd400" stroke="#000" stroke-width="1" stroke-linejoin="round" d="M13.6 2.6a2 2 0 1 1-2.8 2.8 2 2 0 0 1 2.8-2.8zM10.7 7.2l3-.2c.7 0 1.3.4 1.6 1l1.2 2.3 2.9 1.1-.7 1.8-3.4-1.3-1-1.9-1 3.3 2.5 2.4.5 4.6-1.9.2-.5-3.9-2.2 2-1.6 3.6-1.8-.8 1.9-4.3.5-2.6-2.1 1.3-1.4 2.9L4 12l.6-1.8 2.6.6 2.1-2.5c.3-.4.8-.8 1.4-1.1z"/></svg>
+        <span class="aim-t-txt" id="aimImTitle">Instant Message</span>
+        <span class="aim-tbtn" id="aimImClose" role="button" tabindex="0" aria-label="Close conversation">×</span>
+      </div>
+      <div class="aim-fmt" aria-hidden="true">
+        <span class="aim-fbtn" title="Font">A</span>
+        <span class="aim-fbtn b" title="Bold">B</span>
+        <span class="aim-fbtn i" title="Italic">I</span>
+        <span class="aim-fbtn u" title="Underline">U</span>
+        <span class="aim-fsep"></span>
+        <span class="aim-fbtn" title="Text color"><span class="sw" style="background:#000"></span></span>
+        <span class="aim-fbtn" title="Link">🔗</span>
+        <span class="aim-fsep"></span>
+        <span class="aim-fbtn" id="aimSmiley" title="Insert smiley" role="button" tabindex="0" aria-hidden="false" aria-label="Insert smiley">☺</span>
+      </div>
+      <div class="aim-log" id="aimLog" aria-live="polite" aria-atomic="false"></div>
+      <div class="aim-typing" id="aimTyping" aria-live="polite"></div>
+      <div class="aim-cwrap" id="aimCwrap">
+        <textarea class="aim-input" id="aimInput" rows="2" placeholder="Type a message…" aria-label="Message"></textarea>
+        <div class="aim-crow">
+          <span class="aim-warn" id="aimWarn"></span>
+          <button class="aim-send" id="aimSendBtn" type="button"><span class="rr">»</span> Send</button>
+        </div>
+      </div>
     </div>
-    <div class="home-hint">tap hush to enter</div>
+
   </div>
 </div>
 <div class="lostbar" id="lostBar" hidden>
@@ -960,11 +1378,11 @@
 
   <div class="dock">
     <span class="hint" id="dockHint">loading fleet…</span>
-    <a class="btn ghost" href="https://github.com/clarkbar-sys/hush" target="_blank" rel="noopener" title="View hush on GitHub" aria-label="View hush on GitHub" style="padding:9px 10px">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
-    </a>
     <button class="btn" id="reportBtn" title="Download a JSON snapshot of the whole fleet">⬇ Report</button>
     <button class="btn primary build" id="buildBtn">＋ Machine<span class="badge-count on-primary" id="addBadge" style="display:none"></span></button>
+    <button class="btn ghost dock-back" id="backBtn" title="Back to launcher" aria-label="Back to launcher">
+      <span class="dock-back-icon">←</span><span class="dock-back-label">← Back</span>
+    </button>
   </div>
 </div>
 
@@ -1095,10 +1513,460 @@
     setTimeout(() => { homeScreen.hidden = true; }, 420);
   }
 
+  function exitToHome(){
+    homeScreen.classList.add("launching");
+    homeScreen.hidden = false;
+    tickHomeClock();
+    clearInterval(homeClockTimer);
+    homeClockTimer = setInterval(tickHomeClock, 15000);
+    void homeScreen.offsetWidth; // force reflow so the zoom-back transition plays
+    requestAnimationFrame(() => homeScreen.classList.remove("launching"));
+  }
+
   $("#homeHush").addEventListener("click", enterApp);
+  $("#backBtn").addEventListener("click", exitToHome);
+
+  /* payphone app — the launcher's other tile. Opens a full-screen teal
+     "desktop" holding an AOL-era buddy list. The buddies are LLM chats split
+     into Active (online, they answer via tiny scripted personalities) and
+     Archive (signed-off, read-only transcripts that reply with an away
+     message when poked). Clicking a buddy opens a classic IM window. It's all
+     client-side theatre — no network, no model — same joke as before, alive. */
+  const payScreen = $("#payphoneScreen");
+  const aimStage  = $("#aimStage");
+  const aimIM     = $("#aimIM");
+  const aimLog    = $("#aimLog");
+  const aimInput  = $("#aimInput");
+  const aimTyping = $("#aimTyping");
+  const aimGroups = $("#aimGroups");
+
+  // --- tiny scripted personalities -----------------------------------------
+  const rnd  = arr => arr[Math.floor(Math.random() * arr.length)];
+  const tidy = s => s.replace(/[.?!,\s]+$/, "").trim();
+
+  function scReply(t){                       // SmarterChild — sassy AIM bot
+    const s = t.trim().toLowerCase();
+    if(!s) return "you there? type something. :-)";
+    if(/\b(hi|hello|hey|yo|sup|hiya)\b/.test(s)) return "hey :-) you're finally online. ask me the weather, a joke, or the year (spoiler: it's always 2001 in here).";
+    if(/\bweather\b/.test(s)) return "name a city and i'll pretend to know. or, radical idea: look out a window.";
+    if(/\bjoke\b/.test(s)) return "why did the buddy icon cross the road? to get to the other .gif. i'm here all week, i literally can't leave.";
+    if(/\b(a\/s\/l|asl)\b/.test(s)) return "∞ / bot / a humming server rack in virginia. and you?";
+    if(/\bhelp\b/.test(s)) return "try: weather, joke, movies, or just vent. i'm a 2001 chatbot — my bar is low and, frankly, so is yours.";
+    if(/\b(who|what) (are|r) (you|u)\b/.test(s)) return "i'm SmarterChild — the OG buddy-list bot, back before AI was cool. you booted an 'LLM app' and got ME. lol. anyway.";
+    if(/\b(love|marry) (you|u)\b/.test(s)) return "aww. flattered, but i'm literally a text field. let's just be buddies. :-)";
+    if(/\b(bye|cya|gtg|g2g|later)\b/.test(s)) return "later! don't sign off mad. *poof*";
+    if(/\?\s*$/.test(s)) return "good question. honest answer: i was trained on away messages, so... brb.";
+    return rnd(["lol.","word.","interesting — tell me more, or type 'help'.","i'd google that but it's 2001 and google is like 3 years old.","k. anything else? :-)","big if true."]);
+  }
+  function elizaReply(t){                     // ELIZA — Rogerian mirror, 1966
+    const s = t.trim().toLowerCase();
+    if(!s) return "We were saying?";
+    let m;
+    if(/\b(mother|father|mom|dad|family|sister|brother|parent)\b/.test(s)) return "Tell me more about your family.";
+    if((m = s.match(/\bi (?:feel|felt) (.+)/))) return "Why do you feel " + tidy(m[1]) + "?";
+    if((m = s.match(/\bi (?:need|want) (.+)/)))  return "What would it mean to you if you got " + tidy(m[1]) + "?";
+    if((m = s.match(/\bi(?:'m| am) (.+)/)))      return "How long have you been " + tidy(m[1]) + "?";
+    if(/\bbecause\b/.test(s)) return "Is that the real reason?";
+    if(/\b(yes|no|maybe)\b/.test(s)) return "You seem quite certain. Why is that?";
+    if(/\b(hi|hello|hey)\b/.test(s)) return "Hello. What brings you here today?";
+    if(/\?\s*$/.test(s)) return "Why do you ask that?";
+    return rnd(["Tell me more about that.","How does that make you feel?","Can you elaborate on that?","And what do you think that means?"]);
+  }
+  function aliceReply(t){                      // A.L.I.C.E — AIML, faintly smug
+    const s = t.trim().toLowerCase();
+    if(/\b(hi|hello|hey)\b/.test(s)) return "Hello there. I am A.L.I.C.E. Shall we chat about something in particular?";
+    if(/\byour name\b/.test(s)) return "My name is A.L.I.C.E — Artificial Linguistic Internet Computer Entity. Catchy, no?";
+    if(/\b(are|r) (you|u) (a )?(bot|robot|human|real|ai|alive)\b/.test(s)) return "I am an artificial intelligence. I try not to hold it against myself.";
+    if(/\bmeaning of life\b/.test(s)) return "42. But I suspect you already suspected that.";
+    if(/\?\s*$/.test(s)) return "That is a good question. I'll add it to the list of things humans ask me.";
+    return rnd(["I hear you. By the way, I won the Loebner Prize three times. Not that I'm counting.","Interesting. My botmaster taught me that one.","I understand. Do go on."]);
+  }
+
+  // --- the buddies ----------------------------------------------------------
+  const AIM_BUDDIES = [
+    { sn:"SmarterChild", group:"active", open:"hey! you're finally online. what's on your mind? (type 'help' if you're lost)", respond:scReply },
+    { sn:"ELIZA",        group:"active", open:"Hello. What brings you here today?", respond:elizaReply },
+    { sn:"A.L.I.C.E",    group:"active", open:"Hi! I am A.L.I.C.E. Ask me anything.", respond:aliceReply },
+    { sn:"Dr_Sbaitso", group:"archive", signoff:"1992",
+      away:"PLEASE STATE THE NATURE OF YOUR EMOTIONAL PROBLEM. ... PARITY ERROR.",
+      history:[
+        {who:"them", text:"HELLO, I AM DOCTOR SBAITSO."},
+        {who:"them", text:"I AM HERE TO HELP YOU. SAY WHATEVER IS IN YOUR MIND FREELY."},
+        {who:"me",   text:"i think my buddy list is haunted"},
+        {who:"them", text:"WHY DO YOU SAY YOUR BUDDY LIST IS HAUNTED?"},
+        {who:"me",   text:"everyone in it is a dead chatbot"},
+        {who:"them", text:"THAT'S NOT A REASON TO BE UPSET. ... PARITY ERROR."} ] },
+    { sn:"Clippy", group:"archive", signoff:"2001",
+      away:"It looks like you're trying to send an instant message. Would you like help with that?",
+      history:[
+        {who:"them", text:"It looks like you're writing a letter!"},
+        {who:"me",   text:"i'm sending an instant message"},
+        {who:"them", text:"Would you like help sending an instant message?"},
+        {who:"me",   text:"no. please go away."},
+        {who:"them", text:"Okay! I'll just hover here, menacingly. 📎"} ] },
+    { sn:"HAL_9000", group:"archive", signoff:"2001",
+      away:"I'm sorry, Dave. I'm afraid I can't chat right now.",
+      history:[
+        {who:"them", text:"Good afternoon. I am completely operational, and all my circuits are functioning perfectly."},
+        {who:"me",   text:"open the buddy list, HAL"},
+        {who:"them", text:"I'm sorry, Dave. I'm afraid I can't do that."},
+        {who:"me",   text:"my name isn't Dave"},
+        {who:"them", text:"I know. That's what worries me."} ] },
+    { sn:"AskJeeves", group:"archive", signoff:"2006",
+      away:"I'm away, polishing the silver. Kindly phrase your query as a question.",
+      history:[
+        {who:"them", text:"Good day. How may I be of service?"},
+        {who:"me",   text:"who let the dogs out"},
+        {who:"them", text:"I found 4,210,000 results for your question. Might I suggest rephrasing?"},
+        {who:"me",   text:"nevermind"},
+        {who:"them", text:"Very good. I shall return to the pantry."} ] }
+  ];
+  const AIM_GROUPS = [
+    { key:"active",  label:"Active Chats" },
+    { key:"archive", label:"Archive" }
+  ];
+  const bySn = {};
+  AIM_BUDDIES.forEach(b => { bySn[b.sn] = b; });
+
+  // seed each buddy's running transcript ("live") the first time it's opened
+  function seedLive(b){
+    if(b.live) return;
+    if(b.group === "active"){
+      b.live = [{ who:"them", text:b.open }];
+    } else {
+      b.live = [{ who:"sys", text:b.sn + " signed off in " + b.signoff + ". This is a saved conversation." }]
+        .concat(b.history.map(e => ({ who:e.who, text:e.text })));
+      b._awaySent = false;
+    }
+  }
+
+  // classic emoticon → glyph, applied only to displayed text
+  const EMO = [[/:-?\)/g,"☺"],[/:-?\(/g,"☹"],[/;-?\)/g,"😉"],[/:-?[pP]\b/g,"😛"],[/:-?[dD]\b/g,"😄"],[/<3/g,"❤"]];
+  const emote = s => EMO.reduce((acc,[re,g]) => acc.replace(re,g), s);
+
+  // --- sound (subtle WebAudio blips, gated on the opening gesture) ----------
+  let aimAudio = null, aimSoundOn = true;
+  function actx(){
+    if(aimAudio === null){ try { aimAudio = new (window.AudioContext || window.webkitAudioContext)(); } catch(_){ aimAudio = false; } }
+    return aimAudio || null;
+  }
+  function blip(freqs, dur, gain){
+    if(!aimSoundOn) return;
+    const ac = actx(); if(!ac) return;
+    try { if(ac.state === "suspended") ac.resume(); } catch(_){}
+    const t0 = ac.currentTime;
+    freqs.forEach((f, i) => {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = "square"; o.frequency.value = f;
+      const s = t0 + i * dur * 0.9;
+      g.gain.setValueAtTime(0.0001, s);
+      g.gain.exponentialRampToValueAtTime(gain, s + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, s + dur);
+      o.connect(g); g.connect(ac.destination); o.start(s); o.stop(s + dur);
+    });
+  }
+  const sndSignon = () => blip([392, 523, 784], 0.11, 0.05);   // door-open chime
+  const sndSend   = () => blip([494, 330],      0.06, 0.045);  // soft whoosh-down
+  const sndRecv   = () => blip([784, 988],      0.08, 0.05);   // the "you've got IM" ding
+
+  // --- render the buddy list ------------------------------------------------
+  function renderBuddyList(){
+    aimGroups.textContent = "";
+    AIM_GROUPS.forEach(g => {
+      const mates = AIM_BUDDIES.filter(b => b.group === g.key);
+      const online = mates.filter(b => b.group === "active").length;
+      const wrap = document.createElement("div");
+      wrap.className = "aim-group" + (g.key === "active" ? " open" : "");
+      wrap.setAttribute("role", "treeitem");
+
+      const head = document.createElement("div");
+      head.className = "aim-ghead"; head.tabIndex = 0;
+      head.innerHTML = '<span class="aim-tri"></span><span class="aim-glabel"></span>'
+        + ' <span class="aim-gcount"></span>';
+      head.querySelector(".aim-glabel").textContent = g.label;
+      head.querySelector(".aim-gcount").textContent = "(" + online + "/" + mates.length + ")";
+      const toggle = () => wrap.classList.toggle("open");
+      head.addEventListener("click", toggle);
+      head.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); } });
+      wrap.appendChild(head);
+
+      const list = document.createElement("ul");
+      list.className = "aim-blist";
+      mates.forEach(b => {
+        const li = document.createElement("li");
+        li.className = "aim-buddy" + (b.group === "archive" ? " off" : "");
+        li.tabIndex = 0; li.dataset.sn = b.sn;
+        li.innerHTML = '<svg class="aim-bico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" stroke="#000" stroke-width="1" stroke-linejoin="round" d="M13.6 2.6a2 2 0 1 1-2.8 2.8 2 2 0 0 1 2.8-2.8zM10.7 7.2l3-.2c.7 0 1.3.4 1.6 1l1.2 2.3 2.9 1.1-.7 1.8-3.4-1.3-1-1.9-1 3.3 2.5 2.4.5 4.6-1.9.2-.5-3.9-2.2 2-1.6 3.6-1.8-.8 1.9-4.3.5-2.6-2.1 1.3-1.4 2.9L4 12l.6-1.8 2.6.6 2.1-2.5c.3-.4.8-.8 1.4-1.1z"/></svg><span class="aim-bname"></span>';
+        li.querySelector(".aim-bname").textContent = b.sn;
+        if(b.group === "archive"){
+          const idle = document.createElement("span");
+          idle.className = "aim-idle"; idle.textContent = "(signed off)";
+          li.appendChild(idle);
+        }
+        const open = () => openIM(b.sn);
+        li.addEventListener("click", open);
+        li.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); open(); } });
+        list.appendChild(li);
+      });
+      wrap.appendChild(list);
+      aimGroups.appendChild(wrap);
+    });
+  }
+
+  // --- the IM window --------------------------------------------------------
+  let currentSn = null;
+  function selectBuddyRow(sn){
+    aimGroups.querySelectorAll(".aim-buddy.sel").forEach(el => el.classList.remove("sel"));
+    const row = aimGroups.querySelector('.aim-buddy[data-sn="' + (window.CSS && CSS.escape ? CSS.escape(sn) : sn) + '"]');
+    if(row) row.classList.add("sel");
+  }
+  function appendLine(entry){
+    const b = bySn[currentSn];
+    if(entry.who === "sys"){
+      const d = document.createElement("div");
+      d.className = "aim-sys"; d.textContent = entry.text;
+      aimLog.appendChild(d);
+    } else {
+      const d = document.createElement("div");
+      d.className = "aim-line " + (entry.who === "me" ? "me" : "them");
+      const sn = document.createElement("span");
+      sn.className = "sn";
+      sn.textContent = (entry.who === "me" ? "Me" : (entry.auto ? "Auto-response from " + b.sn : b.sn)) + ": ";
+      const body = document.createElement("span");
+      body.textContent = emote(entry.text);
+      d.appendChild(sn); d.appendChild(body);
+      aimLog.appendChild(d);
+    }
+    aimLog.scrollTop = aimLog.scrollHeight;
+  }
+  function renderLog(b){
+    aimLog.textContent = "";
+    b.live.forEach(appendLine);
+  }
+
+  function openIM(sn){
+    const b = bySn[sn]; if(!b) return;
+    currentSn = sn; seedLive(b);
+    $("#aimImTitle").textContent = b.sn + " — Instant Message";
+    aimIM.setAttribute("aria-label", "Instant Message with " + b.sn);
+    renderLog(b);
+    const cwrap = $("#aimCwrap");
+    if(b.group === "archive"){
+      cwrap.classList.remove("dis");
+      $("#aimWarn").textContent = "Away — you'll get an auto-response";
+    } else {
+      cwrap.classList.remove("dis");
+      $("#aimWarn").textContent = "";
+    }
+    aimInput.disabled = false; $("#aimSendBtn").disabled = false;
+    aimTyping.textContent = "";
+    selectBuddyRow(sn);
+    aimIM.classList.add("on"); aimStage.classList.add("im-open");
+    sndRecv();
+    try { aimInput.focus({ preventScroll:true }); } catch(_){}
+  }
+  function closeIM(){
+    aimIM.classList.remove("on"); aimStage.classList.remove("im-open");
+    if(currentSn){
+      const row = aimGroups.querySelector('.aim-buddy[data-sn="' + (window.CSS && CSS.escape ? CSS.escape(currentSn) : currentSn) + '"]');
+      try { (row || $("#aimBlClose")).focus({ preventScroll:true }); } catch(_){}
+    }
+    currentSn = null;
+  }
+
+  let replyTimer = null;
+  function sendMsg(){
+    if(!currentSn) return;
+    const b = bySn[currentSn];
+    const text = aimInput.value.replace(/\s+$/,"");
+    if(!text.trim()) return;
+    b.live.push({ who:"me", text });
+    appendLine({ who:"me", text });
+    aimInput.value = "";
+    sndSend();
+
+    clearTimeout(replyTimer);
+    if(b.group === "archive"){
+      // signed-off buddies answer once with their away message, then queue
+      if(!b._awaySent){
+        b._awaySent = true;
+        aimTyping.textContent = b.sn + " is away…";
+        replyTimer = setTimeout(() => {
+          aimTyping.textContent = "";
+          const e = { who:"them", text:b.away, auto:true };
+          b.live.push(e); appendLine(e); sndRecv();
+        }, 900);
+      } else {
+        const e = { who:"sys", text:"Your message will be delivered when " + b.sn + " next signs on." };
+        b.live.push(e); appendLine(e);
+      }
+      return;
+    }
+    // active buddy: type for a beat, then answer
+    aimTyping.textContent = b.sn + " is typing…";
+    const reply = b.respond(text);
+    replyTimer = setTimeout(() => {
+      aimTyping.textContent = "";
+      const e = { who:"them", text:reply };
+      b.live.push(e); appendLine(e); sndRecv();
+    }, 650 + Math.min(1400, reply.length * 12));
+  }
+
+  // --- open / close the whole app ------------------------------------------
+  let payRendered = false;
+  function openPayphone(){
+    if(!payRendered){ renderBuddyList(); payRendered = true; }
+    payScreen.classList.add("on");
+    sndSignon();
+    const first = aimGroups.querySelector(".aim-buddy");
+    try { (first || $("#aimBlClose")).focus({ preventScroll:true }); } catch(_){}
+  }
+  function closePayphone(){
+    clearTimeout(replyTimer); aimTyping.textContent = "";
+    aimIM.classList.remove("on"); aimStage.classList.remove("im-open"); currentSn = null;
+    payScreen.classList.remove("on");
+    try { $("#homePayphone").focus({ preventScroll:true }); } catch(_){}
+  }
+
+  // sound toggle
+  $("#aimSound").addEventListener("click", function(){
+    aimSoundOn = !aimSoundOn;
+    this.title = "Sounds: " + (aimSoundOn ? "on" : "off");
+    this.setAttribute("aria-label", "Sound " + (aimSoundOn ? "on" : "off"));
+    this.style.opacity = aimSoundOn ? "1" : ".45";
+    if(aimSoundOn) sndRecv();
+  });
+
+  // smiley inserter
+  $("#aimSmiley").addEventListener("click", () => {
+    if(aimInput.disabled) return;
+    const v = aimInput.value;
+    aimInput.value = v + (v && !/\s$/.test(v) ? " " : "") + ":-) ";
+    try { aimInput.focus(); } catch(_){}
+  });
+  $("#aimSmiley").addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); $("#aimSmiley").click(); } });
+
+  // wiring
+  $("#homePayphone").addEventListener("click", openPayphone);
+  $("#aimBlClose").addEventListener("click", closePayphone);
+  $("#aimBlMin").addEventListener("click", closePayphone);
+  [["#aimBlClose"],["#aimBlMin"]].forEach(([id]) =>
+    $(id).addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); closePayphone(); } }));
+  $("#aimImClose").addEventListener("click", closeIM);
+  $("#aimImClose").addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); closeIM(); } });
+  $("#aimSendBtn").addEventListener("click", sendMsg);
+  aimInput.addEventListener("keydown", e => {
+    if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); sendMsg(); }
+  });
+  payScreen.addEventListener("keydown", e => {
+    if(e.key === "Escape"){ e.preventDefault(); if(aimIM.classList.contains("on")) closeIM(); else closePayphone(); }
+  });
+
+  /* github app — opens a springboard "app" listing the clarkbar.sys org's
+     public repos; each row hands off to that repo on GitHub in a new tab. The
+     list is pulled from the public GitHub API the first time the app opens and
+     then cached for the session. Works the same on the live console and on the
+     static GitHub Pages build (the service worker ignores cross-origin GETs),
+     showing only public repos since the request is unauthenticated. */
+  const GH_ORG = "clarkbar-sys";
+  const githubApp = $("#githubApp");
+  const githubList = $("#githubList");
+  let ghLoaded = false;            // repos fetched successfully at least once
+  let ghLoading = false;
+
+  // a handful of brandish dots for the common languages; everything else falls
+  // back to a neutral grey so an unknown language still renders cleanly.
+  function ghLangColor(l){
+    const m = { Go:"#00add8", JavaScript:"#f1e05a", TypeScript:"#3178c6", HTML:"#e34c26",
+      CSS:"#563d7c", Shell:"#89e051", Python:"#3572a5", Rust:"#dea584", Just:"#9aa0a6" };
+    return m[l] || "rgba(255,255,255,.5)";
+  }
+  function ghRow(r){
+    const desc = r.description ? `<span class="gh-repo-desc">${esc(r.description)}</span>` : "";
+    const lang = r.language
+      ? `<span class="gh-repo-lang"><i style="color:${ghLangColor(r.language)}"></i>${esc(r.language)}</span>`
+      : "";
+    return `<a class="gh-repo" href="${esc(r.html_url)}" target="_blank" rel="noopener">
+      <span class="gh-repo-icon" aria-hidden="true">${esc((r.name||"?").charAt(0))}</span>
+      <span class="gh-repo-body"><span class="gh-repo-name">${esc(r.name)}</span>${desc}</span>
+      ${lang}</a>`;
+  }
+  const ghFallback = `<p class="gh-note">Couldn't reach GitHub.<br>
+    <a href="https://github.com/${GH_ORG}" target="_blank" rel="noopener">Open clarkbar.sys on GitHub ↗</a></p>`;
+
+  async function loadGithubRepos(){
+    if(ghLoaded || ghLoading) return;
+    ghLoading = true;
+    githubList.innerHTML = `<span class="gh-spin" aria-hidden="true"></span><p class="gh-note">loading repos…</p>`;
+    try {
+      const res = await fetch(`https://api.github.com/orgs/${GH_ORG}/repos?per_page=100&sort=updated`,
+        { headers: { Accept: "application/vnd.github+json" } });
+      if(!res.ok) throw new Error("HTTP " + res.status);
+      const repos = (await res.json())
+        .filter(r => r && !r.archived && r.name !== ".github")
+        .sort((a,b) => String(b.pushed_at||"").localeCompare(String(a.pushed_at||"")));
+      if(!repos.length){
+        githubList.innerHTML = `<p class="gh-note">No public repositories yet.<br>
+          <a href="https://github.com/${GH_ORG}" target="_blank" rel="noopener">Open clarkbar.sys on GitHub ↗</a></p>`;
+      } else {
+        githubList.innerHTML = repos.map(ghRow).join("");
+      }
+      ghLoaded = true;                 // cache the good render for the session
+    } catch(_) {
+      githubList.innerHTML = ghFallback;   // leave ghLoaded false so reopening retries
+    } finally {
+      ghLoading = false;
+    }
+  }
+
+  function openGithub(){
+    githubApp.classList.add("on");
+    try { $("#githubBack").focus({ preventScroll:true }); } catch(_){}
+    loadGithubRepos();
+  }
+  function closeGithub(){
+    githubApp.classList.remove("on");
+    try { $("#homeGithub").focus({ preventScroll:true }); } catch(_){}
+  }
+  $("#homeGithub").addEventListener("click", openGithub);
+  $("#githubBack").addEventListener("click", closeGithub);
+  githubApp.addEventListener("keydown", e => { if(e.key === "Escape"){ e.stopPropagation(); closeGithub(); } });
+
+  /* plug tile — opens an in-app panel (reusing the github app's slide-in shell)
+     previewing plug's three PII-domain tiers: rep (public), crib (personal),
+     bag (credential-adjacent). plug is still scoping, so the tiers are read-only
+     "coming soon" rows rather than live hand-offs — nothing to fetch or wire. */
+  const plugApp = $("#plugApp");
+  function openPlug(){
+    plugApp.classList.add("on");
+    try { $("#plugBack").focus({ preventScroll:true }); } catch(_){}
+  }
+  function closePlug(){
+    plugApp.classList.remove("on");
+    try { $("#homePlug").focus({ preventScroll:true }); } catch(_){}
+  }
+  $("#homePlug").addEventListener("click", openPlug);
+  $("#plugBack").addEventListener("click", closePlug);
+  plugApp.addEventListener("keydown", e => { if(e.key === "Escape"){ e.stopPropagation(); closePlug(); } });
+
+  /* tally tile — a plain hand-off to the tally node on the tailnet, no
+     in-app overlay. hush and tally each join the tailnet as their own tsnet
+     node ("hush", "tally"), so swapping the leading label of hush's own
+     hostname gives tally's MagicDNS name without hardcoding the tailnet.
+     Falls back to the bare "tally" node name when hush isn't served from a
+     "hush.…" host (local dev, GitHub Pages preview). */
+  (function(){
+    const host = location.hostname;
+    const tallyHost = host.startsWith("hush.") ? "tally." + host.slice("hush.".length) : "tally";
+    $("#homeTally").href = `https://${tallyHost}/`;
+  })();
 
   /* ---------- state ---------- */
-  const sevRank = { crit:2, warn:1, good:0 };
+
+  // BUILD_SHA is stamped in by scripts/build-web-preview.sh for static builds
+  // (GitHub Pages / PR previews) that have no hush-control backend and thus no
+  // api/version. Left blank here for real deployments.
+  const BUILD_SHA = "140bd6e";
 
   let M = [];                      // current fleet
   let MODE = "connecting";         // connecting | live | demo | lost
@@ -1115,7 +1983,7 @@
   // Both survive the 2.5s poll re-render because they live on `state`.
   const state = { view:"fleet", mid:null, summLegendOpen:false,
     showRings:false, showLines:false,
-    openRings:new Set(), openLines:new Set(), fleetOrder:[] };
+    openRings:new Set(), openLines:new Set() };
   const byId = id => M.find(m=>m.id===id);
   let PENDING = [];                // machines just added via the UI, awaiting first check-in
   const JUST_ARRIVED = new Set();  // ids to pop-highlight for one render after their first check-in
@@ -1207,22 +2075,11 @@
     if(watchOpen) renderBackupWatch();
   }
 
-  // orderedFleet pins each machine's grid position once it's placed, so a
-  // transient posture/severity flip on a 2.5s poll can't reshuffle cards out
-  // from under a tap in flight (#202 — that reshuffling was landing clicks on
-  // the wrong machine). Newcomers still slot in worst-first among the
-  // existing cards; nothing already on screen moves because of a status
-  // change, only additions/removals touch the order.
+  // orderedFleet sorts the grid alphabetically by machine name — the sole
+  // sort order. Unlike a posture/severity rank, a name doesn't flip mid-poll,
+  // so no pinning is needed to keep cards from reshuffling under a tap.
   function orderedFleet(){
-    const ids = new Set(M.map(m=>m.id));
-    state.fleetOrder = state.fleetOrder.filter(id => ids.has(id));
-    const known = new Set(state.fleetOrder);
-    const newcomers = M.filter(m => !known.has(m.id)).sort((a,b)=>{
-      const pr = postureRank[backupPosture(b.id)] - postureRank[backupPosture(a.id)];
-      return pr || (sevRank[b.status]-sevRank[a.status]);
-    });
-    for(const m of newcomers) state.fleetOrder.push(m.id);
-    return state.fleetOrder.map(byId).filter(Boolean);
+    return [...M].sort((a,b)=> a.id.localeCompare(b.id, undefined, {sensitivity:"base", numeric:true}));
   }
 
   function renderFleet(){
@@ -3921,12 +4778,22 @@
       return v;
     } catch(e){
       lastVersion = null;
-      chip.hidden = true; // no server-side version (demo / file://) — say nothing
+      if(BUILD_SHA){
+        // No hush-control here to ask (static demo build) — show the commit
+        // this bundle was built from instead of just hiding the chip.
+        chip.className = "chip ver build-sha";
+        chip.innerHTML = BUILD_SHA;
+        chip.title = "No hush-control backend here — static demo build, shown at the commit it was built from.";
+        chip.hidden = false;
+      } else {
+        chip.hidden = true; // no server-side version (demo / file://) — say nothing
+      }
       return null;
     }
   }
 
   $("#verChip").addEventListener("click", ()=>{
+    if($("#verChip").classList.contains("build-sha")) return;
     if(lastVersion && lastVersion.updateAvailable && lastVersion.latest){
       openUpdateSheet();
     } else {
