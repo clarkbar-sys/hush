@@ -1155,9 +1155,21 @@
   .aim-line .sn { font-weight:700; }
   .aim-line.them .sn { color:#c00000; }
   .aim-line.me .sn { color:#0000c0; }
+  /* route readout: the chat path (kind · scope · host) and live tok/s, so the
+     control → runtime hop reads at a glance. Hidden for canned/demo buddies. */
+  .aim-route { display:none; align-items:center; gap:5px; padding:1px 8px;
+    font-size:10px; color:#4a4a4a; font-family:"MS Sans Serif", Tahoma, sans-serif;
+    background:#d9d9d9; border-bottom:1px solid #b7b7b7; }
+  .aim-route.on { display:flex; }
+  .aim-route .chip { padding:0 4px; border:1px solid #a9a9a9; border-radius:2px;
+    background:#efefef; text-transform:lowercase; }
+  .aim-route .chip.tailnet, .aim-route .chip.open { color:#0a660a; border-color:#8fbf8f; }
+  .aim-route .chip.loopback, .aim-route .chip.unknown { color:#8a5a00; border-color:#c9a96a; }
+  .aim-route .tps { margin-left:auto; font-variant-numeric:tabular-nums; }
   .aim-sys { text-align:center; color:#808080; font-size:11px; font-style:italic;
     margin:6px 0; font-family:"MS Sans Serif", Tahoma, sans-serif; }
   .aim-sys b { color:#606060; font-style:normal; }
+  .aim-sys a { color:#0000c0; cursor:pointer; text-decoration:underline; font-style:normal; }
   .aim-typing { min-height:15px; padding:0 12px 2px; font-size:11px; color:#707070;
     font-style:italic; font-family:"MS Sans Serif", Tahoma, sans-serif; }
   .aim-cwrap { margin:0 5px 5px; display:flex; flex-direction:column;
@@ -1400,6 +1412,7 @@
         <span class="aim-fsep"></span>
         <span class="aim-fbtn" id="aimSmiley" title="Insert smiley" role="button" tabindex="0" aria-hidden="false" aria-label="Insert smiley">☺</span>
       </div>
+      <div class="aim-route" id="aimRoute" aria-hidden="true"></div>
       <div class="aim-log" id="aimLog" aria-live="polite" aria-atomic="false"></div>
       <div class="aim-typing" id="aimTyping" aria-live="polite"></div>
       <div class="aim-cwrap" id="aimCwrap">
@@ -1967,6 +1980,46 @@
     if(c) c.live.forEach(appendLine);
   }
 
+  // renderRoute shows the chat path for a live buddy — kind · bind scope · host,
+  // plus live tok/s while streaming — so the control → runtime hop reads at a
+  // glance. Canned/demo buddies have no route and hide it.
+  const aimRoute = $("#aimRoute");
+  function renderRoute(b, tps){
+    if(!b || !b.llm){ aimRoute.className = "aim-route"; aimRoute.textContent = ""; return; }
+    const scope = b.exposure || "unknown";
+    aimRoute.className = "aim-route on";
+    aimRoute.textContent = "";
+    const chip = (cls, txt) => { const s = document.createElement("span"); s.className = "chip " + cls; s.textContent = txt; return s; };
+    aimRoute.appendChild(chip(b.kind === "ollama" ? "ollama" : "openai", b.kind));
+    aimRoute.appendChild(chip(scope, scope));
+    const host = document.createElement("span"); host.textContent = b.host || ""; aimRoute.appendChild(host);
+    const rate = document.createElement("span"); rate.className = "tps";
+    rate.textContent = tps ? (tps + " tok/s") : "";
+    aimRoute.appendChild(rate);
+  }
+  function setRouteTps(tps){
+    const el = aimRoute.querySelector(".tps");
+    if(el) el.textContent = tps ? (tps + " tok/s") : "";
+  }
+
+  // machineLinkLine appends a "View <host> in hush →" affordance under a
+  // loopback buddy's nudge, so "expose me" has a concrete next step: it drops
+  // out of the payphone into that box's machine view (its LLM readout / opencode
+  // export live there).
+  function machineLinkLine(host){
+    const d = document.createElement("div");
+    d.className = "aim-sys";
+    const a = document.createElement("a");
+    a.textContent = "View " + host + " in hush →";
+    a.setAttribute("role", "button"); a.tabIndex = 0;
+    const go = () => { closePayphone(); enterMachine(host); };
+    a.addEventListener("click", go);
+    a.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); go(); } });
+    d.appendChild(a);
+    aimLog.appendChild(d);
+    aimLog.scrollTop = aimLog.scrollHeight;
+  }
+
   // abortStream cancels an in-flight completion (closing the window or switching
   // buddies stops the box working) and clears any pending scripted reply.
   function abortStream(){
@@ -1982,6 +2035,7 @@
     $("#aimImTitle").textContent = b.sn + " — Instant Message";
     aimIM.setAttribute("aria-label", "Instant Message with " + b.sn);
     renderLog(key);
+    renderRoute(b);
     $("#aimCwrap").classList.remove("dis");
     const away = b.empty || (b.llm && !b.online) || (b.canned && b.group === "archive");
     $("#aimWarn").textContent = (away && !b.empty) ? "Away — you'll get an auto-response" : "";
@@ -2013,6 +2067,9 @@
         aimTyping.textContent = "";
         const e = { who:"them", text:away, auto:true };
         c.live.push(e); appendLine(e); sndRecv();
+        // A signed-off (loopback) model gets a concrete next step: jump to its
+        // machine view, where the LLM readout and opencode export live.
+        if(b.llm && b.host) machineLinkLine(b.host);
       }, 900);
     } else {
       const e = { who:"sys", text:"Your message will be delivered when " + b.sn + " next signs on." };
@@ -2066,6 +2123,8 @@
     streamAbort = ac;
     const key = currentKey;         // pin the conversation so a buddy switch mid-stream can't cross wires
     let body = null, acc = "";
+    let ntok = 0, t0 = 0;           // token count + first-token time, for client-side tok/s
+    const now = () => (window.performance && performance.now) ? performance.now() : Date.now();
     const live = () => currentKey === key;
     composerEnabled(false);         // one turn at a time — re-enabled when the stream ends
     try {
@@ -2080,7 +2139,7 @@
         aimTyping.textContent = "";
         if(r.status === 409){
           const e = { who:"them", text:awayText(b), auto:true };
-          c.live.push(e); if(live()) appendLine(e);
+          c.live.push(e); if(live()){ appendLine(e); if(b.host) machineLinkLine(b.host); }
         } else {
           const e = { who:"sys", text:"couldn't reach " + b.model + " on " + b.host + " (error " + r.status + ")." };
           c.live.push(e); if(live()) appendLine(e);
@@ -2105,18 +2164,28 @@
             let j; try { j = JSON.parse(data); } catch(_){ return; }
             const delta = j.choices && j.choices[0] && j.choices[0].delta && j.choices[0].delta.content;
             if(delta){
-              acc += delta;
+              acc += delta; ntok++;
+              if(!t0) t0 = now();
               if(live()){
                 if(!body){ aimTyping.textContent = ""; body = newStreamLine(); }
                 body.textContent = emote(acc);
                 aimLog.scrollTop = aimLog.scrollHeight;
+                const secs = (now() - t0) / 1000;
+                if(secs > 0.25) setRouteTps(Math.round(ntok / secs));
               }
             }
           });
         }
       }
       aimTyping.textContent = "";
-      if(acc){ c.live.push({ who:"them", text:acc }); if(live()) sndRecv(); }
+      if(acc){
+        c.live.push({ who:"them", text:acc });
+        if(live()){
+          const secs = t0 ? (now() - t0) / 1000 : 0;
+          if(secs > 0) setRouteTps(Math.round(ntok / secs));
+          sndRecv();
+        }
+      }
       else if(live()){ const e = { who:"sys", text:"(no response)" }; c.live.push(e); appendLine(e); }
     } catch(err){
       // An abort (window closed / buddy switched) is expected and silent; a real
