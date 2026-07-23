@@ -646,6 +646,12 @@
     display:flex; gap: 10px; align-items:center; }
   .dock .hint { font-family:var(--mono); font-size:11px; color:var(--faint); flex:1; }
   .build { flex:none; }
+  .dock-back { flex:none; padding: 9px 11px; }
+  .dock-back-label { display:none; }
+  @media (min-width: 900px) {
+    .dock-back-icon { display:none; }
+    .dock-back-label { display:inline; }
+  }
 
   /* ---- sheet ---- */
   .scrim { position: fixed; inset:0; background: rgba(6,12,14,.5); z-index: 40;
@@ -1104,6 +1110,9 @@
   <div id="app"></div>
 
   <div class="dock">
+    <button class="btn ghost dock-back" id="backBtn" title="Back to launcher" aria-label="Back to launcher">
+      <span class="dock-back-icon">☰</span><span class="dock-back-label">← Back</span>
+    </button>
     <span class="hint" id="dockHint">loading fleet…</span>
     <button class="btn" id="reportBtn" title="Download a JSON snapshot of the whole fleet">⬇ Report</button>
     <button class="btn primary build" id="buildBtn">＋ Machine<span class="badge-count on-primary" id="addBadge" style="display:none"></span></button>
@@ -1237,7 +1246,18 @@
     setTimeout(() => { homeScreen.hidden = true; }, 420);
   }
 
+  function exitToHome(){
+    homeScreen.classList.add("launching");
+    homeScreen.hidden = false;
+    tickHomeClock();
+    clearInterval(homeClockTimer);
+    homeClockTimer = setInterval(tickHomeClock, 15000);
+    void homeScreen.offsetWidth; // force reflow so the zoom-back transition plays
+    requestAnimationFrame(() => homeScreen.classList.remove("launching"));
+  }
+
   $("#homeHush").addEventListener("click", enterApp);
+  $("#backBtn").addEventListener("click", exitToHome);
 
   /* payphone app — the launcher's other tile. It doesn't leave the home
      screen (no console to zoom into); it just overlays a 1990s gateway
