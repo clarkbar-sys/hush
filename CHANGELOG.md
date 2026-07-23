@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.12.0](https://github.com/clarkbar-sys/hush/compare/v2.11.0...v2.12.0) (2026-07-23)
+
+
+### Features
+
+* **web:** add back button from hush console to launcher ([#223](https://github.com/clarkbar-sys/hush/issues/223)) ([c756627](https://github.com/clarkbar-sys/hush/commit/c756627395306f5df0e96b2ae8800a17fcf37e41))
+* **web:** browse clarkbar.sys repos from the github tile ([#225](https://github.com/clarkbar-sys/hush/issues/225)) ([6c763c6](https://github.com/clarkbar-sys/hush/commit/6c763c62d1ea92f73a0db1235f2f76067cc2b105))
+
+
+### Bug Fixes
+
+* **web:** show update-check sheet above the launcher ([#226](https://github.com/clarkbar-sys/hush/issues/226)) ([d0cf366](https://github.com/clarkbar-sys/hush/commit/d0cf3661dacbe48a53c9573301e5507ce6d06f19))
+
 ## [2.11.0](https://github.com/clarkbar-sys/hush/compare/v2.10.0...v2.11.0) (2026-07-23)
 
 
