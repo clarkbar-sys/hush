@@ -3,277 +3,40 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>hush — a phone-first backup console for your homelab</title>
-<meta name="description" content="hush is a phone-first backup console for a tailnet homelab — a live map coloured by backup posture. Try the console in your browser, then grab the latest release.">
+<title>hush — live console</title>
+<meta name="description" content="hush is a phone-first backup console for a tailnet homelab. Opens straight into the live in-browser demo.">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<!--
+  The site root drops straight into the console's live demo (staged under
+  site/demo/ by the pages-site workflow — the real app in MODE=demo, no backend).
+  No landing page in between. Release/install info lives in the README and the
+  GitHub Releases page.
+-->
+<meta http-equiv="refresh" content="0; url=demo/">
+<link rel="canonical" href="demo/">
 <style>
-  :root {
-    --ground: #060210;
-    --panel: #0d0620;
-    --panel-2: #140b33;
-    --border: #2c1e66;
-    --border-soft: #1b1240;
-    --text: #e6dcff;
-    --muted: #9d86d9;
-    --faint: #6a54a0;
-    --accent: #19e3ff;
-    --accent-soft: #06313f;
-    --ring2: #ff2bd6;
-    --good: #2bffa6;
-    --good-soft: #06331f;
-    --warn: #ffd23f;
-    --crit: #ff3d6e;
-    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
-  }
-  * { box-sizing: border-box; }
   html, body {
     margin: 0;
-    background: var(--ground);
-    color: var(--text);
-    font: 15px/1.6 var(--mono);
+    height: 100%;
+    background: #060210;
+    color: #9d86d9;
+    font: 15px/1.6 ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   }
-  body {
-    min-height: 100vh;
-    background-image:
-      linear-gradient(rgba(120,80,220,.06) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(120,80,220,.06) 1px, transparent 1px);
-    background-size: 28px 28px;
-  }
-  main {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 48px 20px 80px;
-  }
-  h1 {
-    font-size: 28px;
-    margin: 0 0 4px;
-    letter-spacing: .02em;
-  }
-  h1 span { color: var(--accent); text-shadow: 0 0 12px rgba(25,227,255,.5); }
-  h1 .dot { display:inline-block; width:9px; height:9px; border-radius:50%;
-    background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); margin-left:2px;
-    vertical-align: middle; }
-  .tagline { color: var(--muted); margin: 0 0 8px; font-size: 16px; }
-  .lede { color: var(--text); margin: 0 0 28px; max-width: 60ch; }
-  .lede .k { color: var(--good); }
-  .lede .k.warn { color: var(--warn); }
-  .lede .k.crit { color: var(--crit); }
-  .lede .k.faint { color: var(--faint); }
-  a { color: var(--accent); }
-
-  /* ---- hero: the live console preview ---- */
-  .hero {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 32px;
-    align-items: start;
-    margin: 0 0 40px;
-  }
-  @media (max-width: 720px) {
-    .hero { grid-template-columns: 1fr; gap: 24px; }
-    .phone-col { order: -1; }
-  }
-  .hero-copy h2 {
-    font-size: 13px; text-transform: uppercase; letter-spacing: .12em;
-    color: var(--faint); margin: 0 0 12px;
-  }
-  .hero-copy p { color: var(--muted); margin: 0 0 16px; }
-  .hero-copy .demo-tag {
-    display: inline-flex; align-items: center; gap: 7px;
-    font-size: 11px; color: var(--warn); margin-bottom: 14px;
-    border: 1px solid #332905; background: #140b33; border-radius: 999px;
-    padding: 5px 11px;
-  }
-  .hero-copy .demo-tag .live {
-    width: 6px; height: 6px; border-radius: 50%; background: var(--warn); flex: none;
-  }
-  .btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    font-family: var(--mono); font-size: 14px; font-weight: 600;
-    text-decoration: none; cursor: pointer;
-    padding: 11px 18px; border-radius: 8px;
-    border: 1px solid var(--accent);
-    color: var(--ground); background: var(--accent);
-  }
-  .btn.ghost { color: var(--accent); background: transparent; }
-  .btn-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
-
-  /* phone frame around the live console iframe */
-  .phone-col { display: flex; justify-content: center; }
-  .phone {
-    width: 300px; max-width: 82vw;
-    border: 10px solid #17102e;
-    border-radius: 34px;
-    background: var(--ground);
-    box-shadow:
-      0 0 0 1px var(--border),
-      0 0 40px rgba(25,227,255,.16),
-      0 24px 60px rgba(0,0,0,.6);
-    padding: 8px;
-    position: relative;
-  }
-  .phone::before {
-    content: ""; position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-    width: 74px; height: 5px; border-radius: 3px; background: #2c1e66; z-index: 2;
-  }
-  .phone-screen {
-    border-radius: 24px; overflow: hidden; background: var(--ground);
-    position: relative; aspect-ratio: 300 / 620;
-  }
-  .phone-screen iframe {
-    position: absolute; inset: 0;
-    width: 100%; height: 100%; border: 0; display: block;
-  }
-  .phone-cap {
-    text-align: center; color: var(--faint); font-size: 11px; margin-top: 14px;
-  }
-  .phone-cap a { color: var(--muted); }
-
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 20px 24px;
-    margin-bottom: 20px;
-  }
-  .card h2 {
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: .12em;
-    color: var(--faint);
-    margin: 0 0 14px;
-  }
-  .version {
-    font-size: 22px;
-    color: var(--good);
-  }
-  .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
-  .notes {
-    white-space: pre-wrap;
-    color: var(--text);
-    border-top: 1px solid var(--border-soft);
-    margin-top: 16px;
-    padding-top: 16px;
-    font-size: 13.5px;
-  }
-  .assets { list-style: none; margin: 0; padding: 0; }
-  .assets li {
+  .wrap {
+    min-height: 100%;
     display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border-soft);
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
   }
-  .assets li:last-child { border-bottom: none; }
-  .assets .size { color: var(--faint); white-space: nowrap; }
-  pre.install {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
-    overflow-x: auto;
-    color: var(--accent);
-  }
-  .err { color: var(--crit); }
-  .links { color: var(--muted); font-size: 13px; }
-  .links a { margin-right: 16px; }
-  footer { color: var(--faint); font-size: 12px; margin-top: 40px; }
+  a { color: #19e3ff; }
 </style>
+<script>location.replace('demo/');</script>
 </head>
 <body>
-<main>
-  <h1><span>hush</span><span class="dot"></span></h1>
-  <p class="tagline">a phone-first backup console for your homelab.</p>
-  <p class="lede">
-    Every machine on your tailnet, on one legible map — coloured by
-    <span class="k">backup posture</span>, not CPU. Protected boxes sit quiet;
-    the ones <span class="k warn">at risk</span>,
-    <span class="k faint">unprotected</span>, or
-    <span class="k crit">failed</span> are the ones that stand out. It answers
-    the question a homelab usually can't at a glance: <em>is everything backed
-    up, and could I get it back?</em>
-  </p>
-
-  <div class="hero">
-    <div class="hero-copy">
-      <h2>See it running</h2>
-      <span class="demo-tag"><span class="live"></span>demo data · no backend</span>
-      <p>
-        This is the actual console, running in its built-in demo mode against a
-        full fake fleet — nothing installed, no <code>hush-control</code> behind
-        it. Tap a machine to drill in, open a snapshot, watch the vitals move.
-      </p>
-      <div class="btn-row">
-        <a class="btn" href="demo/" target="_blank" rel="noopener">▶ Open the live demo</a>
-        <a class="btn ghost" href="#get">Get hush ↓</a>
-      </div>
-    </div>
-    <div class="phone-col">
-      <div>
-        <div class="phone">
-          <div class="phone-screen">
-            <iframe src="demo/" title="hush console — live demo" loading="lazy"
-              referrerpolicy="no-referrer"></iframe>
-          </div>
-        </div>
-        <p class="phone-cap">live demo · <a href="demo/" target="_blank" rel="noopener">open full screen ↗</a></p>
-      </div>
-    </div>
-  </div>
-
-  <div class="card" id="get">
-    <h2>Latest release</h2>
-    <p>Loading&hellip;</p>
-  </div>
-
-  <div class="card">
-    <h2>Install</h2>
-    <p class="meta">Runs <code>hush-agent</code> and/or <code>hush-control</code> as a systemd service. Must run as root.</p>
-    <pre class="install">curl -fsSL https://raw.githubusercontent.com/clarkbar-sys/hush/main/install.sh | sudo sh</pre>
-  </div>
-
-  <p class="links">
-    <a href="https://github.com/clarkbar-sys/hush">Repository</a>
-    <a href="https://github.com/clarkbar-sys/hush/blob/main/docs/DESIGN.md">Design doc</a>
-    <a href="https://github.com/clarkbar-sys/hush/releases">All releases</a>
-  </p>
-
-  <footer>The preview above is the console's own demo mode — the same static shell hush-control serves, with no live fleet behind it. Release info is fetched live from the GitHub Releases API; this page ships no version info of its own.</footer>
-</main>
-<script>
-(async () => {
-  const el = document.getElementById('get');
-  try {
-    const res = await fetch('https://api.github.com/repos/clarkbar-sys/hush/releases/latest');
-    if (!res.ok) throw new Error('GitHub API returned ' + res.status);
-    const rel = await res.json();
-
-    const published = new Date(rel.published_at).toLocaleDateString(undefined, {
-      year: 'numeric', month: 'long', day: 'numeric',
-    });
-
-    const assets = (rel.assets || []).map(a => {
-      const mb = (a.size / (1024 * 1024)).toFixed(1);
-      return `<li><a href="${a.browser_download_url}">${a.name}</a><span class="size">${mb} MB</span></li>`;
-    }).join('');
-
-    el.innerHTML = `
-      <h2>Latest release</h2>
-      <div class="version">${rel.tag_name}</div>
-      <div class="meta">released ${published}</div>
-      ${rel.body ? `<div class="notes">${escapeHtml(rel.body)}</div>` : ''}
-      ${assets ? `<ul class="assets" style="margin-top:16px">${assets}</ul>` : ''}
-    `;
-  } catch (err) {
-    el.innerHTML = `<h2>Latest release</h2><p class="err">Couldn't load the latest release (${escapeHtml(String(err.message || err))}). See <a href="https://github.com/clarkbar-sys/hush/releases">releases</a> directly.</p>`;
-  }
-})();
-
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[c]));
-}
-</script>
+<div class="wrap">
+  <p>Opening the live console&hellip; <a href="demo/">continue &rarr;</a></p>
+</div>
 </body>
 </html>
