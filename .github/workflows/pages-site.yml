@@ -1,12 +1,12 @@
 name: Deploy release site (GitHub Pages)
 
-# Publishes site/ — a small static page that shows the latest GitHub Release
-# (fetched client-side from the Releases API, so it never goes stale) — to the
-# root of the gh-pages branch. The landing page leads with a live, interactive
-# preview of the console itself: it stages web/ (the console running in its
-# built-in demo mode, no backend required) into site/demo/ via
-# scripts/build-web-preview.sh, so the page embeds /demo/ in an <iframe> and
-# visitors see the actual app, not a mockup that could drift.
+# Publishes site/ to the root of the gh-pages branch. The site root drops
+# visitors straight into the live console: site/index.html is a bare redirect
+# to demo/, and web/ (the console running in its built-in demo mode, no backend
+# required) is staged into site/demo/ via scripts/build-web-preview.sh. So a
+# visitor to the site root lands in the actual app, not a landing page — no
+# mockup that could drift. Release and install info live in the README and the
+# GitHub Releases page.
 #
 # The PR-preview workflow (pr-preview.yml) already owns gh-pages/pr-preview/
 # pr-<N>/ for per-PR console previews; this job only touches the root and
