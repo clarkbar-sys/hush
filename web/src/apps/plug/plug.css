@@ -1,0 +1,17 @@
+  /* ---- plug app: reuses the gh-app slide-in shell (same .on toggle) to preview
+     plug's three PII-domain tiers — rep / crib / bag. plug is still scoping, so
+     these are read-only "coming soon" info rows, each wearing a soon pill, under
+     the repo's own tagline. Nothing to hand off to yet. ---- */
+  .plug-tag { margin:2px 2px 9px; color:rgba(255,255,255,.6); font-size:12px;
+    font-style:italic; text-align:center; letter-spacing:.01em; }
+  .plug-tier { cursor:default; }
+  .plug-tier:hover { background:rgba(255,255,255,.05); }   /* stays flat — nothing opens yet */
+  .plug-tier:active { transform:none; }
+  .plug-tier .plug-ico-rep  { background:linear-gradient(#3f7bd6,#1b3c74); }
+  .plug-tier .plug-ico-crib { background:linear-gradient(#c9683e,#5a2f1c); }
+  .plug-tier .plug-ico-bag  { background:linear-gradient(#8a5cc9,#3a2564); }
+  .plug-soon-pill { flex:0 0 auto; align-self:center; font-size:9px; font-weight:700;
+    letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.7);
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14);
+    border-radius:999px; padding:2px 7px; }
+

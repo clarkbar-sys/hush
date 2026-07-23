@@ -117,7 +117,9 @@ console's **＋ Build → Machine** sheet once it's up.
 
 Working from a clone instead? Swap `hush-control` for `go run ./cmd/hush-control`
 (and likewise for the agent). Add `-web web` to serve the UI from the on-disk
-`web/` directory when you want to iterate on it live.
+`web/` directory when you want to iterate on it live. The UI's source is split
+by app under `web/src/` (see [`web/src/README.md`](./web/src/README.md)); edit a
+partial there and run `go generate ./web` to rebuild `web/index.html`.
 
 ### Serve over the tailnet (HTTPS)
 
@@ -300,7 +302,7 @@ the console and can be updated by re-running the one-line installer.
 | `cmd/hush-control` | control plane on the NAS; fans out to agents, serves the UI |
 | `internal/vitals` | Linux vitals collection (`/proc`, systemd, `nvidia-smi`) |
 | `internal/sessions` | read-only detection of running coding agents (opencode/claude) for the console's Sessions view (see [`docs/SESSIONS.md`](./docs/SESSIONS.md)) |
-| `web/` | the console — a single static page |
+| `web/` | the console — a single static page, assembled from per-app source under `web/src/` (see [`web/src/README.md`](./web/src/README.md)) |
 | `docs/mockups/` | interactive UX reference (open directly for the demo fleet) |
 | `systemd/` | unit files for running the binaries as services |
 | `install.sh` | installs hush as a systemd service under a dedicated `hush` user (fetches binaries + units over the network; root required) |

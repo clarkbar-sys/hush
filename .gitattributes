@@ -1,0 +1,5 @@
+# web/index.html is a build artifact: it's assembled from the per-app source
+# partials under web/src/ by `go generate ./web` (see web/gen.go). Mark it
+# generated so GitHub collapses it in diffs and keeps it out of language stats —
+# review the source partials under web/src/, not the concatenated output.
+web/index.html linguist-generated=true

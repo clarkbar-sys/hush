@@ -1,0 +1,56 @@
+# Ordered assembly manifest for web/index.html.
+#
+# Each non-comment line is a source partial (path relative to web/src/). They
+# are concatenated top-to-bottom — verbatim, byte for byte — to produce the
+# index.html that embed.go ships. Regenerate after editing any partial with:
+#
+#     go generate ./web
+#
+# The order is the order they appear in the document, so it can't be reshuffled
+# freely: the <style> block, the <body>, and the single <script> IIFE are each
+# split across several partials. Blank lines and #-comments are ignored.
+
+# The launcher hosts several slide-in mini-apps (github, plug, riff, tally).
+# Each is its own app folder; the gh-app panel shell they share lives with
+# github (apps/github/github.css), which is where the coming-soon apps reuse it.
+
+# ---- <head> + CSS ------------------------------------------------------------
+core/head.html                    # <!doctype>, <head>, opening <style>
+core/base.css                     # theme vars, body, header, top bar, chip
+global/lostbar.css                # lost-connection banner
+apps/fleet/fleet.css              # fleet grid, cards, machine view, sessions…
+core/sheet.css                    # shared bottom-sheet + toast chrome
+core/skin.css                     # cyber-skin pass over the base components
+apps/fleet/fleet.watch.css        # backup watch modal
+global/boot.css                   # boot / reboot overlay
+launcher/launcher.css             # home screen + edit mode
+apps/github/github.css            # github app + the shared gh-app slide-in shell
+apps/plug/plug.css                # plug app (reuses the gh-app shell)
+apps/riff/riff.css                # riff app (reuses the gh-app shell)
+apps/payphone/payphone.css        # payphone: teal desktop, buddy list, IM, taskbar
+core/style-close.html             # </style></head><body>
+
+# ---- <body> ------------------------------------------------------------------
+global/boot.html                  # boot overlay markup
+launcher/launcher.html            # home screen: status bar, header, tile grid
+apps/github/github.html           # github app panel (nested in the launcher frame)
+apps/plug/plug.html               # plug app panel
+apps/riff/riff.html               # riff app panel
+launcher/launcher.close.html      # closes the launcher home-screen/phone frame
+apps/payphone/payphone.html       # payphone buddy list, IM window, Win95 taskbar
+global/lostbar.html               # lost-connection banner markup
+apps/fleet/fleet.html             # header, #app, dock, command sheets
+core/toast.html                   # toast host
+
+# ---- <script> (one IIFE, split by app) --------------------------------------
+core/script-open.js               # <script>, IIFE open, shared $ helper
+global/boot.js                    # boot overlay logic
+launcher/launcher.home.js         # home screen show/enter/exit
+apps/payphone/payphone.js         # payphone: personalities, buddy list, IM, taskbar
+apps/github/github.js             # github app: fetch + render org repos
+apps/plug/plug.js                 # plug app: open/close the coming-soon panel
+apps/riff/riff.js                 # riff app: pager panel + Try-me notification
+apps/tally/tally.js               # tally tile: resolve the tally node's host
+launcher/launcher.springboard.js  # reorderable springboard + IndexedDB prefs
+apps/fleet/fleet.js               # the fleet console + the go() bootstrap
+core/script-close.js              # IIFE close, </script></body></html>

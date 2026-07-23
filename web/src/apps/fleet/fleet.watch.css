@@ -1,0 +1,23 @@
+  /* ---- backup watch modal ---- */
+  /* Two bars, and which one you get is a question of what the box can actually
+     tell us. The runner publishes restic's live byte progress beside the status
+     file, so a run in flight usually has a real percentage — .wt-prog.det draws
+     it. When it doesn't (a runner too old to publish, progress switched off, or
+     the seconds before the first sample lands) the bar falls back to the
+     indeterminate shuttle: "moving", without inventing a number. Elapsed time
+     ticks live under both. */
+  .wt-prog { height:8px; border-radius:999px; overflow:hidden; position:relative;
+    background:var(--accent-soft); margin:2px 0 10px; }
+  .wt-prog::before { content:""; position:absolute; top:0; bottom:0; width:38%;
+    border-radius:999px; background:var(--accent);
+    animation: wt-shuttle 1.5s ease-in-out infinite; }
+  .wt-prog.det::before { animation:none; left:0; width:var(--pct,0%);
+    transition:width .4s ease; }
+  @keyframes wt-shuttle { 0%{ left:-40%; } 100%{ left:102%; } }
+  .wt-elapsed { font-variant-numeric:tabular-nums; }
+  .wt-note { font-family:var(--mono); font-size:10px; color:var(--faint);
+    margin:0 0 14px; line-height:1.5; }
+  @media (prefers-reduced-motion: reduce){
+    .wt-prog::before { animation:none; left:0; width:100%; opacity:.5; }
+  }
+

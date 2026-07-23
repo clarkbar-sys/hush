@@ -1,0 +1,107 @@
+  /* ============================================================
+     CYBER SKIN — structural HUD treatment on the base components.
+     Sharp corners, terminal chrome, target brackets. Single theme,
+     so these ride directly on the base components.
+     ============================================================ */
+  /* sharpen every rounded holdout (status LEDs stay round on purpose) */
+  .chip, .pill, .role, .badge, .row, .row .gly, .btn,
+  .sheet, .grab, #toast, .alertbar { border-radius: 0; }
+
+  /* header: blinking cursor on the wordmark */
+  .brand b::after { content:"_"; color: var(--accent); margin-left:1px;
+    animation: blink 1.1s step-end infinite; }
+  .chip { text-transform: uppercase; letter-spacing:.08em; }
+  .chip .live { box-shadow:0 0 7px var(--accent); }
+
+  /* section heading: // prefix, chromatic-aberration title + cursor */
+  .eyebrow::before { content:"// "; }
+  .h-title { text-transform: uppercase; letter-spacing:.05em;
+    text-shadow: -1.4px 0 rgba(255,43,214,.55), 1.4px 0 rgba(25,227,255,.55); }
+  .h-title::after { content:" ▮"; color: var(--accent); text-shadow:none;
+    animation: blink 1.1s step-end infinite; }
+
+  /* fleet card: top severity rule + diagonal target brackets */
+  .node::before { inset:0 0 auto 0; width:auto; height:2px; box-shadow:0 0 8px var(--sev); }
+  .node::after { content:""; position:absolute; inset:5px; pointer-events:none;
+    background:
+      linear-gradient(var(--accent),var(--accent)) top right / var(--tick) 1px no-repeat,
+      linear-gradient(var(--accent),var(--accent)) top right / 1px var(--tick) no-repeat,
+      linear-gradient(var(--accent),var(--accent)) bottom left / var(--tick) 1px no-repeat,
+      linear-gradient(var(--accent),var(--accent)) bottom left / 1px var(--tick) no-repeat;
+    opacity:.5; transition: opacity .12s ease; }
+  .node:hover::after { opacity:1; }
+  .node .host { text-transform: uppercase; letter-spacing:.02em; }
+  .role { text-shadow:0 0 6px var(--accent-soft); }
+  .aura { box-shadow:0 0 0 2px var(--sev-soft), 0 0 8px var(--sev); }
+  .ring .v, .bigring .v { text-shadow:0 0 8px currentColor; }
+
+  /* pills → bracketed square tags */
+  .badge { background: transparent; border:1px solid currentColor; padding:2px 5px;
+    text-transform: uppercase; letter-spacing:.06em; }
+  .badge::before { content:"["; margin-right:3px; opacity:.7; }
+  .badge::after  { content:"]"; margin-left:3px;  opacity:.7; }
+
+  /* dock reads like a shell prompt; buttons like commands */
+  .dock .hint::before { content:"$ "; color: var(--accent); }
+  .btn { text-transform: uppercase; letter-spacing:.1em; }
+
+  @keyframes blink { 0%,55%{ opacity:1; } 56%,100%{ opacity:0; } }
+  @keyframes pulse { 0%{ box-shadow:0 0 0 0 var(--accent);} 70%{ box-shadow:0 0 0 6px transparent;} 100%{ box-shadow:0 0 0 0 transparent;} }
+  @keyframes pulse-good { 0%{ box-shadow:0 0 0 0 var(--good-soft);} 70%{ box-shadow:0 0 0 6px transparent;} 100%{ box-shadow:0 0 0 0 transparent;} }
+  @keyframes rise { from{ transform: translateY(30px); opacity:.4;} to{ transform:none; opacity:1;} }
+  @keyframes newpop { 0%{ transform:scale(.94);} 60%{ transform:scale(1.01);} 100%{ transform:scale(1);} }
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after { animation-duration: .001ms !important; transition: none !important; }
+  }
+  /* Backups (docs/BACKUP-CONVENTION.md). A backup is a direction, so the card
+     leads with source → target; everything else hangs off that. Prefixed bk-
+     to keep the backup card styles self-contained. */
+  .bk-cards { display:grid; gap:10px; }
+  @media (min-width: 760px){ .bk-cards { grid-template-columns:1fr 1fr; } }
+  .bk-card { background:var(--panel-2); border:1px solid var(--border-soft);
+    border-radius:10px; overflow:hidden; border-left:3px solid var(--good); }
+  .bk-card.warn { border-left-color:var(--warn); }
+  .bk-card.crit { border-left-color:var(--crit); }
+  .bk-card.run  { border-left-color:var(--accent); }
+  .bk-hd { padding:11px 12px 9px; }
+  .bk-route { display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+    font-family:var(--mono); font-weight:700; font-size:14px; }
+  .bk-route .ar { color:var(--accent); font-weight:400; }
+  .bk-state { margin-left:auto; display:inline-flex; align-items:center; gap:5px;
+    font-family:var(--mono); font-size:10px; font-weight:600; padding:3px 8px;
+    border-radius:999px; white-space:nowrap; }
+  .bk-state .d { width:5px; height:5px; border-radius:50%; background:currentColor; }
+  .bk-state.good { color:var(--good); background:var(--good-soft); }
+  .bk-state.warn { color:var(--warn); background:var(--warn-soft); }
+  .bk-state.crit { color:var(--crit); background:var(--crit-soft); }
+  .bk-state.run  { color:var(--accent); background:var(--accent-soft); }
+  .bk-state.run .d { animation: blink 1.4s steps(2,start) infinite; }
+  .bk-repo { font-family:var(--mono); font-size:10.5px; color:var(--muted);
+    margin-top:5px; overflow-wrap:anywhere; }
+  .bk-metrics { display:grid; grid-template-columns:repeat(2,1fr); gap:1px;
+    background:var(--border-soft); }
+  .bk-m { background:var(--panel-2); padding:8px 12px; }
+  .bk-mk { font-family:var(--mono); font-size:9px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--faint); }
+  .bk-mv { font-family:var(--mono); font-size:12.5px; font-weight:600;
+    font-variant-numeric:tabular-nums; }
+  .bk-hist { padding:9px 12px 11px; border-top:1px solid var(--border-soft); }
+  .bk-histk { font-family:var(--mono); font-size:9px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--faint); margin-bottom:6px; }
+  .bk-bars { display:flex; gap:2px; align-items:flex-end; height:22px; }
+  .bk-bar { flex:1; min-width:3px; border-radius:2px; background:var(--good); opacity:.8; }
+  .bk-bar.warn { background:var(--warn); }
+  .bk-bar.crit { background:var(--crit); }
+  .bk-paths { padding:0 12px 11px; display:flex; flex-wrap:wrap; gap:4px; }
+  .bk-path { font-family:var(--mono); font-size:10px; padding:2px 7px;
+    border-radius:5px; background:var(--panel); border:1px solid var(--border-soft);
+    color:var(--muted); }
+  /* A backup card is a button into its watch modal. Only the affordance
+     changes here — the layout above is untouched — so a tap target reads the
+     same as the read-only card it replaced. */
+  .bk-card.tap { cursor:pointer; text-align:left; width:100%; font:inherit;
+    color:inherit; display:block; transition:border-color .15s, transform .1s; }
+  .bk-card.tap:hover { border-color:var(--border); }
+  .bk-card.tap:active { transform:scale(.995); }
+  .bk-card.tap:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+

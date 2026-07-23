@@ -11,5 +11,11 @@ import "embed"
 // installable as an Android home-screen app. Data streams in over the API at
 // runtime; these are just the shell.
 //
+// index.html is generated, not hand-edited: it's assembled from the per-app
+// source partials under src/ (launcher, payphone, fleet, and the global
+// boot / lost-connection chrome) so a change to one app stays scoped to one
+// folder. After editing any partial, regenerate with `go generate ./web`.
+//
+//go:generate go run gen.go
 //go:embed index.html manifest.webmanifest sw.js icon-192.png icon-512.png icon-192-maskable.png icon-512-maskable.png apple-touch-icon.png
 var FS embed.FS

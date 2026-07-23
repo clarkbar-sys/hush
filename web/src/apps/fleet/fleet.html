@@ -1,0 +1,70 @@
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <span class="dot-h"></span><b>hush</b>
+    </div>
+    <div class="spacer"></div>
+    <button class="chip alert-bell" id="alertBell" type="button" hidden aria-label="Backup alerts"></button>
+    <div class="chip" id="statusChip"><span class="live"></span>connecting…</div>
+  </header>
+
+  <div id="app"></div>
+
+  <div class="dock">
+    <span class="hint" id="dockHint">loading fleet…</span>
+    <button class="btn" id="reportBtn" title="Download a JSON snapshot of the whole fleet">⬇ Report</button>
+    <button class="btn primary build" id="buildBtn">＋ Machine<span class="badge-count on-primary" id="addBadge" style="display:none"></span></button>
+    <button class="btn ghost dock-back" id="backBtn" title="Back to launcher" aria-label="Back to launcher">
+      <span class="dock-back-icon">←</span><span class="dock-back-label">← Back</span>
+    </button>
+  </div>
+</div>
+
+<div class="scrim" id="addScrim">
+  <div class="sheet" role="dialog" aria-label="Add a machine">
+    <div class="grab"></div>
+    <div id="addSheetBody"></div>
+  </div>
+</div>
+
+<div class="scrim" id="alertScrim">
+  <div class="sheet" role="dialog" aria-label="Backup alerts">
+    <div class="grab"></div>
+    <div id="alertSheetBody"></div>
+  </div>
+</div>
+
+<div class="scrim" id="updateScrim">
+  <div class="sheet" role="dialog" aria-label="Update hush-control">
+    <div class="grab"></div>
+    <div id="updateSheetBody"></div>
+  </div>
+</div>
+
+<div class="scrim" id="watchScrim">
+  <div class="sheet" role="dialog" aria-label="Backup details">
+    <div class="grab"></div>
+    <div id="watchSheetBody"></div>
+  </div>
+</div>
+
+<div class="scrim" id="ocScrim">
+  <div class="sheet" role="dialog" aria-label="opencode config">
+    <div class="grab"></div>
+    <div id="ocSheetBody"></div>
+  </div>
+</div>
+
+<div class="scrim" id="spawnScrim">
+  <div class="sheet" role="dialog" aria-label="spawn or stop a session">
+    <div class="grab"></div>
+    <div id="spawnSheetBody"></div>
+  </div>
+</div>
+
+<div class="scrim" id="userScrim">
+  <div class="sheet" role="dialog" aria-label="add a user">
+    <div class="grab"></div>
+    <div id="userSheetBody"></div>
+  </div>
+</div>

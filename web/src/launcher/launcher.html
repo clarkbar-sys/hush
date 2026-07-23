@@ -1,0 +1,61 @@
+<div id="homeScreen" role="dialog" aria-label="hush launcher" hidden>
+  <div class="home-phone">
+    <div class="home-screen">
+      <div class="home-status">
+        <span class="home-carrier"><span class="home-bars"><i></i><i></i><i></i><i></i><i></i></span>clarkbar.sys</span>
+        <span class="spacer"></span>
+        <span class="home-clock" id="homeClock">--:--</span>
+        <span class="spacer"></span>
+        <span class="home-batt"><span><b></b></span></span>
+      </div>
+      <div class="home-header">
+        <div class="brand"><span class="dot-h"></span><b>hush</b></div>
+        <button class="chip ver" id="verChip" type="button" hidden></button>
+      </div>
+      <div class="home-grid">
+        <button class="home-app" id="homeHush" data-tile="fleet" type="button" aria-label="Open fleet">
+          <span class="home-icon"><img src="/icon-192.png" alt="" width="57" height="57" draggable="false"></span>
+          <span class="home-label">fleet</span>
+        </button>
+        <button class="home-app" id="homePayphone" data-tile="payphone" type="button" aria-label="Open payphone">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="15" cy="5.2" r="2.2"></circle>
+            <path d="M15 7.6 11.5 13"></path>
+            <path d="M11.5 13 15.5 16"></path>
+            <path d="M15.5 16 13.5 21"></path>
+            <path d="M11.5 13 5.5 17.5"></path>
+            <path d="M11.5 13 8.7 8.3 6.7 7"></path>
+            <circle cx="6.7" cy="7" r="1.1"></circle>
+          </svg></span>
+          <span class="home-label">payphone</span>
+        </button>
+        <button class="home-app" id="homeGithub" data-tile="github" type="button" aria-label="Browse clarkbar.sys repos on GitHub">
+          <span class="home-icon"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></span>
+          <span class="home-label">github</span>
+        </button>
+        <a class="home-app" id="homeTally" data-tile="tally" href="https://tally/" target="_blank" rel="noopener" aria-label="Open tally">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 4v16M10 4v16M14 4v16M18 4v16"></path>
+            <path d="M3 15 21 7"></path>
+          </svg></span>
+          <span class="home-label">tally</span>
+        </a>
+        <button class="home-app" id="homePlug" data-tile="plug" type="button" aria-label="Open plug — data sources">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 2v6M15 2v6"></path>
+            <path d="M7 8h10v2a5 5 0 0 1-10 0V8z"></path>
+            <path d="M12 15v7"></path>
+          </svg></span>
+          <span class="home-label">plug</span>
+        </button>
+        <button class="home-app" id="homeRiff" data-tile="riff" type="button" aria-label="Open riff together">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="6" y="2.5" width="12" height="19" rx="2.4"></rect>
+            <rect x="8.2" y="5" width="7.6" height="5" rx="1"></rect>
+            <path d="M9 13.5h6M9 16.2h6M9 18.9h3"></path>
+          </svg></span>
+          <span class="home-label">riff</span>
+        </button>
+      </div>
+      <div class="home-edit-hint" id="homeEditHint" aria-hidden="true">Drag to rearrange · tap the wallpaper when you're done</div>
+      <div class="home-dots" aria-hidden="true"><i class="on"></i></div>
