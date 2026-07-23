@@ -1,0 +1,24 @@
+      <!-- riff app: "riff together", still warming up. Reuses the gh-app slide-in
+           shell for a 90s pager coming-soon screen — a green-LCD beeper reading
+           COMING SOON, with a Try me button that pages your phone (a local
+           notification via the service worker). See launcher JS. -->
+      <div class="gh-app riff-app" id="riffApp" role="dialog" aria-label="riff together" aria-modal="true">
+        <div class="gh-top">
+          <button class="gh-back" id="riffBack" type="button" aria-label="Back to launcher">‹ Home</button>
+          <span class="gh-top-title">riff together</span>
+          <span class="gh-org" aria-hidden="true">📟</span>
+        </div>
+        <div class="gh-list riff-list">
+          <div class="pager" aria-hidden="true">
+            <div class="pager-lcd">
+              <div class="pager-lcd-row">*RIFF*</div>
+              <div class="pager-lcd-big" id="riffLcd">COMING SOON</div>
+              <div class="pager-lcd-row pager-lcd-sub" id="riffSub">TAP TRY ME 2 GET PAGED</div>
+            </div>
+            <div class="pager-btns"><i></i><i></i><i></i></div>
+          </div>
+          <button class="riff-try" id="riffTry" type="button">📟 Try me</button>
+          <p class="gh-note riff-note">riff together is warming up.<br>
+            Tap <b>Try me</b> and we'll page your phone. 📟</p>
+        </div>
+      </div>

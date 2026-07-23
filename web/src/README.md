@@ -17,17 +17,25 @@ src/
               <script>/IIFE open+close. The scaffolding every app sits inside.
   global/     cross-app popups: the boot / "hush is coming up" overlay and the
               "lost connection to hush-control" banner.
-  launcher/   the home screen — the springboard, edit-mode reordering, and the
-              coming-soon mini-apps (github, plug, riff).
+  launcher/   the home screen itself — the springboard, edit-mode reordering,
+              and the frame the mini-apps slide into (launcher.close.html closes
+              that frame after the app panels).
   apps/
     payphone/ the payphone app: AOL-era buddy list, IM window, Win95 taskbar.
     fleet/    the fleet console — the main app (grid, machine view, sessions,
               backups, disk, sheets, and the go() bootstrap).
+    github/   the launcher's github tile → org-repo list (owns the shared
+              gh-app slide-in panel shell that plug and riff reuse).
+    plug/     the launcher's plug tile → data-sources coming-soon panel.
+    riff/     the launcher's riff tile → pager panel with a Try-me page.
+    tally/    the launcher's tally tile → hand-off to the tally tailnet node.
   manifest    the ordered list of partials to concatenate.
 ```
 
-Each app folder holds its own `.css`, `.html`, and `.js` — the same three
-document regions (`<style>`, `<body>`, `<script>`) it contributes to.
+Each app folder holds its own `.css`, `.html`, and/or `.js` — the same document
+regions (`<style>`, `<body>`, `<script>`) it contributes to. The launcher tiles
+themselves (the grid buttons) live in `launcher/launcher.html`; each tile's
+_app_ — its panel and logic — lives in that app's folder.
 
 ## How it's assembled
 
