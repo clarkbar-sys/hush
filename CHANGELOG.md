@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.14.0](https://github.com/clarkbar-sys/hush/compare/v2.13.0...v2.14.0) (2026-07-23)
+
+
+### Features
+
+* **web:** add a Win9x taskbar to the payphone app ([#236](https://github.com/clarkbar-sys/hush/issues/236)) ([9e86417](https://github.com/clarkbar-sys/hush/commit/9e86417ff85d638d5e8343f10d75723c2a9514d2))
+* **web:** add plug app to the launcher ([#233](https://github.com/clarkbar-sys/hush/issues/233)) ([e1d4a33](https://github.com/clarkbar-sys/hush/commit/e1d4a330ebfa9195e2b37e06a7a845eb62a3d54e))
+* **web:** give the launcher payphone tile an AOL-derived logo ([#237](https://github.com/clarkbar-sys/hush/issues/237)) ([8fc464c](https://github.com/clarkbar-sys/hush/commit/8fc464c3f21b48c2de66cc194a3317d1d279f6a2))
+* **web:** reorderable launcher, saved to IndexedDB and hush-control ([#239](https://github.com/clarkbar-sys/hush/issues/239)) ([ebb07c0](https://github.com/clarkbar-sys/hush/commit/ebb07c08c94003080f66fa7fa515fae4cda97748))
+
+
+### Continuous Integration
+
+* **pages:** redeploy live demo when the console changes ([#235](https://github.com/clarkbar-sys/hush/issues/235)) ([140bd6e](https://github.com/clarkbar-sys/hush/commit/140bd6ec1c7bd4e3541c71b6adcc3c50e8d4370d))
+
 ## [2.13.0](https://github.com/clarkbar-sys/hush/compare/v2.12.0...v2.13.0) (2026-07-23)
 
 
