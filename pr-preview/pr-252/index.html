@@ -1840,12 +1840,63 @@
     if(/\?\s*$/.test(s)) return "That is a good question. I'll add it to the list of things humans ask me.";
     return rnd(["I hear you. By the way, I won the Loebner Prize three times. Not that I'm counting.","Interesting. My botmaster taught me that one.","I understand. Do go on."]);
   }
+  function mdDemoReply(t){                     // demo "local model" — always answers in Markdown
+    // The other demo bots type plain AIM chatter; this one stands in for a real
+    // llama.cpp model on the tailnet, so its replies are Markdown — the whole
+    // point being to show the formatting (and the sideways-scrolling, copyable
+    // code block) in demo mode, where there's no real fleet behind the console.
+    const s = t.trim().toLowerCase();
+    if(/\b(code|python|quicksort|sort|function|script|algorithm)\b/.test(s)){
+      return [
+        "Sure — here's a tiny quicksort in Python:",
+        "",
+        "```python",
+        "def quicksort(xs):",
+        "    if len(xs) <= 1:",
+        "        return xs",
+        "    pivot = xs[len(xs) // 2]",
+        "    return quicksort([x for x in xs if x < pivot]) + [x for x in xs if x == pivot] + quicksort([x for x in xs if x > pivot])",
+        "```",
+        "",
+        "Tap **Copy** to grab it — and that middle line runs long on purpose, so the code box scrolls left/right on your phone.",
+      ].join("\n");
+    }
+    if(/\btable\b/.test(s)){
+      return [
+        "Here's what renders now:",
+        "",
+        "| feature | works |",
+        "|:--------|:-----:|",
+        "| headings & **bold** | ✅ |",
+        "| lists | ✅ |",
+        "| `inline code` | ✅ |",
+        "| fenced code + Copy | ✅ |",
+        "| tables (this one) | ✅ |",
+      ].join("\n");
+    }
+    return [
+      "### hey — I'm a *real* model 🦙",
+      "",
+      "Unlike the other buddies in here, I reply in **Markdown**. Ask me for **code** or a **table** and watch it format.",
+      "",
+      "- **bold**, *italic*, `inline_code`",
+      "- fenced code scrolls sideways →",
+      "- with a **Copy** button for your phone",
+      "",
+      "```js",
+      "// a long line, on purpose — slide the code box left and right",
+      "const greet = (name) => 'hello ' + name + ', welcome to 2001 — this line runs off the edge so the box scrolls instead of wrapping';",
+      "```",
+    ].join("\n");
+  }
 
   // --- the buddies ----------------------------------------------------------
   const AIM_BUDDIES = [
     { sn:"SmarterChild", group:"active", open:"hey! you're finally online. what's on your mind? (type 'help' if you're lost)", respond:scReply },
     { sn:"ELIZA",        group:"active", open:"Hello. What brings you here today?", respond:elizaReply },
     { sn:"A.L.I.C.E",    group:"active", open:"Hi! I am A.L.I.C.E. Ask me anything.", respond:aliceReply },
+    { sn:"TinyLlama 🦙", group:"active", md:true, respond:mdDemoReply,
+      open:"### 🦙 hey — I'm a *model*\n\nThe other buddies type plain text, but I answer in **Markdown**. Ask me for `code` or a `table` and watch it format — code blocks slide sideways and carry a **Copy** button." },
     { sn:"Dr_Sbaitso", group:"archive", signoff:"1992",
       away:"PLEASE STATE THE NATURE OF YOUR EMOTIONAL PROBLEM. ... PARITY ERROR.",
       history:[
@@ -2303,7 +2354,9 @@
   // auto-responses, not the user's own lines) get parsed.
   function mdWanted(entry){
     const b = byKey[currentKey];
-    return !!(b && b.llm && entry.who === "them" && !entry.auto);
+    // Real tailnet models (b.llm) answer in Markdown; the demo "model" buddy
+    // (b.md) does too, so the formatting is visible with no fleet behind it.
+    return !!(b && (b.llm || b.md) && entry.who === "them" && !entry.auto);
   }
   function appendLine(entry){
     if(entry.who === "sys"){
@@ -3040,7 +3093,7 @@
   // BUILD_SHA is stamped in by scripts/build-web-preview.sh for static builds
   // (GitHub Pages / PR previews) that have no hush-control backend and thus no
   // api/version. Left blank here for real deployments.
-  const BUILD_SHA = "3eeac52";
+  const BUILD_SHA = "28b0a25";
 
   let M = [];                      // current fleet
   let MODE = "connecting";         // connecting | live | demo | lost
