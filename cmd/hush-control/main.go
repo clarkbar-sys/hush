@@ -352,6 +352,13 @@ func buildMux(store *agentStore, discoverer *discoverer, dialer *agentDialer, we
 			log.Printf("encode version: %v", err)
 		}
 	})
+	// The launcher tile order is console cosmetics, not fleet state, so it lives
+	// in its own launcher.json beside the fleet config and gets its own store.
+	// GET/PUT /api/launcher/layout lets the console persist a reordered home
+	// screen server-side; the browser mirrors the same order into IndexedDB for
+	// an instant, offline-safe first paint.
+	layout := newLauncherLayout(launcherLayoutPath(store.path))
+	mux.HandleFunc("/api/launcher/layout", handleLauncherLayout(layout))
 	if webDir != "" {
 		mux.Handle("/", http.FileServer(http.Dir(webDir)))
 	} else {
