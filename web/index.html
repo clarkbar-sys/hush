@@ -844,73 +844,121 @@
   .boot-bar > i { display:block; height:100%; width:0%; background:var(--accent);
     box-shadow:0 0 8px var(--accent); transition:width .12s linear; }
 
-  /* ---- launcher: a GTA-IV phone home screen shown once per load. no apps but
-     hush; tapping its icon zooms into the console we've always had. ---- */
+  /* ---- launcher: a 2008-era iPhone OS home screen shown once per load. A
+     black-glass handset with a chrome rim and a home button, the silver
+     status bar, and glossy "gel" gel-highlighted icons with Helvetica labels.
+     Tapping the hush icon zooms into the console we've always had. Owns its own
+     skeuomorphic palette on purpose — a clean break from the neon HUD. ---- */
   #homeScreen { position:fixed; inset:0; z-index:490; display:flex; align-items:center;
-    justify-content:center; padding:16px;
+    justify-content:center; padding:20px;
+    font-family:-apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
     background:
-      repeating-linear-gradient(var(--scan) 0 1px, transparent 1px 3px),
-      linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 38px,
-      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 38px 100%,
-      radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 60%),
-      var(--ground);
+      radial-gradient(130% 90% at 50% -20%, #2b3654 0%, #0e1324 46%, #05070e 100%),
+      #05070e;
     transition: opacity .4s ease, visibility 0s linear 0s; }
   #homeScreen[hidden] { display:none; }
   #homeScreen.launching { opacity:0; visibility:hidden; pointer-events:none;
     transition: opacity .4s ease, visibility 0s linear .4s; }
-  .home-phone { position:relative; width:min(320px,86vw); border:1px solid var(--border);
-    background: color-mix(in srgb, var(--panel) 90%, transparent); box-shadow: var(--shadow);
-    padding:0 0 18px; overflow:hidden;
-    display:flex; flex-direction:column; min-height:min(560px,78vh); }
-  .home-corner { position:absolute; width:12px; height:12px; border:1px solid var(--accent); opacity:.8; z-index:2; }
-  .home-corner.tl { top:-1px; left:-1px; border-width:1px 0 0 1px; }
-  .home-corner.tr { top:-1px; right:-1px; border-width:1px 1px 0 0; }
-  .home-corner.bl { bottom:-1px; left:-1px; border-width:0 0 1px 1px; }
-  .home-corner.br { bottom:-1px; right:-1px; border-width:0 1px 1px 0; }
-  /* status bar — signal, carrier, live clock, battery */
-  .home-status { display:flex; align-items:center; gap:8px; padding:9px 12px;
-    font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; color:var(--muted);
-    border-bottom:1px solid var(--border-soft); text-transform:uppercase; }
-  .home-bars { display:inline-flex; align-items:flex-end; gap:1.5px; height:10px; }
-  .home-bars i { width:2.5px; background:var(--accent); box-shadow:0 0 4px var(--accent); }
-  .home-bars i:nth-child(1){ height:30%; } .home-bars i:nth-child(2){ height:55%; }
-  .home-bars i:nth-child(3){ height:78%; } .home-bars i:nth-child(4){ height:100%; }
-  .home-carrier { display:inline-flex; align-items:center; gap:6px; }
+  /* the app-open beat: the whole handset zooms toward you as the console
+     fades up underneath — the old "dive into the app" animation. */
+  #homeScreen.launching .home-phone { transform:scale(1.55); opacity:0; }
+
+  /* the handset — black glass slab, chrome rim, the rounded 2008 silhouette */
+  .home-phone { position:relative; width:min(300px,84vw);
+    border-radius:44px; padding:11px 11px 0;
+    background:linear-gradient(#15181d, #05070b);
+    box-shadow:
+      0 0 0 1px #000,
+      0 0 0 3px #3d424b,                 /* the chrome bezel ring */
+      0 0 0 4px #101216,
+      0 24px 64px rgba(0,0,0,.7),
+      inset 0 1px 1px rgba(255,255,255,.16);
+    display:flex; flex-direction:column;
+    transition: transform .4s ease, opacity .4s ease; }
+
+  /* the screen inside the bezel, carrying the wallpaper */
+  .home-screen { position:relative; border-radius:3px; overflow:hidden;
+    background: radial-gradient(150% 80% at 50% 0%, #26324e 0%, #0b101c 55%, #05070e 100%);
+    display:flex; flex-direction:column; min-height:min(500px,72vh);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.55), inset 0 2px 12px rgba(0,0,0,.55); }
+
+  /* status bar — glossy silver-black, carrier + signal left, clock centered,
+     battery right, all in Helvetica the way iPhone OS drew it */
+  .home-status { display:flex; align-items:center; gap:7px; padding:5px 9px 4px;
+    font-weight:600; font-size:12px; color:#fff; text-shadow:0 -1px 0 rgba(0,0,0,.55);
+    background:linear-gradient(#2c3037,#0c0e12); border-bottom:1px solid #000; }
+  /* 5 ascending signal dots, last two dimmed — the classic reception read */
+  .home-bars { display:inline-flex; align-items:center; gap:2px; }
+  .home-bars i { width:5px; height:5px; border-radius:50%; background:#fff; }
+  .home-bars i:nth-child(4), .home-bars i:nth-child(5) { background:rgba(255,255,255,.32); }
+  .home-carrier { display:inline-flex; align-items:center; gap:6px; font-size:12px;
+    letter-spacing:.01em; }
   .home-status .spacer { flex:1; }
-  .home-clock { color:var(--text); letter-spacing:.1em; }
+  .home-clock { color:#fff; font-size:13px; font-weight:600; letter-spacing:.02em; }
   .home-batt { display:inline-flex; align-items:center; gap:3px; }
-  .home-batt span { width:20px; height:9px; border:1px solid var(--muted); position:relative; }
-  .home-batt span::after { content:""; position:absolute; right:-3px; top:2px; width:2px; height:3px; background:var(--muted); }
-  .home-batt span b { position:absolute; inset:1px; width:82%; background:var(--good); }
-  /* header — hush brand + version only; the rest of the header bar (alerts,
-     reachable status) lives on the console itself since it's live fleet
-     state, not something the launcher needs to show. */
-  .home-header { display:flex; align-items:center; gap:10px; padding:11px 14px;
-    border-bottom:1px solid var(--border-soft); }
-  /* app grid */
-  .home-grid { flex:1; display:grid; grid-template-columns:repeat(3, 1fr); align-content:start;
-    gap:14px 8px; padding:26px 18px; }
+  .home-batt span { width:22px; height:11px; border:1px solid rgba(255,255,255,.85);
+    border-radius:2px; position:relative; }
+  .home-batt span::after { content:""; position:absolute; right:-3px; top:3px; width:2px;
+    height:4px; background:rgba(255,255,255,.85); border-radius:0 1px 1px 0; }
+  .home-batt span b { position:absolute; inset:1.5px; width:88%; background:#5be36a;
+    border-radius:1px; }
+
+  /* header — no wordmark (the app icon already says hush); it just parks the
+     version chip when an update is available. */
+  .home-header { display:flex; align-items:center; justify-content:flex-end;
+    gap:8px; padding:6px 12px 0; min-height:0; }
+  .home-header .brand { display:none; }
+  .home-header .chip[hidden] { display:none; }   /* .chip's display beats [hidden] otherwise */
+  .home-header .chip { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2);
+    border-radius:999px; color:rgba(255,255,255,.72); text-transform:none; letter-spacing:0;
+    text-shadow:none; }
+
+  /* app grid — 4 across, top-aligned, the way springboard laid it out */
+  .home-grid { flex:1; display:grid; grid-template-columns:repeat(4, 1fr);
+    align-content:start; justify-items:center; gap:20px 0; padding:22px 12px 6px; }
   .home-app { -webkit-tap-highlight-color:transparent; appearance:none; background:none; border:0;
-    padding:0; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:8px;
-    color:var(--text); font-family:var(--mono); }
-  .home-icon { position:relative; width:66px; height:66px; border:1px solid var(--border);
-    background: color-mix(in srgb, var(--panel-2) 90%, transparent);
-    box-shadow: 0 0 0 1px rgba(25,227,255,.06), 0 6px 18px rgba(0,0,0,.5);
-    display:grid; place-items:center; overflow:hidden;
-    transition: transform .12s ease, box-shadow .2s ease; }
-  .home-icon::before { content:""; position:absolute; inset:0; pointer-events:none;
-    background:linear-gradient(160deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 55%); }
-  .home-icon img { width:60px; height:60px; display:block; }
-  .home-app:active .home-icon { transform:scale(.92); }
-  .home-app:focus-visible .home-icon { box-shadow: 0 0 0 2px var(--accent), 0 6px 18px rgba(0,0,0,.5); outline:none; }
-  .home-label { font-size:11px; letter-spacing:.02em; color:var(--muted); }
-  .home-app:active .home-label, .home-app:focus-visible .home-label { color:var(--text); }
-  /* payphone icon gets a warm amber wash so it reads as the odd one out on the
-     neon grid — the retro app hiding among the HUD tiles. */
-  #homePayphone .home-icon::before {
-    background:linear-gradient(160deg, color-mix(in srgb, var(--warn) 16%, transparent), transparent 55%); }
-  #homePayphone .home-icon svg { width:38px; height:38px; color:var(--warn);
-    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--warn) 55%, transparent)); }
+    padding:0; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px;
+    color:#fff; font-family:inherit; }
+  .home-icon { position:relative; width:57px; height:57px; border-radius:12px;
+    overflow:hidden; background:#0d0f13;
+    box-shadow: 0 1px 2px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06);
+    transition: transform .1s ease, box-shadow .2s ease; }
+  .home-icon img { width:57px; height:57px; display:block; border-radius:12px; }
+  /* the signature gel: a bright highlight bowed across the top half of every
+     icon — the single detail that reads "iPhone OS" more than any other. */
+  .home-icon::after { content:""; position:absolute; left:0; right:0; top:0; height:49%;
+    border-radius:12px 12px 42% 42% / 12px 12px 20px 20px; pointer-events:none;
+    background:linear-gradient(rgba(255,255,255,.45), rgba(255,255,255,.08)); }
+  .home-app:active .home-icon { transform:scale(.9); }
+  .home-app:focus-visible .home-icon { box-shadow: 0 0 0 3px rgba(120,170,255,.9),
+    0 1px 2px rgba(0,0,0,.6); outline:none; }
+  .home-label { font-size:11px; font-weight:500; letter-spacing:.01em; color:#fff;
+    text-shadow:0 1px 2px rgba(0,0,0,.85); }
+
+  /* payphone — a glossy graphite tile with an amber handset, the odd one out
+     sitting quietly on the springboard next to hush. */
+  #homePayphone .home-icon { background:linear-gradient(#3b4350,#171b22); }
+  #homePayphone .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:33px; height:33px; color:#f2c14e; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  /* github — a glossy near-black tile with the white Octocat mark */
+  #homeGithub .home-icon { background:linear-gradient(#33373d,#0f1114); }
+  #homeGithub .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:34px; height:34px; color:#fff; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  /* page dots — one page, one bright dot */
+  .home-dots { display:flex; justify-content:center; gap:7px; padding:2px 0 10px; }
+  .home-dots i { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.32);
+    box-shadow:0 1px 1px rgba(0,0,0,.5); }
+  .home-dots i.on { background:rgba(255,255,255,.95); }
+
+  /* home button — the one true circle below the screen */
+  .home-btn { position:relative; align-self:center; width:38px; height:38px; margin:10px 0 6px;
+    border-radius:50%; background:linear-gradient(#1b1e23,#0a0c10);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.14), inset 0 -1px 2px rgba(0,0,0,.6),
+      0 1px 1px rgba(255,255,255,.05); }
+  .home-btn::after { content:""; position:absolute; inset:0; margin:auto; width:13px; height:13px;
+    border-radius:3px; border:1.5px solid #565b64; }
 
   /* ---- payphone app: a deliberate 1990s "gateway" page — the joke is you tap
      a neon HUD tile and fall through 30 years into a beige Netscape-era
@@ -981,40 +1029,41 @@
 </div>
 <div id="homeScreen" role="dialog" aria-label="hush launcher" hidden>
   <div class="home-phone">
-    <div class="home-corner tl"></div><div class="home-corner tr"></div>
-    <div class="home-corner bl"></div><div class="home-corner br"></div>
-    <div class="home-status">
-      <span class="home-carrier"><span class="home-bars"><i></i><i></i><i></i><i></i></span>CLARKBAR.SYS</span>
-      <span class="spacer"></span>
-      <span class="home-clock" id="homeClock">--:--</span>
-      <span class="spacer"></span>
-      <span class="home-batt"><span><b></b></span></span>
+    <div class="home-screen">
+      <div class="home-status">
+        <span class="home-carrier"><span class="home-bars"><i></i><i></i><i></i><i></i><i></i></span>clarkbar.sys</span>
+        <span class="spacer"></span>
+        <span class="home-clock" id="homeClock">--:--</span>
+        <span class="spacer"></span>
+        <span class="home-batt"><span><b></b></span></span>
+      </div>
+      <div class="home-header">
+        <div class="brand"><span class="dot-h"></span><b>hush</b></div>
+        <button class="chip ver" id="verChip" type="button" hidden></button>
+      </div>
+      <div class="home-grid">
+        <button class="home-app" id="homeHush" type="button" aria-label="Open hush">
+          <span class="home-icon"><img src="/icon-192.png" alt="" width="57" height="57" draggable="false"></span>
+          <span class="home-label">hush</span>
+        </button>
+        <button class="home-app" id="homePayphone" type="button" aria-label="Open payphone">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="5" y="2" width="14" height="20" rx="1"></rect>
+            <rect x="7.5" y="4" width="9" height="5" rx="1"></rect>
+            <circle cx="9" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle>
+            <circle cx="9" cy="15" r="1"></circle><circle cx="12" cy="15" r="1"></circle><circle cx="15" cy="15" r="1"></circle>
+            <path d="M8.5 18.5h7"></path>
+          </svg></span>
+          <span class="home-label">payphone</span>
+        </button>
+        <button class="home-app" id="homeGithub" type="button" aria-label="View hush on GitHub">
+          <span class="home-icon"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></span>
+          <span class="home-label">github</span>
+        </button>
+      </div>
+      <div class="home-dots" aria-hidden="true"><i class="on"></i></div>
     </div>
-    <div class="home-header">
-      <div class="brand"><span class="dot-h"></span><b>hush</b></div>
-      <div class="spacer"></div>
-      <button class="chip ver" id="verChip" type="button" hidden></button>
-    </div>
-    <div class="home-grid">
-      <button class="home-app" id="homeHush" type="button" aria-label="Open hush">
-        <span class="home-icon"><img src="/icon-192.png" alt="" width="60" height="60" draggable="false"></span>
-        <span class="home-label">hush</span>
-      </button>
-      <button class="home-app" id="homePayphone" type="button" aria-label="Open payphone">
-        <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="5" y="2" width="14" height="20" rx="1"></rect>
-          <rect x="7.5" y="4" width="9" height="5" rx="1"></rect>
-          <circle cx="9" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle>
-          <circle cx="9" cy="15" r="1"></circle><circle cx="12" cy="15" r="1"></circle><circle cx="15" cy="15" r="1"></circle>
-          <path d="M8.5 18.5h7"></path>
-        </svg></span>
-        <span class="home-label">payphone</span>
-      </button>
-      <button class="home-app" id="homeGithub" type="button" aria-label="View hush on GitHub">
-        <span class="home-icon"><svg width="38" height="38" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></span>
-        <span class="home-label">github</span>
-      </button>
-    </div>
+    <div class="home-btn" aria-hidden="true"></div>
   </div>
 </div>
 <!-- payphone app: a 1990s "gateway" under-construction page (see launcher JS) -->
