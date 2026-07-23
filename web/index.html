@@ -89,9 +89,12 @@
   .chip.down { color: var(--crit); border-color: var(--crit-soft); }
   .chip.down .live { background: var(--crit); animation: none; }
 
-  /* ---- lost-connection banner: has to be impossible to miss on a cached tab ---- */
+  /* ---- lost-connection banner: has to be impossible to miss on a cached tab.
+     z-index sits above every full-screen overlay (boot/launcher/payphone) so
+     the disconnect state reads as a global event, not something scoped to
+     the fleet console view. ---- */
   .lostbar {
-    position: sticky; top: 0; z-index: 50;
+    position: sticky; top: 0; z-index: 600;
     display: flex; align-items: center; justify-content: center; gap: 8px;
     padding: 9px 12px; font-family: var(--mono); font-size: 12px; font-weight: 700;
     letter-spacing: .04em; text-transform: uppercase; text-align: center;
