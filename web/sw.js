@@ -5,7 +5,7 @@
 //
 // Bump CACHE when the shell changes so clients pull the new version; activate
 // sweeps away older caches.
-const CACHE = 'hush-shell-v1';
+const CACHE = 'hush-shell-v2';
 const SHELL = [
   '/',
   '/manifest.webmanifest',
@@ -29,6 +29,42 @@ self.addEventListener('activate', (event) => {
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
+  );
+});
+
+// A tapped notification — the "page" the riff pager sends — focuses the already
+// open console if one is around, otherwise opens a fresh window at the launcher.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) {
+        if ('focus' in w) return w.focus();
+      }
+      return self.clients.openWindow('/');
+    }),
+  );
+});
+
+// Web Push handler, here for the day a real push server (VAPID keys +
+// subscriptions on hush-control) lands. Nothing sends these yet — the riff
+// pager's "Try me" calls showNotification straight from the page so it works
+// with no backend — but wiring it now means a future server just works.
+self.addEventListener('push', (event) => {
+  let data = { title: '*RIFF*', body: 'riff together' };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch (_) {
+    /* non-JSON payload: keep the defaults */
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: data.tag || 'riff-page',
+      renotify: true,
+    }),
   );
 });
 
