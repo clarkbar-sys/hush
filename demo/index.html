@@ -1059,7 +1059,7 @@
      a neon HUD tile and fall through 30 years into a beige Netscape-era
      under-construction screen. Owns its own retro palette on purpose. ---- */
   #payphoneScreen { position:fixed; inset:0; z-index:495; display:none;
-    align-items:center; justify-content:center; padding:16px;
+    align-items:center; justify-content:center; padding:16px 16px 46px;
     background:#008080;  /* the one true teal desktop */
     font-family:"Times New Roman", Times, serif; }
   #payphoneScreen.on { display:flex; }
@@ -1178,6 +1178,57 @@
   .aim-send:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
   .aim-send:disabled { color:#808080; cursor:default; }
   .aim-send .rr { color:#c00000; }
+
+  /* ---- payphone → Win9x taskbar + Start menu -------------------------------
+     A working Windows-95 taskbar pinned to the bottom of the teal desktop.
+     Start (left) pops the classic menu whose "Shut Down…" clears the app and
+     drops you back at the launcher. The tray (right) holds a live clock and a
+     thumb-reachable Back button that quietly does the same. Reuses the beige
+     bevel vocabulary the .aim-* / .pay-* rules already established. */
+  .pay-taskbar { position:absolute; left:0; right:0; bottom:0; height:34px; z-index:6;
+    display:flex; align-items:center; gap:4px; padding:2px 3px;
+    background:#c0c0c0; border-top:2px solid #dfdfdf; box-shadow: inset 0 1px 0 #fff;
+    font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .pay-start { display:flex; align-items:center; gap:5px; height:26px; padding:0 9px 0 5px;
+    background:#c0c0c0; border:1px solid #000; font-size:13px; font-weight:700; color:#000;
+    cursor:pointer; flex:0 0 auto;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .pay-start.on, .pay-start:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .pay-start.on .pay-flag, .pay-start:active .pay-flag { transform:translate(1px,1px); }
+  .pay-flag { width:18px; height:16px; flex:0 0 auto; }
+  .pay-tb-sep { flex:1; }
+  .pay-tray { display:flex; align-items:center; gap:7px; height:26px; padding:0 5px 0 9px;
+    flex:0 0 auto; box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .pay-clock { font-size:12px; color:#000; min-width:58px; text-align:center;
+    user-select:none; cursor:default; }
+  .pay-back { display:flex; align-items:center; gap:5px; height:24px; padding:0 13px 0 9px;
+    background:#c0c0c0; border:1px solid #000; font-size:12px; font-weight:700; color:#000;
+    cursor:pointer; flex:0 0 auto; font-family:"MS Sans Serif", Tahoma, sans-serif;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .pay-back:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .pay-back .pay-back-ar { font-size:14px; line-height:1; }
+
+  .pay-startmenu { position:absolute; left:3px; bottom:34px; z-index:7; display:none;
+    min-width:196px; padding:3px; background:#c0c0c0; border:1px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #dfdfdf,
+      inset -2px -2px 0 #808080, inset 2px 2px 0 #fff, 2px 2px 0 rgba(0,0,0,.4);
+    font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .pay-startmenu.on { display:flex; }
+  .pay-sm-rail { width:27px; flex:0 0 auto; margin-right:3px;
+    background:linear-gradient(#00007b,#1084d0); }
+  .pay-sm-rail span { display:block; writing-mode:vertical-rl; transform:rotate(180deg);
+    padding:8px 1px 10px; color:#fff; font-size:15px; font-weight:700; letter-spacing:.5px; }
+  .pay-sm-rail span i { font-style:normal; font-weight:400; opacity:.8; }
+  .pay-sm-list { flex:1; display:flex; flex-direction:column; }
+  .pay-sm-item { display:flex; align-items:center; gap:9px; padding:5px 20px 5px 6px;
+    font-size:13px; color:#000; cursor:pointer; white-space:nowrap; text-align:left;
+    background:transparent; border:0; width:100%; }
+  .pay-sm-item:hover, .pay-sm-item:focus { background:#00007b; color:#fff; outline:none; }
+  .pay-sm-ico { width:22px; flex:0 0 auto; text-align:center; font-size:15px; }
+  .pay-sm-item u { text-underline-offset:2px; }
+  .pay-sm-sep { height:0; margin:3px 3px 3px 33px; border-top:1px solid #808080;
+    box-shadow:0 1px 0 #fff; }
+
   @media (max-width:560px){
     .aim-stage { width:100%; height:100%; }
     .aim-bl { left:50%; top:50%; transform:translate(-50%,-50%); width:min(300px,94vw);
@@ -1358,6 +1409,37 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- Win95 taskbar: Start menu on the left (its "Shut Down…" clears the app
+       and returns to the launcher); a live clock and a thumb-reachable Back
+       button in the tray on the right. All client-side theatre, same joke. -->
+  <div class="pay-startmenu" id="payStartMenu" role="menu" aria-label="Start menu">
+    <div class="pay-sm-rail" aria-hidden="true"><span>hush&nbsp;<i>98</i></span></div>
+    <div class="pay-sm-list">
+      <button class="pay-sm-item" type="button" role="menuitem" data-pay-sm="noop"><span class="pay-sm-ico">📁</span><u>P</u>rograms</button>
+      <button class="pay-sm-item" type="button" role="menuitem" data-pay-sm="noop"><span class="pay-sm-ico">📄</span><u>D</u>ocuments</button>
+      <button class="pay-sm-item" type="button" role="menuitem" data-pay-sm="noop"><span class="pay-sm-ico">⚙️</span><u>S</u>ettings</button>
+      <button class="pay-sm-item" type="button" role="menuitem" data-pay-sm="noop"><span class="pay-sm-ico">🔎</span><u>F</u>ind</button>
+      <button class="pay-sm-item" type="button" role="menuitem" data-pay-sm="noop"><span class="pay-sm-ico">❔</span><u>H</u>elp</button>
+      <div class="pay-sm-sep"></div>
+      <button class="pay-sm-item" type="button" role="menuitem" data-pay-sm="shutdown"><span class="pay-sm-ico">🖥️</span>Sh<u>u</u>t Down…</button>
+    </div>
+  </div>
+  <div class="pay-taskbar">
+    <button class="pay-start" id="payStartBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="payStartMenu">
+      <svg class="pay-flag" viewBox="0 0 20 18" aria-hidden="true"><g transform="skewY(-8)">
+        <rect x="1" y="4" width="8" height="6" rx="1" fill="#f24e29"></rect>
+        <rect x="10" y="3.2" width="8" height="6" rx="1" fill="#7cbb00"></rect>
+        <rect x="1" y="11" width="8" height="6" rx="1" fill="#02a4ef"></rect>
+        <rect x="10" y="10.2" width="8" height="6" rx="1" fill="#ffb901"></rect>
+      </g></svg>Start
+    </button>
+    <span class="pay-tb-sep"></span>
+    <div class="pay-tray">
+      <span class="pay-clock" id="payClock" aria-hidden="true">--:--</span>
+      <button class="pay-back" id="payBack" type="button" aria-label="Back to launcher"><span class="pay-back-ar">⬅</span>Back</button>
+    </div>
   </div>
 </div>
 <div class="lostbar" id="lostBar" hidden>
@@ -1812,17 +1894,56 @@
     }, 650 + Math.min(1400, reply.length * 12));
   }
 
+  // --- Win95 taskbar: Start menu + tray clock + Back button -----------------
+  const payStartBtn  = $("#payStartBtn");
+  const payStartMenu = $("#payStartMenu");
+  const payClockEl   = $("#payClock");
+  let payClockTimer  = null;
+
+  function payMenu(on){
+    payStartMenu.classList.toggle("on", on);
+    payStartBtn.classList.toggle("on", on);
+    payStartBtn.setAttribute("aria-expanded", on ? "true" : "false");
+    if(on){ const it = payStartMenu.querySelector(".pay-sm-item");
+      try { it && it.focus({ preventScroll:true }); } catch(_){} }
+  }
+  function payClockTick(){
+    const d = new Date(); let h = d.getHours(); const m = d.getMinutes();
+    const ap = h < 12 ? "AM" : "PM"; h = h % 12 || 12;
+    payClockEl.textContent = h + ":" + (m < 10 ? "0" : "") + m + " " + ap;
+  }
+
+  payStartBtn.addEventListener("click", e => {
+    e.stopPropagation(); payMenu(!payStartMenu.classList.contains("on"));
+  });
+  payStartMenu.addEventListener("click", e => {
+    const item = e.target.closest(".pay-sm-item");
+    if(!item) return;
+    payMenu(false);
+    // decorative items just dismiss — it's 1998, nothing else is installed
+    if(item.dataset.paySm === "shutdown") closePayphone();
+  });
+  // a click anywhere else on the desktop dismisses the Start menu
+  payScreen.addEventListener("click", e => {
+    if(payStartMenu.classList.contains("on") &&
+       !payStartMenu.contains(e.target) && !payStartBtn.contains(e.target)){ payMenu(false); }
+  });
+  $("#payBack").addEventListener("click", closePayphone);
+
   // --- open / close the whole app ------------------------------------------
   let payRendered = false;
   function openPayphone(){
     if(!payRendered){ renderBuddyList(); payRendered = true; }
     payScreen.classList.add("on");
+    payClockTick(); payClockTimer = setInterval(payClockTick, 15000);
     sndSignon();
     const first = aimGroups.querySelector(".aim-buddy");
     try { (first || $("#aimBlClose")).focus({ preventScroll:true }); } catch(_){}
   }
   function closePayphone(){
     clearTimeout(replyTimer); aimTyping.textContent = "";
+    payMenu(false);
+    if(payClockTimer){ clearInterval(payClockTimer); payClockTimer = null; }
     aimIM.classList.remove("on"); aimStage.classList.remove("im-open"); currentSn = null;
     payScreen.classList.remove("on");
     try { $("#homePayphone").focus({ preventScroll:true }); } catch(_){}
@@ -1859,7 +1980,10 @@
     if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); sendMsg(); }
   });
   payScreen.addEventListener("keydown", e => {
-    if(e.key === "Escape"){ e.preventDefault(); if(aimIM.classList.contains("on")) closeIM(); else closePayphone(); }
+    if(e.key === "Escape"){ e.preventDefault();
+      if(payStartMenu.classList.contains("on")) payMenu(false);
+      else if(aimIM.classList.contains("on")) closeIM();
+      else closePayphone(); }
   });
 
   /* github app — opens a springboard "app" listing the clarkbar.sys org's
@@ -1966,7 +2090,7 @@
   // BUILD_SHA is stamped in by scripts/build-web-preview.sh for static builds
   // (GitHub Pages / PR previews) that have no hush-control backend and thus no
   // api/version. Left blank here for real deployments.
-  const BUILD_SHA = "140bd6e";
+  const BUILD_SHA = "9e86417";
 
   let M = [];                      // current fleet
   let MODE = "connecting";         // connecting | live | demo | lost
