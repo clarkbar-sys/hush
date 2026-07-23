@@ -964,6 +964,12 @@
   #homeTally .home-icon svg { position:absolute; inset:0; margin:auto;
     width:32px; height:32px; color:#fce8c9; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
 
+  /* plug — a glossy green "power" tile with a two-prong plug mark; opens the
+     plug app (the provider-side data substrate), still scoping, over the grid. */
+  #homePlug .home-icon { background:linear-gradient(#2f8f63,#134029); }
+  #homePlug .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:31px; height:31px; color:#d6f7e4; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
   /* ---- github app: tapping the octocat tile no longer jumps straight to one
      repo. It opens this panel over the springboard listing the clarkbar.sys
      org's public repos; each row hands off to that repo on GitHub in a new
@@ -1017,6 +1023,23 @@
     border:2px solid rgba(255,255,255,.2); border-top-color:#8fb4ff; border-radius:50%;
     animation: gh-spin .7s linear infinite; }
   @keyframes gh-spin { to { transform:rotate(360deg); } }
+
+  /* ---- plug app: reuses the gh-app slide-in shell (same .on toggle) to preview
+     plug's three PII-domain tiers — rep / crib / bag. plug is still scoping, so
+     these are read-only "coming soon" info rows, each wearing a soon pill, under
+     the repo's own tagline. Nothing to hand off to yet. ---- */
+  .plug-tag { margin:2px 2px 9px; color:rgba(255,255,255,.6); font-size:12px;
+    font-style:italic; text-align:center; letter-spacing:.01em; }
+  .plug-tier { cursor:default; }
+  .plug-tier:hover { background:rgba(255,255,255,.05); }   /* stays flat — nothing opens yet */
+  .plug-tier:active { transform:none; }
+  .plug-tier .plug-ico-rep  { background:linear-gradient(#3f7bd6,#1b3c74); }
+  .plug-tier .plug-ico-crib { background:linear-gradient(#c9683e,#5a2f1c); }
+  .plug-tier .plug-ico-bag  { background:linear-gradient(#8a5cc9,#3a2564); }
+  .plug-soon-pill { flex:0 0 auto; align-self:center; font-size:9px; font-weight:700;
+    letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.7);
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14);
+    border-radius:999px; padding:2px 7px; }
 
   /* page dots — one page, one bright dot */
   .home-dots { display:flex; justify-content:center; gap:7px; padding:2px 0 10px; }
@@ -1216,6 +1239,14 @@
           </svg></span>
           <span class="home-label">tally</span>
         </a>
+        <button class="home-app" id="homePlug" type="button" aria-label="Open plug — data sources">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 2v6M15 2v6"></path>
+            <path d="M7 8h10v2a5 5 0 0 1-10 0V8z"></path>
+            <path d="M12 15v7"></path>
+          </svg></span>
+          <span class="home-label">plug</span>
+        </button>
       </div>
       <div class="home-dots" aria-hidden="true"><i class="on"></i></div>
       <div class="gh-app" id="githubApp" role="dialog" aria-label="clarkbar.sys on GitHub" aria-modal="true">
@@ -1225,6 +1256,45 @@
           <a class="gh-org" id="githubOrgLink" href="https://github.com/clarkbar-sys" target="_blank" rel="noopener" aria-label="Open the clarkbar.sys organization on GitHub">↗</a>
         </div>
         <div class="gh-list" id="githubList" aria-live="polite"></div>
+      </div>
+      <!-- plug app: a scoping preview of plug's three PII-domain tiers. Reuses
+           the gh-app slide-in shell; the tiers are read-only "coming soon" rows
+           (plug has no implementation yet). See launcher JS. -->
+      <div class="gh-app plug-app" id="plugApp" role="dialog" aria-label="plug — data sources" aria-modal="true">
+        <div class="gh-top">
+          <button class="gh-back" id="plugBack" type="button" aria-label="Back to launcher">‹ Home</button>
+          <span class="gh-top-title">plug</span>
+          <a class="gh-org" href="https://github.com/clarkbar-sys/plug" target="_blank" rel="noopener" aria-label="Open the plug repository on GitHub">↗</a>
+        </div>
+        <div class="gh-list">
+          <p class="plug-tag">The plug is who supplies you.</p>
+          <div class="gh-repo plug-tier">
+            <span class="gh-repo-icon plug-ico-rep" aria-hidden="true">R</span>
+            <span class="gh-repo-body">
+              <span class="gh-repo-name">rep</span>
+              <span class="gh-repo-desc">public — Spotify, GitHub, Steam, Strava</span>
+            </span>
+            <span class="plug-soon-pill">soon</span>
+          </div>
+          <div class="gh-repo plug-tier">
+            <span class="gh-repo-icon plug-ico-crib" aria-hidden="true">C</span>
+            <span class="gh-repo-body">
+              <span class="gh-repo-name">crib</span>
+              <span class="gh-repo-desc">personal — calendar, photos, health</span>
+            </span>
+            <span class="plug-soon-pill">soon</span>
+          </div>
+          <div class="gh-repo plug-tier">
+            <span class="gh-repo-icon plug-ico-bag" aria-hidden="true">B</span>
+            <span class="gh-repo-body">
+              <span class="gh-repo-name">bag</span>
+              <span class="gh-repo-desc">credential-adjacent — Gmail, bank</span>
+            </span>
+            <span class="plug-soon-pill">soon</span>
+          </div>
+          <p class="gh-note">Coming soon — plug is still scoping.<br>
+            <a href="https://github.com/clarkbar-sys/plug" target="_blank" rel="noopener">Follow along on GitHub ↗</a></p>
+        </div>
       </div>
     </div>
     <div class="home-btn" aria-hidden="true"></div>
@@ -1861,6 +1931,23 @@
   $("#homeGithub").addEventListener("click", openGithub);
   $("#githubBack").addEventListener("click", closeGithub);
   githubApp.addEventListener("keydown", e => { if(e.key === "Escape"){ e.stopPropagation(); closeGithub(); } });
+
+  /* plug tile — opens an in-app panel (reusing the github app's slide-in shell)
+     previewing plug's three PII-domain tiers: rep (public), crib (personal),
+     bag (credential-adjacent). plug is still scoping, so the tiers are read-only
+     "coming soon" rows rather than live hand-offs — nothing to fetch or wire. */
+  const plugApp = $("#plugApp");
+  function openPlug(){
+    plugApp.classList.add("on");
+    try { $("#plugBack").focus({ preventScroll:true }); } catch(_){}
+  }
+  function closePlug(){
+    plugApp.classList.remove("on");
+    try { $("#homePlug").focus({ preventScroll:true }); } catch(_){}
+  }
+  $("#homePlug").addEventListener("click", openPlug);
+  $("#plugBack").addEventListener("click", closePlug);
+  plugApp.addEventListener("keydown", e => { if(e.key === "Escape"){ e.stopPropagation(); closePlug(); } });
 
   /* tally tile — a plain hand-off to the tally node on the tailnet, no
      in-app overlay. hush and tally each join the tailnet as their own tsnet
