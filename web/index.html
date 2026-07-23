@@ -858,7 +858,11 @@
   #homeScreen[hidden] { display:none; }
   #homeScreen.launching { opacity:0; visibility:hidden; pointer-events:none;
     transition: opacity .4s ease, visibility 0s linear .4s; }
-  .home-phone { position:relative; width:min(320px,86vw); border:1px solid var(--border);
+  /* matrix rain veiling the launcher, behind the phone. drawn in hush's
+     cyan/mint so it reads as the console's own screensaver, not payphone green. */
+  #homeRain { position:absolute; inset:0; z-index:0; opacity:.5; pointer-events:none;
+    mix-blend-mode:screen; }
+  .home-phone { position:relative; z-index:1; width:min(320px,86vw); border:1px solid var(--border);
     background: color-mix(in srgb, var(--panel) 90%, transparent); box-shadow: var(--shadow);
     padding:0 0 18px; overflow:hidden;
     display:flex; flex-direction:column; min-height:min(560px,78vh); }
@@ -924,6 +928,7 @@
   </div>
 </div>
 <div id="homeScreen" role="dialog" aria-label="hush launcher" hidden>
+  <canvas id="homeRain" aria-hidden="true"></canvas>
   <div class="home-phone">
     <div class="home-corner tl"></div><div class="home-corner tr"></div>
     <div class="home-corner bl"></div><div class="home-corner br"></div>
@@ -1086,10 +1091,53 @@
       String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
   }
 
+  // Matrix rain behind the launcher. Katakana + hush glyphs falling in the
+  // console's cyan/mint. Runs only while the home screen is up — we cancel the
+  // frame loop on enterApp so nothing paints behind the live console.
+  const homeRain = (() => {
+    const canvas = $("#homeRain");
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const glyphs = "01ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾅﾆﾇﾊﾋﾌﾍﾎﾐﾑﾒﾗﾘﾜ<>/*{}hush".split("");
+    const x = canvas.getContext("2d");
+    let cols, drops, W, H, raf = 0;
+    function size(){
+      W = canvas.width = canvas.offsetWidth;
+      H = canvas.height = canvas.offsetHeight;
+      cols = Math.max(1, Math.floor(W / 14));
+      drops = Array(cols).fill(0).map(() => Math.random() * -H / 16);
+    }
+    function draw(){
+      x.fillStyle = "rgba(6,2,16,.07)";
+      x.fillRect(0, 0, W, H);
+      x.font = "14px ui-monospace, Menlo, Consolas, monospace";
+      for(let i = 0; i < cols; i++){
+        const g = glyphs[Math.floor(Math.random() * glyphs.length)];
+        const y = drops[i] * 16;
+        x.fillStyle = Math.random() > .97 ? "#19e3ff" : "#2bffa6";
+        x.fillText(g, i * 14, y);
+        if(y > H && Math.random() > .975) drops[i] = 0; else drops[i]++;
+      }
+      raf = requestAnimationFrame(draw);
+    }
+    function start(){
+      if(reduce || raf) return;
+      size();
+      addEventListener("resize", size);
+      draw();
+    }
+    function stop(){
+      if(!raf) return;
+      cancelAnimationFrame(raf); raf = 0;
+      removeEventListener("resize", size);
+    }
+    return { start, stop };
+  })();
+
   function showHome(){
     if(homeShown) return;
     homeShown = true;
     homeScreen.hidden = false;
+    homeRain.start();
     tickHomeClock();
     homeClockTimer = setInterval(tickHomeClock, 15000);
     try { $("#homeHush").focus({ preventScroll:true }); } catch(_){}
@@ -1097,6 +1145,7 @@
 
   function enterApp(){
     clearInterval(homeClockTimer);
+    homeRain.stop();
     homeScreen.classList.add("launching");
     setTimeout(() => { homeScreen.hidden = true; }, 420);
   }
