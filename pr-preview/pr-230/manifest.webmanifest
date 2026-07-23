@@ -1,6 +1,6 @@
 {
-  "name": "fleet — tailnet fleet console",
-  "short_name": "fleet",
+  "name": "hush — tailnet fleet console",
+  "short_name": "hush",
   "description": "See and run your homelab fleet from your phone.",
   "start_url": "./",
   "scope": "./",
