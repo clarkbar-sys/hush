@@ -17,7 +17,12 @@ name: Deploy release site (GitHub Pages)
 on:
   push:
     branches: [main]
-    paths: ["site/**"]
+    # Redeploy when the landing redirect (site/**) changes, but also when the
+    # console it stages into site/demo/ changes — web/** is the demo's actual
+    # content, and scripts/build-web-preview.sh is how it's staged. Without
+    # web/** here, a console change (feat(web): …) would refresh every PR
+    # preview but leave the live demo at the site root stale.
+    paths: ["site/**", "web/**", "scripts/build-web-preview.sh"]
   release:
     types: [published]
   workflow_dispatch: {}
@@ -37,8 +42,8 @@ jobs:
 
       - name: Stage the console demo into site/demo
         # Same self-contained demo bundle the PR-preview workflow uses, staged
-        # under site/demo/ so the landing page's <iframe src="demo/"> has the
-        # real console (MODE=demo, no hush-control) to embed.
+        # under site/demo/ so the landing page's redirect to demo/ lands the
+        # visitor in the real console (MODE=demo, no hush-control).
         run: ./scripts/build-web-preview.sh site/demo
 
       - name: Deploy to gh-pages root
