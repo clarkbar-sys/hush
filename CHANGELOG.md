@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.13.0](https://github.com/clarkbar-sys/hush/compare/v2.12.0...v2.13.0) (2026-07-23)
+
+
+### Features
+
+* **web:** add tally tile to launcher ([#232](https://github.com/clarkbar-sys/hush/issues/232)) ([8f44bbb](https://github.com/clarkbar-sys/hush/commit/8f44bbbb1fdfe7c83763dd5196c4fa68491f59f9))
+* **web:** sort fleet grid alphabetically by machine name ([#228](https://github.com/clarkbar-sys/hush/issues/228)) ([d0b53b5](https://github.com/clarkbar-sys/hush/commit/d0b53b5774498032731669f457b97ea5d89080d7))
+* **web:** turn payphone into an AOL-style buddy list of LLM chats ([#231](https://github.com/clarkbar-sys/hush/issues/231)) ([2f613cd](https://github.com/clarkbar-sys/hush/commit/2f613cd3559ccdb84344dc2b3f220166da1bb010))
+
 ## [2.12.0](https://github.com/clarkbar-sys/hush/compare/v2.11.0...v2.12.0) (2026-07-23)
 
 
