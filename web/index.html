@@ -947,6 +947,39 @@
   .home-label { font-size:11px; font-weight:500; letter-spacing:.01em; color:#fff;
     text-shadow:0 1px 2px rgba(0,0,0,.85); }
 
+  /* ---- edit mode: long-press any tile to put the springboard into the
+     iPhone-OS "jiggle" — every icon wobbles and can be dragged to a new slot,
+     exactly the reorder gesture of the era. Tap the empty area (or Escape) to
+     settle. The new order is saved to IndexedDB immediately and synced up to
+     hush-control so it survives a cache wipe and follows you to another
+     browser. See the launcher-layout JS. */
+  @keyframes home-jiggle {
+    0%   { transform:rotate(-1.6deg); }
+    50%  { transform:rotate(1.6deg); }
+    100% { transform:rotate(-1.6deg); }
+  }
+  /* Alternate the phase per tile so they don't wobble in lockstep. */
+  .home-grid.editing .home-app { animation:home-jiggle .24s ease-in-out infinite;
+    touch-action:none; }
+  .home-grid.editing .home-app:nth-child(even) { animation-delay:-.12s; }
+  .home-grid.editing .home-app:active .home-icon { transform:none; }
+  /* The tile under the finger lifts, stops wobbling, and rides above the rest
+     while it's dragged; the JS drives its translate. */
+  .home-grid.editing .home-app.dragging { animation:none; z-index:5;
+    position:relative; }
+  .home-grid.editing .home-app.dragging .home-icon {
+    transform:scale(1.12); box-shadow:0 8px 20px rgba(0,0,0,.55),
+    inset 0 0 0 1px rgba(255,255,255,.06); }
+  /* A quiet hint that pins to the bottom of the springboard while editing. */
+  .home-edit-hint { position:absolute; left:0; right:0; bottom:34px;
+    text-align:center; font-size:11px; color:rgba(255,255,255,.7);
+    text-shadow:0 1px 2px rgba(0,0,0,.85); pointer-events:none; opacity:0;
+    transition:opacity .2s ease; }
+  .home-screen.editing .home-edit-hint { opacity:1; }
+  @media (prefers-reduced-motion: reduce) {
+    .home-grid.editing .home-app { animation:none; }
+  }
+
   /* payphone — AOL-blue tile with a gold running-man silhouette, receiver
      clamped to his ear: the launcher's homage to the AIM sprinter. */
   #homePayphone .home-icon { background:linear-gradient(#1a7fe0,#002d7a); }
@@ -1277,11 +1310,11 @@
         <button class="chip ver" id="verChip" type="button" hidden></button>
       </div>
       <div class="home-grid">
-        <button class="home-app" id="homeHush" type="button" aria-label="Open fleet">
+        <button class="home-app" id="homeHush" data-tile="fleet" type="button" aria-label="Open fleet">
           <span class="home-icon"><img src="/icon-192.png" alt="" width="57" height="57" draggable="false"></span>
           <span class="home-label">fleet</span>
         </button>
-        <button class="home-app" id="homePayphone" type="button" aria-label="Open payphone">
+        <button class="home-app" id="homePayphone" data-tile="payphone" type="button" aria-label="Open payphone">
           <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="15" cy="5.2" r="2.2"></circle>
             <path d="M15 7.6 11.5 13"></path>
@@ -1293,18 +1326,18 @@
           </svg></span>
           <span class="home-label">payphone</span>
         </button>
-        <button class="home-app" id="homeGithub" type="button" aria-label="Browse clarkbar.sys repos on GitHub">
+        <button class="home-app" id="homeGithub" data-tile="github" type="button" aria-label="Browse clarkbar.sys repos on GitHub">
           <span class="home-icon"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></span>
           <span class="home-label">github</span>
         </button>
-        <a class="home-app" id="homeTally" href="https://tally/" target="_blank" rel="noopener" aria-label="Open tally">
+        <a class="home-app" id="homeTally" data-tile="tally" href="https://tally/" target="_blank" rel="noopener" aria-label="Open tally">
           <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M6 4v16M10 4v16M14 4v16M18 4v16"></path>
             <path d="M3 15 21 7"></path>
           </svg></span>
           <span class="home-label">tally</span>
         </a>
-        <button class="home-app" id="homePlug" type="button" aria-label="Open plug — data sources">
+        <button class="home-app" id="homePlug" data-tile="plug" type="button" aria-label="Open plug — data sources">
           <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M9 2v6M15 2v6"></path>
             <path d="M7 8h10v2a5 5 0 0 1-10 0V8z"></path>
@@ -1313,6 +1346,7 @@
           <span class="home-label">plug</span>
         </button>
       </div>
+      <div class="home-edit-hint" id="homeEditHint" aria-hidden="true">Drag to rearrange · tap the wallpaper when you're done</div>
       <div class="home-dots" aria-hidden="true"><i class="on"></i></div>
       <div class="gh-app" id="githubApp" role="dialog" aria-label="clarkbar.sys on GitHub" aria-modal="true">
         <div class="gh-top">
@@ -2393,6 +2427,196 @@
     const host = location.hostname;
     const tallyHost = host.startsWith("hush.") ? "tally." + host.slice("hush.".length) : "tally";
     $("#homeTally").href = `https://${tallyHost}/`;
+  })();
+
+  /* ---- launcher layout: a reorderable springboard. Long-press any tile to
+     drop the home screen into iPhone-OS jiggle mode, drag a tile to a new slot,
+     then tap the wallpaper (or press Escape) to settle. The order is saved to
+     IndexedDB immediately — an instant, offline-safe first paint — and mirrored
+     up to hush-control (PUT /api/launcher/layout) as the durable copy that
+     survives a cache wipe and follows you to another browser. Tile identity is
+     the data-tile slug on each .home-app; we move the real button nodes (never
+     re-render), so every tile keeps the click handler wired to it above. */
+  (function(){
+    const grid = $(".home-grid");
+    if(!grid) return;
+    const screen = grid.closest(".home-screen") || grid;
+
+    // --- IndexedDB: a tiny key/value store for console prefs. Named "hush" so
+    //     it reads plainly in devtools; the launcher order lives under one key.
+    const DB_NAME = "hush", DB_VERSION = 1, STORE = "prefs", ORDER_KEY = "launcherOrder";
+    let dbPromise = null;
+    function idb(){
+      if(dbPromise) return dbPromise;
+      dbPromise = new Promise((resolve, reject) => {
+        if(typeof indexedDB === "undefined"){ reject(new Error("no indexedDB")); return; }
+        let req;
+        try { req = indexedDB.open(DB_NAME, DB_VERSION); }
+        catch(e){ reject(e); return; }
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if(!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      return dbPromise;
+    }
+    function idbGet(key){
+      return idb().then(db => new Promise((resolve, reject) => {
+        const rq = db.transaction(STORE, "readonly").objectStore(STORE).get(key);
+        rq.onsuccess = () => resolve(rq.result);
+        rq.onerror = () => reject(rq.error);
+      }));
+    }
+    function idbPut(key, val){
+      return idb().then(db => new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, "readwrite");
+        tx.objectStore(STORE).put(val, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      }));
+    }
+
+    // --- order helpers: an order is a list of data-tile slugs. We only ever
+    //     rearrange the tiles actually present, so a saved order that names a
+    //     since-removed tile (or omits a newly shipped one) still lands sanely.
+    const tiles = () => Array.from(grid.querySelectorAll(".home-app"));
+    const tileId = el => el.getAttribute("data-tile");
+    const currentOrder = () => tiles().map(tileId);
+
+    function applyOrder(order){
+      if(!Array.isArray(order) || !order.length) return;
+      const byId = new Map(tiles().map(el => [tileId(el), el]));
+      const seen = new Set();
+      // Saved ids first, in saved order…
+      order.forEach(id => {
+        const el = byId.get(id);
+        if(el){ grid.appendChild(el); seen.add(id); }
+      });
+      // …then any tile the save didn't mention (a new tile), kept at the end.
+      tiles().forEach(el => { if(!seen.has(tileId(el))) grid.appendChild(el); });
+    }
+
+    // Persist: write IndexedDB immediately (the next paint reads from it), then
+    // best-effort PUT to the server. A server hiccup never blocks the local save.
+    function persist(order){
+      idbPut(ORDER_KEY, order).catch(() => {});
+      fetch("/api/launcher/layout", {
+        method:"PUT",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ order }),
+      }).catch(() => {});
+    }
+
+    // Load: paint from IndexedDB first (instant), then reconcile with the server
+    // as the durable cross-device copy — if it differs, the server wins and the
+    // local cache is refreshed to match.
+    (async function load(){
+      let localOrder = null;
+      try { localOrder = await idbGet(ORDER_KEY); } catch(_){}
+      if(Array.isArray(localOrder) && localOrder.length) applyOrder(localOrder);
+      try {
+        const res = await fetch("/api/launcher/layout", { headers:{ "Accept":"application/json" } });
+        if(!res.ok) return;
+        const data = await res.json();
+        const server = data && data.order;
+        if(Array.isArray(server) && server.length){
+          applyOrder(server);
+          if(JSON.stringify(server) !== JSON.stringify(localOrder || [])) idbPut(ORDER_KEY, server).catch(() => {});
+        }
+      } catch(_){ /* offline or a static preview with no backend — local order stands */ }
+    })();
+
+    // --- edit mode + drag-to-reorder ----------------------------------------
+    // Reorder is snap-to-slot: the held tile hops into whichever slot is nearest
+    // the pointer as you move, staying in grid flow. Simpler and far more robust
+    // than free-follow translation, and it reads the same on a phone.
+    let editing = false, drag = null, pressTimer = 0, press = null;
+
+    function setEditing(on){
+      if(editing === on) return;
+      editing = on;
+      grid.classList.toggle("editing", on);
+      screen.classList.toggle("editing", on);
+      if(!on) endDrag(false);
+    }
+
+    // Swallow a tile's own click while editing (capture beats the per-tile
+    // handlers) so a drag or an edit-mode tap never opens an app.
+    grid.addEventListener("click", e => {
+      if(editing){ e.stopPropagation(); e.preventDefault(); }
+    }, true);
+
+    const cancelPress = () => { clearTimeout(pressTimer); pressTimer = 0; press = null; };
+
+    // Long-press to enter edit mode; if the finger is still down, that same
+    // press begins dragging the tile it started on.
+    grid.addEventListener("pointerdown", e => {
+      const tile = e.target.closest(".home-app");
+      if(!tile) return;
+      if(editing){ startDrag(tile, e); return; }
+      press = { x:e.clientX, y:e.clientY };
+      clearTimeout(pressTimer);
+      pressTimer = setTimeout(() => { pressTimer = 0; press = null; setEditing(true); startDrag(tile, e); }, 450);
+    });
+    grid.addEventListener("pointermove", e => {
+      if(drag){ moveDrag(e); return; }
+      // A slip past a few px before the long-press fires is a scroll, not intent.
+      if(pressTimer && press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) cancelPress();
+    });
+    grid.addEventListener("pointerup", () => { cancelPress(); if(drag) endDrag(true); });
+    grid.addEventListener("pointercancel", () => { cancelPress(); endDrag(false); });
+
+    // Tap the wallpaper (anywhere on the springboard that isn't a tile) to settle.
+    screen.addEventListener("pointerdown", e => {
+      if(editing && !e.target.closest(".home-app")) setEditing(false);
+    });
+    // Escape settles edit mode before any other Escape handler runs.
+    document.addEventListener("keydown", e => {
+      if(editing && e.key === "Escape"){ e.stopPropagation(); setEditing(false); }
+    }, true);
+
+    function startDrag(tile, e){
+      if(drag) return;
+      try { tile.setPointerCapture(e.pointerId); } catch(_){}
+      drag = { tile, id:e.pointerId };
+      tile.classList.add("dragging");
+    }
+    function moveDrag(e){
+      if(e.pointerId !== drag.id) return;
+      const ref = insertionRef(e.clientX, e.clientY);
+      if(ref !== drag.tile && ref !== drag.tile.nextElementSibling){
+        if(ref) grid.insertBefore(drag.tile, ref);
+        else grid.appendChild(drag.tile);
+      }
+    }
+    function endDrag(commit){
+      if(!drag) return;
+      const tile = drag.tile;
+      try { tile.releasePointerCapture(drag.id); } catch(_){}
+      tile.classList.remove("dragging");
+      drag = null;
+      if(commit) persist(currentOrder());
+    }
+
+    // Nearest-center pick: the sibling closest to the pointer decides the slot,
+    // and reading order (left-or-above its center) decides before vs after it.
+    function insertionRef(x, y){
+      let best = null, bestDist = Infinity, before = true;
+      for(const el of tiles()){
+        if(el === drag.tile) continue;
+        const r = el.getBoundingClientRect();
+        const cx = r.left + r.width/2, cy = r.top + r.height/2;
+        const d = Math.hypot(x - cx, y - cy);
+        if(d < bestDist){
+          bestDist = d; best = el;
+          before = (y < cy - r.height/2) || (Math.abs(y - cy) <= r.height/2 && x < cx);
+        }
+      }
+      if(!best) return null;
+      return before ? best : best.nextElementSibling;
+    }
   })();
 
   /* ---------- state ---------- */
