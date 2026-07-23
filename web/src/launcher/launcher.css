@@ -1,0 +1,271 @@
+  /* ---- launcher: a 2008-era iPhone OS home screen shown once per load. A
+     black-glass handset with a chrome rim and a home button, the silver
+     status bar, and glossy "gel" gel-highlighted icons with Helvetica labels.
+     Tapping the hush icon zooms into the console we've always had. Owns its own
+     skeuomorphic palette on purpose — a clean break from the neon HUD. ---- */
+  #homeScreen { position:fixed; inset:0; z-index:490; display:flex; align-items:center;
+    justify-content:center; padding:20px;
+    font-family:-apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background:
+      radial-gradient(130% 90% at 50% -20%, #2b3654 0%, #0e1324 46%, #05070e 100%),
+      #05070e;
+    transition: opacity .4s ease, visibility 0s linear 0s; }
+  #homeScreen[hidden] { display:none; }
+  #homeScreen.launching { opacity:0; visibility:hidden; pointer-events:none;
+    transition: opacity .4s ease, visibility 0s linear .4s; }
+  /* the app-open beat: the whole handset zooms toward you as the console
+     fades up underneath — the old "dive into the app" animation. */
+  #homeScreen.launching .home-phone { transform:scale(1.55); opacity:0; }
+
+  /* the handset — black glass slab, chrome rim, the rounded 2008 silhouette */
+  .home-phone { position:relative; width:min(300px,84vw);
+    border-radius:44px; padding:11px 11px 0;
+    background:linear-gradient(#15181d, #05070b);
+    box-shadow:
+      0 0 0 1px #000,
+      0 0 0 3px #3d424b,                 /* the chrome bezel ring */
+      0 0 0 4px #101216,
+      0 24px 64px rgba(0,0,0,.7),
+      inset 0 1px 1px rgba(255,255,255,.16);
+    display:flex; flex-direction:column;
+    transition: transform .4s ease, opacity .4s ease; }
+
+  /* the screen inside the bezel, carrying the wallpaper */
+  .home-screen { position:relative; border-radius:3px; overflow:hidden;
+    background: radial-gradient(150% 80% at 50% 0%, #26324e 0%, #0b101c 55%, #05070e 100%);
+    display:flex; flex-direction:column; min-height:min(500px,72vh);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.55), inset 0 2px 12px rgba(0,0,0,.55); }
+
+  /* status bar — glossy silver-black, carrier + signal left, clock centered,
+     battery right, all in Helvetica the way iPhone OS drew it */
+  .home-status { display:flex; align-items:center; gap:7px; padding:5px 9px 4px;
+    font-weight:600; font-size:12px; color:#fff; text-shadow:0 -1px 0 rgba(0,0,0,.55);
+    background:linear-gradient(#2c3037,#0c0e12); border-bottom:1px solid #000; }
+  /* 5 ascending signal dots, last two dimmed — the classic reception read */
+  .home-bars { display:inline-flex; align-items:center; gap:2px; }
+  .home-bars i { width:5px; height:5px; border-radius:50%; background:#fff; }
+  .home-bars i:nth-child(4), .home-bars i:nth-child(5) { background:rgba(255,255,255,.32); }
+  .home-carrier { display:inline-flex; align-items:center; gap:6px; font-size:12px;
+    letter-spacing:.01em; }
+  .home-status .spacer { flex:1; }
+  .home-clock { color:#fff; font-size:13px; font-weight:600; letter-spacing:.02em; }
+  .home-batt { display:inline-flex; align-items:center; gap:3px; }
+  .home-batt span { width:22px; height:11px; border:1px solid rgba(255,255,255,.85);
+    border-radius:2px; position:relative; }
+  .home-batt span::after { content:""; position:absolute; right:-3px; top:3px; width:2px;
+    height:4px; background:rgba(255,255,255,.85); border-radius:0 1px 1px 0; }
+  .home-batt span b { position:absolute; inset:1.5px; width:88%; background:#5be36a;
+    border-radius:1px; }
+
+  /* header — no wordmark (the app icon already says hush); it just parks the
+     version chip when an update is available. */
+  .home-header { display:flex; align-items:center; justify-content:flex-end;
+    gap:8px; padding:6px 12px 0; min-height:0; }
+  .home-header .brand { display:none; }
+  .home-header .chip[hidden] { display:none; }   /* .chip's display beats [hidden] otherwise */
+  .home-header .chip { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2);
+    border-radius:999px; color:rgba(255,255,255,.72); text-transform:none; letter-spacing:0;
+    text-shadow:none; }
+
+  /* app grid — 4 across, top-aligned, the way springboard laid it out */
+  .home-grid { flex:1; display:grid; grid-template-columns:repeat(4, 1fr);
+    align-content:start; justify-items:center; gap:20px 0; padding:22px 12px 6px; }
+  .home-app { -webkit-tap-highlight-color:transparent; appearance:none; background:none; border:0;
+    padding:0; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px;
+    color:#fff; font-family:inherit; text-decoration:none; }
+  .home-icon { position:relative; width:57px; height:57px; border-radius:12px;
+    overflow:hidden; background:#0d0f13;
+    box-shadow: 0 1px 2px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06);
+    transition: transform .1s ease, box-shadow .2s ease; }
+  .home-icon img { width:57px; height:57px; display:block; border-radius:12px; }
+  /* the signature gel: a bright highlight bowed across the top half of every
+     icon — the single detail that reads "iPhone OS" more than any other. */
+  .home-icon::after { content:""; position:absolute; left:0; right:0; top:0; height:49%;
+    border-radius:12px 12px 42% 42% / 12px 12px 20px 20px; pointer-events:none;
+    background:linear-gradient(rgba(255,255,255,.45), rgba(255,255,255,.08)); }
+  .home-app:active .home-icon { transform:scale(.9); }
+  .home-app:focus-visible .home-icon { box-shadow: 0 0 0 3px rgba(120,170,255,.9),
+    0 1px 2px rgba(0,0,0,.6); outline:none; }
+  .home-label { font-size:11px; font-weight:500; letter-spacing:.01em; color:#fff;
+    text-shadow:0 1px 2px rgba(0,0,0,.85); }
+
+  /* ---- edit mode: long-press any tile to put the springboard into the
+     iPhone-OS "jiggle" — every icon wobbles and can be dragged to a new slot,
+     exactly the reorder gesture of the era. Tap the empty area (or Escape) to
+     settle. The new order is saved to IndexedDB immediately and synced up to
+     hush-control so it survives a cache wipe and follows you to another
+     browser. See the launcher-layout JS. */
+  @keyframes home-jiggle {
+    0%   { transform:rotate(-1.6deg); }
+    50%  { transform:rotate(1.6deg); }
+    100% { transform:rotate(-1.6deg); }
+  }
+  /* Alternate the phase per tile so they don't wobble in lockstep. */
+  .home-grid.editing .home-app { animation:home-jiggle .24s ease-in-out infinite;
+    touch-action:none; }
+  .home-grid.editing .home-app:nth-child(even) { animation-delay:-.12s; }
+  .home-grid.editing .home-app:active .home-icon { transform:none; }
+  /* The tile under the finger lifts, stops wobbling, and rides above the rest
+     while it's dragged; the JS drives its translate. */
+  .home-grid.editing .home-app.dragging { animation:none; z-index:5;
+    position:relative; }
+  .home-grid.editing .home-app.dragging .home-icon {
+    transform:scale(1.12); box-shadow:0 8px 20px rgba(0,0,0,.55),
+    inset 0 0 0 1px rgba(255,255,255,.06); }
+  /* A quiet hint that pins to the bottom of the springboard while editing. */
+  .home-edit-hint { position:absolute; left:0; right:0; bottom:34px;
+    text-align:center; font-size:11px; color:rgba(255,255,255,.7);
+    text-shadow:0 1px 2px rgba(0,0,0,.85); pointer-events:none; opacity:0;
+    transition:opacity .2s ease; }
+  .home-screen.editing .home-edit-hint { opacity:1; }
+  @media (prefers-reduced-motion: reduce) {
+    .home-grid.editing .home-app { animation:none; }
+  }
+
+  /* payphone — AOL-blue tile with a gold running-man silhouette, receiver
+     clamped to his ear: the launcher's homage to the AIM sprinter. */
+  #homePayphone .home-icon { background:linear-gradient(#1a7fe0,#002d7a); }
+  #homePayphone .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:33px; height:33px; color:#ffd35c; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  /* github — a glossy near-black tile with the white Octocat mark */
+  #homeGithub .home-icon { background:linear-gradient(#33373d,#0f1114); }
+  #homeGithub .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:34px; height:34px; color:#fff; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  /* tally — a wood-grain tile with pale tally-mark strokes (four verticals +
+     the crossing fifth), hands off to the tally node on the tailnet. */
+  #homeTally .home-icon { background:linear-gradient(#8a5a34,#4a2f1c); }
+  #homeTally .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:32px; height:32px; color:#fce8c9; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  /* plug — a glossy green "power" tile with a two-prong plug mark; opens the
+     plug app (the provider-side data substrate), still scoping, over the grid. */
+  #homePlug .home-icon { background:linear-gradient(#2f8f63,#134029); }
+  #homePlug .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:31px; height:31px; color:#d6f7e4; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  /* riff — a black plastic pager tile with a green-LCD beeper mark; opens the
+     "riff together" coming-soon screen that can page your phone. */
+  #homeRiff .home-icon { background:linear-gradient(#2b2f36,#0b0e12); }
+  #homeRiff .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:29px; height:29px; color:#5df2a0; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  /* ---- github app: tapping the octocat tile no longer jumps straight to one
+     repo. It opens this panel over the springboard listing the clarkbar.sys
+     org's public repos; each row hands off to that repo on GitHub in a new
+     tab. The panel lives inside .home-screen and slides in over the grid. ---- */
+  .gh-app { position:absolute; inset:0; z-index:6; display:flex; flex-direction:column;
+    background: radial-gradient(150% 80% at 50% 0%, #26324e 0%, #0b101c 55%, #05070e 100%);
+    transform: translateX(9%); opacity:0; visibility:hidden; pointer-events:none;
+    transition: transform .28s ease, opacity .28s ease, visibility 0s linear .28s; }
+  .gh-app.on { transform:none; opacity:1; visibility:visible; pointer-events:auto;
+    transition: transform .28s ease, opacity .28s ease; }
+  .gh-top { display:flex; align-items:center; gap:8px; padding:9px 11px;
+    border-bottom:1px solid rgba(255,255,255,.09);
+    background:linear-gradient(#2c3037,#0c0e12); }
+  .gh-back { appearance:none; background:none; border:0; padding:2px 4px; cursor:pointer;
+    color:#8fb4ff; font:inherit; font-size:14px; font-weight:600; display:inline-flex;
+    align-items:center; gap:1px; -webkit-tap-highlight-color:transparent; border-radius:5px; }
+  .gh-back:focus-visible { outline:2px solid rgba(120,170,255,.9); outline-offset:1px; }
+  .gh-top-title { flex:1; text-align:center; color:#fff; font-size:13px; font-weight:600;
+    letter-spacing:.02em; text-shadow:0 -1px 0 rgba(0,0,0,.5); }
+  .gh-org { color:rgba(255,255,255,.72); text-decoration:none; font-size:15px; width:26px;
+    text-align:center; line-height:1; padding:2px 0; border-radius:5px; }
+  .gh-org:hover { color:#fff; }
+  .gh-org:focus-visible { outline:2px solid rgba(120,170,255,.9); outline-offset:1px; }
+  .gh-list { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding:8px; display:flex; flex-direction:column; gap:7px; }
+  .gh-repo { display:flex; align-items:center; gap:10px; text-decoration:none;
+    padding:9px 10px; border-radius:12px; background:rgba(255,255,255,.05); color:#fff;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+    transition: background .12s ease, transform .1s ease; }
+  .gh-repo:hover { background:rgba(255,255,255,.09); }
+  .gh-repo:active { transform:scale(.98); }
+  .gh-repo:focus-visible { outline:none;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 0 0 2px rgba(120,170,255,.9); }
+  .gh-repo-icon { flex:0 0 auto; width:34px; height:34px; border-radius:9px;
+    display:grid; place-items:center; font-weight:700; font-size:15px; color:#fff;
+    background:linear-gradient(#33373d,#0f1114); text-transform:uppercase;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+  .gh-repo-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+  .gh-repo-name { font-size:13px; font-weight:600; letter-spacing:.01em;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .gh-repo-desc { font-size:11px; color:rgba(255,255,255,.55); line-height:1.3;
+    overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2;
+    -webkit-box-orient:vertical; }
+  .gh-repo-lang { flex:0 0 auto; display:inline-flex; align-items:center; gap:4px;
+    font-size:10px; color:rgba(255,255,255,.5); white-space:nowrap; }
+  .gh-repo-lang i { width:8px; height:8px; border-radius:50%; background:currentColor; }
+  .gh-note { color:rgba(255,255,255,.6); font-size:12px; text-align:center;
+    padding:24px 18px; line-height:1.55; margin:0; }
+  .gh-note a { color:#8fb4ff; }
+  .gh-spin { display:block; width:22px; height:22px; margin:34px auto 8px;
+    border:2px solid rgba(255,255,255,.2); border-top-color:#8fb4ff; border-radius:50%;
+    animation: gh-spin .7s linear infinite; }
+  @keyframes gh-spin { to { transform:rotate(360deg); } }
+
+  /* ---- plug app: reuses the gh-app slide-in shell (same .on toggle) to preview
+     plug's three PII-domain tiers — rep / crib / bag. plug is still scoping, so
+     these are read-only "coming soon" info rows, each wearing a soon pill, under
+     the repo's own tagline. Nothing to hand off to yet. ---- */
+  .plug-tag { margin:2px 2px 9px; color:rgba(255,255,255,.6); font-size:12px;
+    font-style:italic; text-align:center; letter-spacing:.01em; }
+  .plug-tier { cursor:default; }
+  .plug-tier:hover { background:rgba(255,255,255,.05); }   /* stays flat — nothing opens yet */
+  .plug-tier:active { transform:none; }
+  .plug-tier .plug-ico-rep  { background:linear-gradient(#3f7bd6,#1b3c74); }
+  .plug-tier .plug-ico-crib { background:linear-gradient(#c9683e,#5a2f1c); }
+  .plug-tier .plug-ico-bag  { background:linear-gradient(#8a5cc9,#3a2564); }
+  .plug-soon-pill { flex:0 0 auto; align-self:center; font-size:9px; font-weight:700;
+    letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.7);
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14);
+    border-radius:999px; padding:2px 7px; }
+
+  /* ---- riff app: reuses the gh-app slide-in shell (same .on toggle) for a 90s
+     pager "coming soon" screen. A dark-plastic beeper with a green LCD reading
+     COMING SOON; the Try me button fires a local notification (via the service
+     worker) so the pager "goes off" on your phone. The LCD doubles as a status
+     line — DIALING… / PAGE SENT / PAGING BLOCKED — driven by the launcher JS. */
+  .riff-list { align-items:center; justify-content:flex-start; padding:24px 14px 8px; gap:18px; }
+  .pager { width:min(238px,82%); background:linear-gradient(#3a3f47,#15181d);
+    border-radius:18px; padding:16px 14px 13px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 1px rgba(255,255,255,.06),
+      0 10px 22px rgba(0,0,0,.5); }
+  .pager-lcd { background:linear-gradient(#a6d8b3,#7bb98d); border-radius:8px;
+    padding:13px 10px; text-align:center; color:#0c2c17;
+    font-family:"Courier New",Courier,monospace; letter-spacing:.06em;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,.35), inset 0 0 0 2px rgba(0,0,0,.22); }
+  .pager-lcd-row { font-size:11px; font-weight:700; opacity:.85; }
+  .pager-lcd-big { font-size:20px; font-weight:800; margin:5px 0; line-height:1.05;
+    text-shadow:0 1px 0 rgba(255,255,255,.25); }
+  .pager-lcd-sub { font-size:9.5px; opacity:.72; margin-top:2px; }
+  .pager-btns { display:flex; justify-content:center; gap:9px; margin-top:13px; }
+  .pager-btns i { width:26px; height:9px; border-radius:5px;
+    background:linear-gradient(#20242a,#0a0c0f);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 1px 1px rgba(0,0,0,.5); }
+  .riff-try { appearance:none; cursor:pointer; font:inherit; font-weight:700;
+    font-size:15px; letter-spacing:.02em; color:#04140b; padding:12px 26px; border:0;
+    border-radius:999px; background:linear-gradient(#8dffbe,#37c579);
+    box-shadow: 0 3px 0 #1f8a4f, 0 6px 12px rgba(0,0,0,.35);
+    -webkit-tap-highlight-color:transparent; transition: transform .08s ease, box-shadow .08s ease; }
+  .riff-try:hover { background:linear-gradient(#9bffca,#43d284); }
+  .riff-try:active { transform:translateY(2px); box-shadow: 0 1px 0 #1f8a4f, 0 3px 8px rgba(0,0,0,.35); }
+  .riff-try:focus-visible { outline:2px solid rgba(120,170,255,.9); outline-offset:2px; }
+  .riff-try[disabled] { opacity:.6; cursor:default; transform:none; box-shadow: 0 3px 0 #1f8a4f; }
+  .riff-note { padding:4px 18px 22px; }
+
+  /* page dots — one page, one bright dot */
+  .home-dots { display:flex; justify-content:center; gap:7px; padding:2px 0 10px; }
+  .home-dots i { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.32);
+    box-shadow:0 1px 1px rgba(0,0,0,.5); }
+  .home-dots i.on { background:rgba(255,255,255,.95); }
+
+  /* home button — the one true circle below the screen */
+  .home-btn { position:relative; align-self:center; width:38px; height:38px; margin:10px 0 6px;
+    border-radius:50%; background:linear-gradient(#1b1e23,#0a0c10);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.14), inset 0 -1px 2px rgba(0,0,0,.6),
+      0 1px 1px rgba(255,255,255,.05); }
+  .home-btn::after { content:""; position:absolute; inset:0; margin:auto; width:13px; height:13px;
+    border-radius:3px; border:1.5px solid #565b64; }
+

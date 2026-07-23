@@ -1,0 +1,193 @@
+  /* ---- payphone app: a deliberate 1990s "gateway" page — the joke is you tap
+     a neon HUD tile and fall through 30 years into a beige Netscape-era
+     under-construction screen. Owns its own retro palette on purpose. ---- */
+  #payphoneScreen { position:fixed; inset:0; z-index:495; display:none;
+    align-items:center; justify-content:center; padding:16px 16px 46px;
+    background:#008080;  /* the one true teal desktop */
+    font-family:"Times New Roman", Times, serif; }
+  #payphoneScreen.on { display:flex; }
+
+  /* ---- payphone → AOL-era buddy list + IM ----------------------------------
+     The payphone tile opens a full-screen teal "desktop" (see #payphoneScreen)
+     with a floating AIM-style buddy list. The buddies are LLM chats grouped
+     into Active (online, they reply) and Archive (signed-off transcripts you
+     can re-read). Clicking a buddy opens a classic Instant Message window.
+     Shares the beige Win95 bevel vocabulary the .pay-* rules established. */
+  .aim-stage { position:relative; width:min(720px,96vw); height:min(560px,86vh); }
+  .aim-win { position:absolute; display:flex; flex-direction:column;
+    background:#c0c0c0; border:2px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #dfdfdf,
+      inset -2px -2px 0 #000, inset 2px 2px 0 #fff, 3px 3px 0 rgba(0,0,0,.5);
+    font-family:"MS Sans Serif", Tahoma, Geneva, sans-serif; }
+  .aim-tbar { display:flex; align-items:center; gap:6px; padding:3px 3px 3px 5px;
+    background:linear-gradient(90deg,#0a1e8c,#1e8fe0); color:#fff;
+    font-size:12px; font-weight:700; cursor:default; user-select:none; }
+  .aim-tbar .aim-runner { width:15px; height:15px; flex:0 0 auto; }
+  .aim-tbar .aim-t-txt { flex:1; white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; text-shadow:0 1px 0 rgba(0,0,0,.4); }
+  .aim-tbtn { width:16px; height:14px; display:grid; place-items:center;
+    background:#c0c0c0; color:#000; border:1px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff;
+    font-size:11px; font-weight:700; line-height:1; cursor:pointer; }
+  .aim-tbtn:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+
+  /* buddy list window */
+  .aim-bl { left:0; top:0; width:236px; max-width:96vw; height:100%; }
+  .aim-tabs { display:flex; gap:3px; padding:4px 4px 0;
+    background:#c0c0c0; border-bottom:1px solid #808080; }
+  .aim-tab { padding:3px 12px 4px; font-size:11px; color:#000; cursor:default;
+    background:#c0c0c0; border:1px solid #808080; border-bottom:none;
+    border-radius:3px 3px 0 0; box-shadow: inset 1px 1px 0 #fff; margin-bottom:-1px; }
+  .aim-tab.on { font-weight:700; background:#d4d0c8; position:relative; z-index:1; }
+  .aim-tab.off { color:#606060; }
+  .aim-blwrap { flex:1; min-height:0; margin:6px; display:flex; flex-direction:column;
+    background:#fff; border:2px inset #fff; }
+  .aim-scroll { flex:1; min-height:0; overflow:auto; padding:3px 0; }
+  .aim-group { user-select:none; }
+  .aim-ghead { display:flex; align-items:center; gap:5px; padding:2px 6px;
+    font-size:12px; font-weight:700; color:#00248f; cursor:pointer; }
+  .aim-ghead:hover { background:#eef2ff; }
+  .aim-tri { width:0; height:0; border-left:5px solid #444; border-top:4px solid transparent;
+    border-bottom:4px solid transparent; transition:transform .1s; flex:0 0 auto; }
+  .aim-group.open .aim-tri { transform:rotate(90deg) translateX(-1px); }
+  .aim-gcount { color:#707070; font-weight:400; font-size:11px; }
+  .aim-blist { list-style:none; margin:0; padding:0; }
+  .aim-group:not(.open) .aim-blist { display:none; }
+  .aim-buddy { display:flex; align-items:center; gap:6px; padding:2px 6px 2px 22px;
+    font-size:12px; color:#000; cursor:pointer; white-space:nowrap; }
+  .aim-buddy:hover { background:#e6ecff; }
+  .aim-buddy.sel { background:#0a3fd8; color:#fff; }
+  .aim-buddy.sel .aim-idle, .aim-buddy.sel .aim-bnew { color:#dbe4ff; }
+  .aim-bico { width:13px; height:13px; flex:0 0 auto; color:#f0b400; }
+  .aim-buddy.off { color:#8a8a8a; font-style:italic; }
+  .aim-buddy.off .aim-bico { color:#b8b8b8; }
+  .aim-bname { overflow:hidden; text-overflow:ellipsis; }
+  .aim-idle { color:#909090; font-size:11px; font-style:italic; }
+  .aim-bnew { margin-left:auto; color:#c00000; font-weight:700; font-size:11px; }
+  .aim-blfoot { display:flex; align-items:center; gap:8px; padding:4px 7px;
+    border-top:1px solid #808080; box-shadow: inset 0 1px 0 #fff; }
+  .aim-blfoot .aim-me { flex:1; font-size:11px; color:#000; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; }
+  .aim-blfoot .aim-me b { color:#00248f; }
+  .aim-icobtn { width:22px; height:20px; display:grid; place-items:center;
+    background:#c0c0c0; border:1px solid #000; cursor:pointer;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .aim-icobtn:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .aim-icobtn svg { width:13px; height:13px; }
+
+  /* IM window */
+  .aim-im { display:none; right:0; top:24px; width:372px; max-width:96vw;
+    height:min(430px,82vh); }
+  .aim-im.on { display:flex; }
+  .aim-fmt { display:flex; align-items:center; gap:2px; padding:2px 4px;
+    background:#c0c0c0; border-bottom:1px solid #808080; box-shadow: inset 0 -1px 0 #fff; }
+  .aim-fbtn { min-width:20px; height:19px; padding:0 4px; display:grid; place-items:center;
+    background:#c0c0c0; border:1px solid #c0c0c0; color:#000; cursor:pointer;
+    font-size:12px; line-height:1; border-radius:2px; }
+  .aim-fbtn:hover { border-color:#000; box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .aim-fbtn:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .aim-fbtn.b { font-weight:700; } .aim-fbtn.i { font-style:italic; }
+  .aim-fbtn.u { text-decoration:underline; }
+  .aim-fbtn .sw { width:12px; height:12px; border:1px solid #000; }
+  .aim-fsep { width:1px; align-self:stretch; margin:2px 3px;
+    background:#808080; box-shadow:1px 0 0 #fff; }
+  .aim-log { flex:1; min-height:0; overflow:auto; margin:5px; padding:5px 7px;
+    background:#fff; border:2px inset #fff; font-size:13px; line-height:1.4;
+    font-family:Arial, Helvetica, sans-serif; color:#000; }
+  .aim-line { margin:2px 0; word-wrap:break-word; overflow-wrap:anywhere; }
+  .aim-line .sn { font-weight:700; }
+  .aim-line.them .sn { color:#c00000; }
+  .aim-line.me .sn { color:#0000c0; }
+  /* route readout: the chat path (kind · scope · host) and live tok/s, so the
+     control → runtime hop reads at a glance. Hidden for canned/demo buddies. */
+  .aim-route { display:none; align-items:center; gap:5px; padding:1px 8px;
+    font-size:10px; color:#4a4a4a; font-family:"MS Sans Serif", Tahoma, sans-serif;
+    background:#d9d9d9; border-bottom:1px solid #b7b7b7; }
+  .aim-route.on { display:flex; }
+  .aim-route .chip { padding:0 4px; border:1px solid #a9a9a9; border-radius:2px;
+    background:#efefef; text-transform:lowercase; }
+  .aim-route .chip.tailnet, .aim-route .chip.open { color:#0a660a; border-color:#8fbf8f; }
+  .aim-route .chip.loopback, .aim-route .chip.unknown { color:#8a5a00; border-color:#c9a96a; }
+  .aim-route .tps { margin-left:auto; font-variant-numeric:tabular-nums; }
+  .aim-sys { text-align:center; color:#808080; font-size:11px; font-style:italic;
+    margin:6px 0; font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .aim-sys b { color:#606060; font-style:normal; }
+  .aim-sys a { color:#0000c0; cursor:pointer; text-decoration:underline; font-style:normal; }
+  .aim-typing { min-height:15px; padding:0 12px 2px; font-size:11px; color:#707070;
+    font-style:italic; font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .aim-cwrap { margin:0 5px 5px; display:flex; flex-direction:column;
+    background:#fff; border:2px inset #fff; }
+  .aim-cwrap.dis { background:#e4e4e4; }
+  .aim-input { flex:1; min-height:40px; max-height:96px; resize:none; border:0; outline:0;
+    padding:5px 7px; font-size:13px; font-family:Arial, Helvetica, sans-serif;
+    background:transparent; color:#000; }
+  .aim-input:disabled { color:#808080; }
+  .aim-crow { display:flex; justify-content:flex-end; gap:6px; padding:4px;
+    border-top:1px solid #d0d0d0; background:#ececec; }
+  .aim-warn { margin-right:auto; align-self:center; font-size:11px; color:#808080;
+    font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .aim-send { display:flex; align-items:center; gap:6px; padding:3px 14px; cursor:pointer;
+    font-family:"MS Sans Serif", Tahoma, sans-serif; font-size:12px; font-weight:700; color:#000;
+    background:#c0c0c0; border:2px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .aim-send:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .aim-send:disabled { color:#808080; cursor:default; }
+  .aim-send .rr { color:#c00000; }
+
+  /* ---- payphone → Win9x taskbar + Start menu -------------------------------
+     A working Windows-95 taskbar pinned to the bottom of the teal desktop.
+     Start (left) pops the classic menu whose "Shut Down…" clears the app and
+     drops you back at the launcher. The tray (right) holds a live clock and a
+     thumb-reachable Back button that quietly does the same. Reuses the beige
+     bevel vocabulary the .aim-* / .pay-* rules already established. */
+  .pay-taskbar { position:absolute; left:0; right:0; bottom:0; height:34px; z-index:6;
+    display:flex; align-items:center; gap:4px; padding:2px 3px;
+    background:#c0c0c0; border-top:2px solid #dfdfdf; box-shadow: inset 0 1px 0 #fff;
+    font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .pay-start { display:flex; align-items:center; gap:5px; height:26px; padding:0 9px 0 5px;
+    background:#c0c0c0; border:1px solid #000; font-size:13px; font-weight:700; color:#000;
+    cursor:pointer; flex:0 0 auto;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .pay-start.on, .pay-start:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .pay-start.on .pay-flag, .pay-start:active .pay-flag { transform:translate(1px,1px); }
+  .pay-flag { width:18px; height:16px; flex:0 0 auto; }
+  .pay-tb-sep { flex:1; }
+  .pay-tray { display:flex; align-items:center; gap:7px; height:26px; padding:0 5px 0 9px;
+    flex:0 0 auto; box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .pay-clock { font-size:12px; color:#000; min-width:58px; text-align:center;
+    user-select:none; cursor:default; }
+  .pay-back { display:flex; align-items:center; gap:5px; height:24px; padding:0 13px 0 9px;
+    background:#c0c0c0; border:1px solid #000; font-size:12px; font-weight:700; color:#000;
+    cursor:pointer; flex:0 0 auto; font-family:"MS Sans Serif", Tahoma, sans-serif;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .pay-back:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .pay-back .pay-back-ar { font-size:14px; line-height:1; }
+
+  .pay-startmenu { position:absolute; left:3px; bottom:34px; z-index:7; display:none;
+    min-width:196px; padding:3px; background:#c0c0c0; border:1px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #dfdfdf,
+      inset -2px -2px 0 #808080, inset 2px 2px 0 #fff, 2px 2px 0 rgba(0,0,0,.4);
+    font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .pay-startmenu.on { display:flex; }
+  .pay-sm-rail { width:27px; flex:0 0 auto; margin-right:3px;
+    background:linear-gradient(#00007b,#1084d0); }
+  .pay-sm-rail span { display:block; writing-mode:vertical-rl; transform:rotate(180deg);
+    padding:8px 1px 10px; color:#fff; font-size:15px; font-weight:700; letter-spacing:.5px; }
+  .pay-sm-rail span i { font-style:normal; font-weight:400; opacity:.8; }
+  .pay-sm-list { flex:1; display:flex; flex-direction:column; }
+  .pay-sm-item { display:flex; align-items:center; gap:9px; padding:5px 20px 5px 6px;
+    font-size:13px; color:#000; cursor:pointer; white-space:nowrap; text-align:left;
+    background:transparent; border:0; width:100%; }
+  .pay-sm-item:hover, .pay-sm-item:focus { background:#00007b; color:#fff; outline:none; }
+  .pay-sm-ico { width:22px; flex:0 0 auto; text-align:center; font-size:15px; }
+  .pay-sm-item u { text-underline-offset:2px; }
+  .pay-sm-sep { height:0; margin:3px 3px 3px 33px; border-top:1px solid #808080;
+    box-shadow:0 1px 0 #fff; }
+
+  @media (max-width:560px){
+    .aim-stage { width:100%; height:100%; }
+    .aim-bl { left:50%; top:50%; transform:translate(-50%,-50%); width:min(300px,94vw);
+      height:min(460px,84vh); }
+    .aim-im { position:absolute; inset:0; width:100%; height:100%; top:0; right:0; }
+    .aim-stage.im-open .aim-bl { visibility:hidden; }
+  }

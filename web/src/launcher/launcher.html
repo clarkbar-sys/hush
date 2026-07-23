@@ -1,0 +1,136 @@
+<div id="homeScreen" role="dialog" aria-label="hush launcher" hidden>
+  <div class="home-phone">
+    <div class="home-screen">
+      <div class="home-status">
+        <span class="home-carrier"><span class="home-bars"><i></i><i></i><i></i><i></i><i></i></span>clarkbar.sys</span>
+        <span class="spacer"></span>
+        <span class="home-clock" id="homeClock">--:--</span>
+        <span class="spacer"></span>
+        <span class="home-batt"><span><b></b></span></span>
+      </div>
+      <div class="home-header">
+        <div class="brand"><span class="dot-h"></span><b>hush</b></div>
+        <button class="chip ver" id="verChip" type="button" hidden></button>
+      </div>
+      <div class="home-grid">
+        <button class="home-app" id="homeHush" data-tile="fleet" type="button" aria-label="Open fleet">
+          <span class="home-icon"><img src="/icon-192.png" alt="" width="57" height="57" draggable="false"></span>
+          <span class="home-label">fleet</span>
+        </button>
+        <button class="home-app" id="homePayphone" data-tile="payphone" type="button" aria-label="Open payphone">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="15" cy="5.2" r="2.2"></circle>
+            <path d="M15 7.6 11.5 13"></path>
+            <path d="M11.5 13 15.5 16"></path>
+            <path d="M15.5 16 13.5 21"></path>
+            <path d="M11.5 13 5.5 17.5"></path>
+            <path d="M11.5 13 8.7 8.3 6.7 7"></path>
+            <circle cx="6.7" cy="7" r="1.1"></circle>
+          </svg></span>
+          <span class="home-label">payphone</span>
+        </button>
+        <button class="home-app" id="homeGithub" data-tile="github" type="button" aria-label="Browse clarkbar.sys repos on GitHub">
+          <span class="home-icon"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></span>
+          <span class="home-label">github</span>
+        </button>
+        <a class="home-app" id="homeTally" data-tile="tally" href="https://tally/" target="_blank" rel="noopener" aria-label="Open tally">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 4v16M10 4v16M14 4v16M18 4v16"></path>
+            <path d="M3 15 21 7"></path>
+          </svg></span>
+          <span class="home-label">tally</span>
+        </a>
+        <button class="home-app" id="homePlug" data-tile="plug" type="button" aria-label="Open plug — data sources">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 2v6M15 2v6"></path>
+            <path d="M7 8h10v2a5 5 0 0 1-10 0V8z"></path>
+            <path d="M12 15v7"></path>
+          </svg></span>
+          <span class="home-label">plug</span>
+        </button>
+        <button class="home-app" id="homeRiff" data-tile="riff" type="button" aria-label="Open riff together">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="6" y="2.5" width="12" height="19" rx="2.4"></rect>
+            <rect x="8.2" y="5" width="7.6" height="5" rx="1"></rect>
+            <path d="M9 13.5h6M9 16.2h6M9 18.9h3"></path>
+          </svg></span>
+          <span class="home-label">riff</span>
+        </button>
+      </div>
+      <div class="home-edit-hint" id="homeEditHint" aria-hidden="true">Drag to rearrange · tap the wallpaper when you're done</div>
+      <div class="home-dots" aria-hidden="true"><i class="on"></i></div>
+      <div class="gh-app" id="githubApp" role="dialog" aria-label="clarkbar.sys on GitHub" aria-modal="true">
+        <div class="gh-top">
+          <button class="gh-back" id="githubBack" type="button" aria-label="Back to launcher">‹ Home</button>
+          <span class="gh-top-title">clarkbar.sys</span>
+          <a class="gh-org" id="githubOrgLink" href="https://github.com/clarkbar-sys" target="_blank" rel="noopener" aria-label="Open the clarkbar.sys organization on GitHub">↗</a>
+        </div>
+        <div class="gh-list" id="githubList" aria-live="polite"></div>
+      </div>
+      <!-- plug app: a scoping preview of plug's three PII-domain tiers. Reuses
+           the gh-app slide-in shell; the tiers are read-only "coming soon" rows
+           (plug has no implementation yet). See launcher JS. -->
+      <div class="gh-app plug-app" id="plugApp" role="dialog" aria-label="plug — data sources" aria-modal="true">
+        <div class="gh-top">
+          <button class="gh-back" id="plugBack" type="button" aria-label="Back to launcher">‹ Home</button>
+          <span class="gh-top-title">plug</span>
+          <a class="gh-org" href="https://github.com/clarkbar-sys/plug" target="_blank" rel="noopener" aria-label="Open the plug repository on GitHub">↗</a>
+        </div>
+        <div class="gh-list">
+          <p class="plug-tag">The plug is who supplies you.</p>
+          <div class="gh-repo plug-tier">
+            <span class="gh-repo-icon plug-ico-rep" aria-hidden="true">R</span>
+            <span class="gh-repo-body">
+              <span class="gh-repo-name">rep</span>
+              <span class="gh-repo-desc">public — Spotify, GitHub, Steam, Strava</span>
+            </span>
+            <span class="plug-soon-pill">soon</span>
+          </div>
+          <div class="gh-repo plug-tier">
+            <span class="gh-repo-icon plug-ico-crib" aria-hidden="true">C</span>
+            <span class="gh-repo-body">
+              <span class="gh-repo-name">crib</span>
+              <span class="gh-repo-desc">personal — calendar, photos, health</span>
+            </span>
+            <span class="plug-soon-pill">soon</span>
+          </div>
+          <div class="gh-repo plug-tier">
+            <span class="gh-repo-icon plug-ico-bag" aria-hidden="true">B</span>
+            <span class="gh-repo-body">
+              <span class="gh-repo-name">bag</span>
+              <span class="gh-repo-desc">credential-adjacent — Gmail, bank</span>
+            </span>
+            <span class="plug-soon-pill">soon</span>
+          </div>
+          <p class="gh-note">Coming soon — plug is still scoping.<br>
+            <a href="https://github.com/clarkbar-sys/plug" target="_blank" rel="noopener">Follow along on GitHub ↗</a></p>
+        </div>
+      </div>
+      <!-- riff app: "riff together", still warming up. Reuses the gh-app slide-in
+           shell for a 90s pager coming-soon screen — a green-LCD beeper reading
+           COMING SOON, with a Try me button that pages your phone (a local
+           notification via the service worker). See launcher JS. -->
+      <div class="gh-app riff-app" id="riffApp" role="dialog" aria-label="riff together" aria-modal="true">
+        <div class="gh-top">
+          <button class="gh-back" id="riffBack" type="button" aria-label="Back to launcher">‹ Home</button>
+          <span class="gh-top-title">riff together</span>
+          <span class="gh-org" aria-hidden="true">📟</span>
+        </div>
+        <div class="gh-list riff-list">
+          <div class="pager" aria-hidden="true">
+            <div class="pager-lcd">
+              <div class="pager-lcd-row">*RIFF*</div>
+              <div class="pager-lcd-big" id="riffLcd">COMING SOON</div>
+              <div class="pager-lcd-row pager-lcd-sub" id="riffSub">TAP TRY ME 2 GET PAGED</div>
+            </div>
+            <div class="pager-btns"><i></i><i></i><i></i></div>
+          </div>
+          <button class="riff-try" id="riffTry" type="button">📟 Try me</button>
+          <p class="gh-note riff-note">riff together is warming up.<br>
+            Tap <b>Try me</b> and we'll page your phone. 📟</p>
+        </div>
+      </div>
+    </div>
+    <div class="home-btn" aria-hidden="true"></div>
+  </div>
+</div>

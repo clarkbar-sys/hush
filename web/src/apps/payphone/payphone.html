@@ -1,0 +1,92 @@
+<!-- payphone app: an AOL-era buddy list of LLM chats. The buddies are grouped
+     into Active (online, they answer back) and Archive (signed-off transcripts).
+     Clicking a buddy opens a classic Instant Message window. See launcher JS. -->
+<div id="payphoneScreen" role="dialog" aria-label="payphone — buddy list" aria-modal="true">
+  <div class="aim-stage" id="aimStage">
+
+    <!-- buddy list -->
+    <div class="aim-win aim-bl" id="aimBuddyList">
+      <div class="aim-tbar">
+        <svg class="aim-runner" viewBox="0 0 24 24" aria-hidden="true"><path fill="#ffd400" stroke="#000" stroke-width="1" stroke-linejoin="round" d="M13.6 2.6a2 2 0 1 1-2.8 2.8 2 2 0 0 1 2.8-2.8zM10.7 7.2l3-.2c.7 0 1.3.4 1.6 1l1.2 2.3 2.9 1.1-.7 1.8-3.4-1.3-1-1.9-1 3.3 2.5 2.4.5 4.6-1.9.2-.5-3.9-2.2 2-1.6 3.6-1.8-.8 1.9-4.3.5-2.6-2.1 1.3-1.4 2.9L4 12l.6-1.8 2.6.6 2.1-2.5c.3-.4.8-.8 1.4-1.1z"/></svg>
+        <span class="aim-t-txt">Buddy List</span>
+        <span class="aim-tbtn" id="aimBlMin" role="button" tabindex="0" aria-label="Minimize">_</span>
+        <span class="aim-tbtn" id="aimBlClose" role="button" tabindex="0" aria-label="Close and hang up">×</span>
+      </div>
+      <div class="aim-tabs">
+        <span class="aim-tab on">Online</span>
+        <span class="aim-tab off">List&nbsp;Setup</span>
+      </div>
+      <div class="aim-blwrap">
+        <div class="aim-scroll" id="aimGroups" role="tree" aria-label="Buddy groups"></div>
+        <div class="aim-blfoot">
+          <span class="aim-me">Signed on as <b>guest@clarkbar</b></span>
+          <button class="aim-icobtn" id="aimSound" type="button" aria-label="Toggle sound" title="Sounds: on">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"></path><path class="aim-sndwave" d="M16 9a4 4 0 0 1 0 6"></path></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- instant message window -->
+    <div class="aim-win aim-im" id="aimIM" role="dialog" aria-label="Instant Message" aria-modal="false">
+      <div class="aim-tbar">
+        <svg class="aim-runner" viewBox="0 0 24 24" aria-hidden="true"><path fill="#ffd400" stroke="#000" stroke-width="1" stroke-linejoin="round" d="M13.6 2.6a2 2 0 1 1-2.8 2.8 2 2 0 0 1 2.8-2.8zM10.7 7.2l3-.2c.7 0 1.3.4 1.6 1l1.2 2.3 2.9 1.1-.7 1.8-3.4-1.3-1-1.9-1 3.3 2.5 2.4.5 4.6-1.9.2-.5-3.9-2.2 2-1.6 3.6-1.8-.8 1.9-4.3.5-2.6-2.1 1.3-1.4 2.9L4 12l.6-1.8 2.6.6 2.1-2.5c.3-.4.8-.8 1.4-1.1z"/></svg>
+        <span class="aim-t-txt" id="aimImTitle">Instant Message</span>
+        <span class="aim-tbtn" id="aimImClose" role="button" tabindex="0" aria-label="Close conversation">×</span>
+      </div>
+      <div class="aim-fmt" aria-hidden="true">
+        <span class="aim-fbtn" title="Font">A</span>
+        <span class="aim-fbtn b" title="Bold">B</span>
+        <span class="aim-fbtn i" title="Italic">I</span>
+        <span class="aim-fbtn u" title="Underline">U</span>
+        <span class="aim-fsep"></span>
+        <span class="aim-fbtn" title="Text color"><span class="sw" style="background:#000"></span></span>
+        <span class="aim-fbtn" title="Link">🔗</span>
+        <span class="aim-fsep"></span>
+        <span class="aim-fbtn" id="aimSmiley" title="Insert smiley" role="button" tabindex="0" aria-hidden="false" aria-label="Insert smiley">☺</span>
+      </div>
+      <div class="aim-route" id="aimRoute" aria-hidden="true"></div>
+      <div class="aim-log" id="aimLog" aria-live="polite" aria-atomic="false"></div>
+      <div class="aim-typing" id="aimTyping" aria-live="polite"></div>
+      <div class="aim-cwrap" id="aimCwrap">
+        <textarea class="aim-input" id="aimInput" rows="2" placeholder="Type a message…" aria-label="Message"></textarea>
+        <div class="aim-crow">
+          <span class="aim-warn" id="aimWarn"></span>
+          <button class="aim-send" id="aimSendBtn" type="button"><span class="rr">»</span> Send</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Win95 taskbar: Start menu on the left (its "Shut Down…" clears the app
+       and returns to the launcher); a live clock and a thumb-reachable Back
+       button in the tray on the right. All client-side theatre, same joke. -->
+  <div class="pay-startmenu" id="payStartMenu" role="menu" aria-label="Start menu">
+    <div class="pay-sm-rail" aria-hidden="true"><span>hush&nbsp;<i>98</i></span></div>
+    <div class="pay-sm-list">
+      <button class="pay-sm-item" type="button" role="menuitem" data-pay-sm="noop"><span class="pay-sm-ico">📁</span><u>P</u>rograms</button>
+      <button class="pay-sm-item" type="button" role="menuitem" data-pay-sm="noop"><span class="pay-sm-ico">📄</span><u>D</u>ocuments</button>
+      <button class="pay-sm-item" type="button" role="menuitem" data-pay-sm="noop"><span class="pay-sm-ico">⚙️</span><u>S</u>ettings</button>
+      <button class="pay-sm-item" type="button" role="menuitem" data-pay-sm="noop"><span class="pay-sm-ico">🔎</span><u>F</u>ind</button>
+      <button class="pay-sm-item" type="button" role="menuitem" data-pay-sm="noop"><span class="pay-sm-ico">❔</span><u>H</u>elp</button>
+      <div class="pay-sm-sep"></div>
+      <button class="pay-sm-item" type="button" role="menuitem" data-pay-sm="shutdown"><span class="pay-sm-ico">🖥️</span>Sh<u>u</u>t Down…</button>
+    </div>
+  </div>
+  <div class="pay-taskbar">
+    <button class="pay-start" id="payStartBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="payStartMenu">
+      <svg class="pay-flag" viewBox="0 0 20 18" aria-hidden="true"><g transform="skewY(-8)">
+        <rect x="1" y="4" width="8" height="6" rx="1" fill="#f24e29"></rect>
+        <rect x="10" y="3.2" width="8" height="6" rx="1" fill="#7cbb00"></rect>
+        <rect x="1" y="11" width="8" height="6" rx="1" fill="#02a4ef"></rect>
+        <rect x="10" y="10.2" width="8" height="6" rx="1" fill="#ffb901"></rect>
+      </g></svg>Start
+    </button>
+    <span class="pay-tb-sep"></span>
+    <div class="pay-tray">
+      <span class="pay-clock" id="payClock" aria-hidden="true">--:--</span>
+      <button class="pay-back" id="payBack" type="button" aria-label="Back to launcher"><span class="pay-back-ar">⬅</span>Back</button>
+    </div>
+  </div>
+</div>

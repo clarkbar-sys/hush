@@ -1,0 +1,75 @@
+  :root {
+    /* cyber — the console's single locked theme. neon on void, cyan × magenta.
+       everything downstream reads these vars, so the whole UI re-skins from here. */
+    --ground: #060210;
+    --panel: #0d0620;
+    --panel-2: #140b33;
+    --border: #2c1e66;
+    --border-soft: #1b1240;
+    --text: #e6dcff;
+    --muted: #9d86d9;
+    --faint: #6a54a0;
+    --accent: #19e3ff;
+    --accent-soft: #06313f;
+    --ring2: #ff2bd6;
+    --good: #2bffa6;
+    --good-soft: #06331f;
+    --warn: #ffd23f;
+    --warn-soft: #332905;
+    --crit: #ff3d6e;
+    --crit-soft: #360712;
+    --shadow: 0 0 0 1px rgba(25,227,255,.05), 0 2px 0 rgba(0,0,0,.55);
+    --scan: rgba(25,227,255,.03);   /* ambient scanline wash */
+    --grid: rgba(120,80,220,.06);   /* blueprint grid        */
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: var(--mono);            /* locked: the whole console runs terminal-mono */
+    --r: 0px;                       /* sharp HUD corners      */
+    --tick: 9px;                    /* card corner-bracket size */
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.45;
+    /* blueprint grid + scanline wash over the void */
+    background:
+      repeating-linear-gradient(var(--scan) 0 1px, transparent 1px 3px),
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 38px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 38px 100%,
+      var(--ground);
+  }
+  .wrap { max-width: 480px; margin: 0 auto; min-height: 100vh;
+    background: transparent; position: relative;
+    display: flex; flex-direction: column; }
+  @media (min-width: 900px) { .wrap { max-width: 900px; } }
+  #app { flex: 1; }
+
+  /* ---- top bar ---- */
+  header {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    background: color-mix(in srgb, var(--ground) 82%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .brand { display: flex; align-items: baseline; gap: 8px; }
+  .brand b { font-size: 17px; letter-spacing: -.02em; font-weight: 700; }
+  .brand .dot-h { width:7px; height:7px; border-radius:50%; background:var(--accent);
+    display:inline-block; box-shadow:0 0 0 3px var(--accent-soft); }
+  .spacer { flex: 1; }
+  .chip {
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 9px; border: 1px solid var(--border); border-radius: 999px;
+    background: var(--panel); white-space: nowrap;
+  }
+  .chip .live { width:6px; height:6px; border-radius:50%; background:var(--accent);
+    box-shadow:0 0 0 0 var(--accent); animation: pulse 2.4s infinite; }
+  .chip.demo { color: var(--warn); border-color: var(--warn-soft); }
+  .chip.demo .live { background: var(--warn); animation: none; }
+  .chip.down { color: var(--crit); border-color: var(--crit-soft); }
+  .chip.down .live { background: var(--crit); animation: none; }
+
