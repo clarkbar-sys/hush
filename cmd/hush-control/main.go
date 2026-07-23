@@ -352,11 +352,21 @@ func buildMux(store *agentStore, discoverer *discoverer, dialer *agentDialer, we
 			log.Printf("encode version: %v", err)
 		}
 	})
+	// One file source drives both routes so dev (-web dir) and prod (embed)
+	// stay identical.
+	var files http.FileSystem = http.FS(web.FS)
 	if webDir != "" {
-		mux.Handle("/", http.FileServer(http.Dir(webDir)))
-	} else {
-		mux.Handle("/", http.FileServerFS(web.FS))
+		files = http.Dir(webDir)
 	}
+	fileServer := http.FileServer(files)
+	// /wu — the launcher ("front door"): a pretty URL for wu.html so the fleet
+	// opens at hush.<tailnet>.ts.net/wu. Rewriting the path lets the same file
+	// server answer it whether the asset is embedded or on disk.
+	mux.HandleFunc("/wu", func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = "/wu.html"
+		fileServer.ServeHTTP(w, r)
+	})
+	mux.Handle("/", fileServer)
 	return mux, fc
 }
 

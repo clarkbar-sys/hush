@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070c">
+<title>wu — your apps</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  /*
+    wu — the front door. A deliberately quiet launcher so each app keeps its own
+    colour: hush stays violet/cyan, payphone stays phosphor-green, and wu itself
+    is neutral terminal-dark. Everything runs mono, like both apps do.
+
+    Committed single-theme dark on purpose: both apps live in a dark terminal
+    world, so the door does too.
+  */
+  :root{
+    --ground:#05070c;
+    --panel:#0a0e16;
+    --line:#1a2233;
+    --text:#e9eef7;
+    --muted:#8592a8;
+    --faint:#556074;
+    --steel:#c6d2e6;
+    /* borrowed app accents */
+    --hush-cyan:#19e3ff; --hush-violet:#9d86d9; --hush-ground:#0b0620;
+    --pay-green:#00ff66; --pay-text:#a7ffbf; --pay-ground:#04140b;
+    /* backup posture (hush) */
+    --good:#2bffa6; --warn:#ffd23f; --crit:#ff3d6e;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{
+    font-family:var(--mono);
+    color:var(--text);
+    background:radial-gradient(130% 80% at 50% -5%, #0a1120 0%, var(--ground) 55%, #03050a 100%);
+    background-attachment:fixed;
+    -webkit-font-smoothing:antialiased;
+    padding:max(22px,env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));
+    display:flex; justify-content:center;
+  }
+  body::before{ /* faint desk grid */
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-image:
+      linear-gradient(rgba(120,140,180,.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,140,180,.045) 1px, transparent 1px);
+    background-size:34px 34px;
+    mask:radial-gradient(80% 70% at 50% 30%, #000 25%, transparent 100%);
+  }
+  .wrap{position:relative;z-index:1;width:100%;max-width:460px;display:flex;flex-direction:column;gap:18px}
+
+  /* ---- header ---- */
+  .tailchip{display:inline-flex;align-items:center;gap:7px;align-self:flex-start;
+    border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:11px;color:var(--muted)}
+  .tailchip .d{width:6px;height:6px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good)}
+  .tailchip b{color:var(--hush-cyan);font-weight:600}
+
+  .hello{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:6px 2px 0}
+  .hello b{color:var(--muted);font-weight:600}
+  .wu{display:flex;align-items:flex-end;gap:11px;margin:2px 2px 0}
+  .wu h1{font-size:clamp(58px,17vw,80px);line-height:.82;margin:0;font-weight:700;letter-spacing:-.045em;
+    color:var(--text);text-shadow:0 0 28px rgba(198,210,230,.14)}
+  .wu .cur{width:13px;height:13px;margin-bottom:13px;background:var(--steel);border-radius:2px;
+    box-shadow:0 0 14px rgba(198,210,230,.5);animation:blink 1.2s steps(1) infinite}
+  .sub{color:var(--muted);font-size:12.5px;margin:10px 2px 0}
+  .sub .node{color:var(--hush-cyan)}
+
+  .lbl{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--faint);padding:6px 2px 0}
+
+  /* ---- app tiles ---- */
+  .apps{display:flex;flex-direction:column;gap:13px}
+  .app{
+    position:relative;text-decoration:none;color:inherit;
+    border:1px solid var(--line);border-radius:20px;padding:16px 15px;background:var(--panel);
+    display:grid;grid-template-columns:54px 1fr auto;gap:15px;align-items:center;overflow:hidden;
+    transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;
+  }
+  a.app{cursor:pointer}
+  a.app:active{transform:scale(.985)}
+  a.app:focus-visible{outline:2px solid var(--steel);outline-offset:3px}
+  .app .glyph{width:54px;height:54px;border-radius:15px;display:grid;place-items:center;border:1px solid var(--line)}
+  .app .name{font-size:19px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .app .k{font-size:9px;border-radius:5px;padding:1px 6px;letter-spacing:.13em;text-transform:uppercase;
+    font-weight:600;border:1px solid var(--line);color:var(--muted)}
+  .app .tag{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.35}
+  .app .stat{margin-top:9px;display:flex;align-items:center;gap:7px;font-size:11px;color:var(--faint);flex-wrap:wrap}
+  .app .chev{color:var(--faint);font-size:22px;justify-self:end}
+  .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .live{position:relative}
+  .live::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid currentColor;
+    opacity:.4;animation:ring 2.2s ease-out infinite}
+  .fleet{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+  .fleet i{width:8px;height:8px;border-radius:2px;background:var(--good)}
+
+  /* skin: hush */
+  .app.hush{background:linear-gradient(150deg,var(--hush-ground),var(--panel) 70%);border-color:#241a55}
+  .app.hush:hover{border-color:color-mix(in srgb,var(--hush-cyan) 45%,#241a55);box-shadow:0 10px 40px -18px rgba(25,227,255,.4)}
+  .app.hush .glyph{background:#0d0620;border-color:#2c1e66}
+  .app.hush .name{color:var(--hush-violet)} .app.hush .name>span:first-child{color:#e6dcff}
+  .app.hush .k{color:var(--hush-cyan);border-color:#2c1e66}
+
+  /* skin: payphone */
+  .app.pay{background:linear-gradient(150deg,var(--pay-ground),var(--panel) 72%);border-color:#0f3d22}
+  .app.pay:hover{border-color:color-mix(in srgb,var(--pay-green) 45%,#0f3d22);box-shadow:0 10px 40px -18px rgba(0,255,102,.35)}
+  .app.pay .glyph{background:#061c10;border-color:#0f3d22}
+  .app.pay .name{color:var(--pay-text)}
+  .app.pay .k{color:var(--pay-green);border-color:#0f3d22}
+  .app.pay .stat{color:#4fae72}
+  .app.pay::before{content:"";position:absolute;left:0;right:0;height:42%;top:-42%;
+    background:linear-gradient(180deg,transparent,rgba(0,255,102,.06),transparent);
+    animation:scan 5.5s linear infinite;pointer-events:none}
+
+  /* skin: coming soon (any not-yet-built app) */
+  .app.soon{opacity:.72;border-style:dashed;cursor:default}
+  .app.soon .glyph{background:#0c1017;color:var(--faint)}
+  .app.soon .name{color:var(--muted)}
+  .app.soon .ribbon{position:absolute;top:11px;right:-30px;transform:rotate(45deg);
+    background:var(--line);color:var(--muted);font-size:8.5px;letter-spacing:.18em;
+    text-transform:uppercase;padding:3px 34px;font-weight:600}
+
+  /* ---- CLI footer ---- */
+  .cli{border:1px dashed var(--line);border-radius:14px;padding:12px 13px;color:var(--muted);
+    font-size:11.5px;background:rgba(255,255,255,.015);word-break:break-word}
+  .cli .p{color:var(--pay-green)} .cli .c{color:var(--text)}
+  .cli small{display:block;margin-top:7px;color:var(--faint);font-size:10.5px}
+  .foot{text-align:center;color:var(--faint);font-size:10px;letter-spacing:.14em;text-transform:uppercase;padding-top:2px}
+
+  @keyframes blink{50%{opacity:0}}
+  @keyframes ring{0%{transform:scale(.6);opacity:.6}100%{transform:scale(1.9);opacity:0}}
+  @keyframes scan{0%{top:-42%}100%{top:142%}}
+  @media (prefers-reduced-motion:reduce){
+    .wu .cur{animation:none}.live::after{display:none}.app.pay::before{display:none}
+  }
+</style>
+</head>
+<body>
+  <main class="wrap">
+    <span class="tailchip"><span class="d"></span> tailnet · <b id="node">hush</b></span>
+
+    <div>
+      <div class="hello" id="hello">welcome back</div>
+      <div class="wu"><h1>wu</h1><span class="cur"></span></div>
+      <div class="sub">your apps, one door — on <span class="node" id="host">hush.tailnet.ts.net</span></div>
+    </div>
+
+    <div>
+      <div class="lbl"><span>your apps</span><span id="count"></span></div>
+      <div class="apps" id="apps"></div>
+    </div>
+
+    <div class="cli">
+      <span class="p">$</span> git diff | <span class="c">payphone dial</span> qwen3-coder "review this"
+      <small>same core, two doors — the CLI pipes into the same switchboard.</small>
+    </div>
+
+    <div class="foot">wu · front door to the tailnet</div>
+  </main>
+
+<script>
+  // ────────────────────────────────────────────────────────────────────────
+  //  THE WHOLE ARCHITECTURE: to add an app, append one entry below.
+  //  No routing, no framework, no build step. A launcher is just a list.
+  //
+  //    state:'live'  → tappable tile, needs href
+  //    state:'soon'  → dimmed "coming soon" placeholder, href ignored
+  //    skin: 'hush' | 'pay' | 'soon' | ''   (drives the tile's colour)
+  // ────────────────────────────────────────────────────────────────────────
+  const APPS = [
+    {
+      id:'hush', name:'hush', badge:'backups', state:'live', skin:'hush',
+      href:'/',                       // hush is the endpoint; the console lives at /
+      tag:'know your fleet is backed up — from your phone.',
+      glyph:`<div class="fleet">
+               <i></i><i></i><i style="background:var(--warn)"></i>
+               <i></i><i></i><i></i>
+               <i style="background:var(--crit)"></i><i></i><i></i>
+             </div>`,
+      status:`<span class="dot live" style="background:var(--good);color:var(--good)"></span>
+              <span>6 protected</span>
+              <span class="dot" style="background:var(--warn)"></span><span>1 at risk</span>
+              <span class="dot" style="background:var(--crit)"></span><span>1 failed</span>`,
+    },
+    {
+      id:'payphone', name:'payphone', badge:'on hook', state:'live', skin:'pay',
+      href:'https://payphone.tailnet.ts.net',   // ← set to your payphone node's URL
+      tag:'dial a model — exact change only.',
+      glyph:`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--pay-green)"
+                  stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+               <path d="M4 5c0-1 1-2 2-2h2l1.5 4L7 9c1 2 3 4 5 5l2-2.5L18 13v2c0 1-1 2-2 2C9.5 17 4 11.5 4 5z"/>
+             </svg>`,
+      status:`<span class="dot live" style="background:var(--pay-green);color:var(--pay-green)"></span>
+              <span>dial tone · ready</span><span>· last: qwen3-coder · 2h</span>`,
+    },
+    // ── a placeholder to show the "coming soon" pattern (and hush's roadmap) ──
+    {
+      id:'relay', name:'relay', badge:'coming soon', state:'soon', skin:'soon',
+      href:null,
+      tag:'push + email alerts for your fleet — so you hear about the box that isn’t safe.',
+      glyph:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+               <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/>
+             </svg>`,
+      status:`<span>in the works</span>`,
+    },
+  ];
+
+  // ── renderer: turns the list above into tiles. This is all of wu. ──
+  const tile = (a) => {
+    const el = document.createElement(a.state === 'live' ? 'a' : 'div');
+    el.className = `app ${a.skin || ''}`.trim();
+    if (a.state === 'live' && a.href) el.href = a.href;
+    el.innerHTML = `
+      <div class="glyph">${a.glyph}</div>
+      <div>
+        <div class="name"><span>${a.name}</span>${a.badge ? `<span class="k">${a.badge}</span>` : ''}</div>
+        <div class="tag">${a.tag}</div>
+        <div class="stat">${a.status || ''}</div>
+      </div>
+      ${a.state === 'live' ? '<div class="chev">›</div>' : '<span class="ribbon">soon</span>'}`;
+    return el;
+  };
+
+  const list = document.getElementById('apps');
+  APPS.forEach((a) => list.appendChild(tile(a)));
+  document.getElementById('count').textContent = APPS.length;
+
+  // ── little niceties: greeting by time of day, real node name from the URL ──
+  const h = new Date().getHours();
+  const part = h < 5 ? 'still up' : h < 12 ? 'good morning' : h < 18 ? 'good afternoon' : 'good evening';
+  const day = new Date().toLocaleDateString(undefined, { weekday:'short', day:'numeric', month:'short' });
+  document.getElementById('hello').innerHTML = `${part} · <b>${day.toLowerCase()}</b>`;
+
+  const host = location.hostname;
+  if (host && host !== 'localhost' && !/^[0-9.]+$/.test(host)) {
+    document.getElementById('host').textContent = host;
+    document.getElementById('node').textContent = host.split('.')[0];
+  }
+</script>
+</body>
+</html>

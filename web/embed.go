@@ -11,5 +11,5 @@ import "embed"
 // installable as an Android home-screen app. Data streams in over the API at
 // runtime; these are just the shell.
 //
-//go:embed index.html manifest.webmanifest sw.js icon-192.png icon-512.png icon-192-maskable.png icon-512-maskable.png apple-touch-icon.png
+//go:embed index.html wu.html manifest.webmanifest sw.js icon-192.png icon-512.png icon-192-maskable.png icon-512-maskable.png apple-touch-icon.png
 var FS embed.FS
