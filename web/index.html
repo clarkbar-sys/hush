@@ -876,6 +876,11 @@
   .home-batt span { width:20px; height:9px; border:1px solid var(--muted); position:relative; }
   .home-batt span::after { content:""; position:absolute; right:-3px; top:2px; width:2px; height:3px; background:var(--muted); }
   .home-batt span b { position:absolute; inset:1px; width:82%; background:var(--good); }
+  /* header — hush brand + version only; the rest of the header bar (alerts,
+     reachable status) lives on the console itself since it's live fleet
+     state, not something the launcher needs to show. */
+  .home-header { display:flex; align-items:center; gap:10px; padding:11px 14px;
+    border-bottom:1px solid var(--border-soft); }
   /* app grid */
   .home-grid { flex:1; display:grid; grid-template-columns:repeat(3, 1fr); align-content:start;
     gap:14px 8px; padding:26px 18px; }
@@ -923,6 +928,11 @@
       <span class="spacer"></span>
       <span class="home-batt"><span><b></b></span></span>
     </div>
+    <div class="home-header">
+      <div class="brand"><span class="dot-h"></span><b>hush</b></div>
+      <div class="spacer"></div>
+      <button class="chip ver" id="verChip" type="button" hidden></button>
+    </div>
     <div class="home-grid">
       <button class="home-app" id="homeHush" type="button" aria-label="Open hush">
         <span class="home-icon"><img src="/icon-192.png" alt="" width="60" height="60" draggable="false"></span>
@@ -943,7 +953,6 @@
     </div>
     <div class="spacer"></div>
     <button class="chip alert-bell" id="alertBell" type="button" hidden aria-label="Backup alerts"></button>
-    <button class="chip ver" id="verChip" type="button" hidden></button>
     <div class="chip" id="statusChip"><span class="live"></span>connecting…</div>
   </header>
 
