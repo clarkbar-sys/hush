@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.15.0](https://github.com/clarkbar-sys/hush/compare/v2.14.0...v2.15.0) (2026-07-23)
+
+
+### Features
+
+* payphone → fleet inference — IM the tailnet's real llama.cpp models ([#244](https://github.com/clarkbar-sys/hush/issues/244)) ([494faf6](https://github.com/clarkbar-sys/hush/commit/494faf62f01411c6db004546177941dd03df4d48))
+* **web:** riff together launcher app — a 90s pager that pages your phone ([#249](https://github.com/clarkbar-sys/hush/issues/249)) ([76414c4](https://github.com/clarkbar-sys/hush/commit/76414c4242a87c6e92fbe0372f844b5e4613d0da))
+
 ## [2.14.0](https://github.com/clarkbar-sys/hush/compare/v2.13.0...v2.14.0) (2026-07-23)
 
 
