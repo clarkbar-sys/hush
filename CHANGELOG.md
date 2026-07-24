@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.20.0](https://github.com/clarkbar-sys/hush/compare/v2.19.0...v2.20.0) (2026-07-24)
+
+
+### Features
+
+* **sessions:** detect opencode servers and compose a sandboxed launcher ([#267](https://github.com/clarkbar-sys/hush/issues/267)) ([054eb96](https://github.com/clarkbar-sys/hush/commit/054eb96283ed7c29d7f43ea0ca218dfb29ec3a1c))
+
+
+### Documentation
+
+* docs/OPENCODE-SERVER.md; SESSIONS.md + README cross-references. ([054eb96](https://github.com/clarkbar-sys/hush/commit/054eb96283ed7c29d7f43ea0ca218dfb29ec3a1c))
+
 ## [2.19.0](https://github.com/clarkbar-sys/hush/compare/v2.18.0...v2.19.0) (2026-07-24)
 
 
