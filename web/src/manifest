@@ -28,6 +28,7 @@ apps/github/github.css            # github app + the shared gh-app slide-in shel
 apps/plug/plug.css                # plug app (reuses the gh-app shell)
 apps/riff/riff.css                # riff app (reuses the gh-app shell)
 apps/forgecraft/forgecraft.css    # forgecraft app (reuses the gh-app shell)
+apps/llmnuke/llmnuke.css          # LLMNUKE.EXE: hacked-Win95 warez agent sessions
 apps/payphone/payphone.css        # payphone: teal desktop, buddy list, IM, taskbar
 core/style-close.html             # </style></head><body>
 
@@ -38,6 +39,7 @@ apps/github/github.html           # github app panel (nested in the launcher fra
 apps/plug/plug.html               # plug app panel
 apps/riff/riff.html               # riff app panel
 apps/forgecraft/forgecraft.html   # forgecraft app panel (coming-soon crest)
+apps/llmnuke/llmnuke.html         # LLMNUKE.EXE full-screen desktop (demo + live crest)
 launcher/launcher.close.html      # closes the launcher home-screen/phone frame
 apps/payphone/payphone.html       # payphone buddy list, IM window, Win95 taskbar
 global/lostbar.html               # lost-connection banner markup
@@ -53,6 +55,7 @@ apps/github/github.js             # github app: fetch + render org repos
 apps/plug/plug.js                 # plug app: open/close the coming-soon panel
 apps/riff/riff.js                 # riff app: pager panel + Try-me notification
 apps/forgecraft/forgecraft.js     # forgecraft app: open/close the coming-soon panel
+apps/llmnuke/llmnuke.js           # LLMNUKE.EXE: agent-session desktop (demo/live probe)
 apps/tally/tally.js               # tally tile: resolve the tally node's host
 launcher/launcher.springboard.js  # reorderable springboard + IndexedDB prefs
 apps/fleet/fleet.js               # the fleet console + the go() bootstrap

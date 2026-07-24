@@ -1,0 +1,295 @@
+  /* ===== LLMNUKE.EXE — a hacked-Win95 cracktro skin for agent sessions =====
+     All state is client-side theatre; the whole app is namespaced .nuke-* so it
+     stays isolated in this folder (see web/src/README.md). Classic Win95 window
+     bevels, recoloured toxic: phosphor green on a scanlined CRT void, neon
+     title bars, l337 everywhere. Reveals with #llmnukeScreen.on, like payphone. */
+  #llmnukeScreen {
+    --nk-green:#39ff14; --nk-dim:#27b312; --nk-deep:#0c3a05;
+    --nk-blk:#010600; --nk-panel:#08120a; --nk-panel2:#0d1e0b;
+    --nk-face:#173f10;                 /* window-chrome face */
+    --nk-lite:#3f9b28; --nk-dark:#03150a;   /* bevel highlight / shadow */
+    --nk-amber:#ffd23f; --nk-mag:#ff2bd6; --nk-red:#ff3d6e;
+    --nk-mono: ui-monospace, "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    position:fixed; inset:0; z-index:1200;
+    display:none; flex-direction:column;
+    background:#000; color:var(--nk-green);
+    font-family:var(--nk-mono);
+    -webkit-font-smoothing:none; text-rendering:geometricPrecision;
+    opacity:0; transition:opacity .18s ease;
+  }
+  #llmnukeScreen.on { display:flex; opacity:1; }
+  /* [hidden] must win over the display rules below (e.g. .nuke-desk's flex), so
+     the boot / crest / desk branch toggled in JS actually hides. */
+  #llmnukeScreen [hidden] { display:none !important; }
+
+  /* CRT: green void, blueprint grid, scanline wash, vignette + faint flicker */
+  .nuke-crt {
+    position:relative; flex:1; min-height:0;
+    display:flex; flex-direction:column;
+    padding:14px 12px 0;
+    background:
+      radial-gradient(120% 80% at 50% -10%, rgba(57,255,20,.10), transparent 60%),
+      linear-gradient(rgba(57,255,20,.045) 1px, transparent 1px) 0 0 / 100% 30px,
+      linear-gradient(90deg, rgba(57,255,20,.045) 1px, transparent 1px) 0 0 / 30px 100%,
+      #010600;
+    overflow:hidden;
+    animation:nuke-flicker 5.5s infinite steps(60);
+  }
+  @keyframes nuke-flicker { 0%,97%{opacity:1} 98%{opacity:.86} 99%{opacity:.97} 100%{opacity:1} }
+  .nuke-crt::before {                       /* scanlines */
+    content:""; position:absolute; inset:0; pointer-events:none; z-index:40;
+    background:repeating-linear-gradient(transparent 0 2px, rgba(0,14,0,.32) 2px 3px);
+  }
+  .nuke-crt::after {                        /* vignette */
+    content:""; position:absolute; inset:0; pointer-events:none; z-index:41;
+    background:radial-gradient(130% 120% at 50% 45%, transparent 55%, rgba(0,0,0,.7));
+  }
+  .nuke-crt > * { position:relative; z-index:1; }
+
+  /* ---- detect splash ---- */
+  .nuke-boot { margin:auto; text-align:center; text-shadow:0 0 8px rgba(57,255,20,.7); }
+  .nuke-boot-art { margin:0 0 10px; font-size:12px; line-height:1.1; color:var(--nk-green);
+    filter:drop-shadow(0 0 6px rgba(57,255,20,.55)); }
+  .nuke-boot-txt { font-size:18px; font-weight:700; letter-spacing:.14em; }
+  .nuke-boot-sub { margin-top:8px; font-size:11px; color:var(--nk-dim); letter-spacing:.08em; }
+  .nuke-blink { animation:nuke-blink 1s steps(1) infinite; }
+  @keyframes nuke-blink { 50%{opacity:0} }
+
+  /* ---- LIVE coming-soon crest ---- */
+  .nuke-soon { margin:auto; text-align:center; padding:20px; max-width:440px; }
+  .nuke-crest { width:150px; height:150px; filter:drop-shadow(0 0 14px rgba(57,255,20,.6));
+    animation:nuke-pulse 2.6s ease-in-out infinite; }
+  @keyframes nuke-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+  .nuke-soon-title { margin-top:6px; font-size:16px; letter-spacing:.16em; color:var(--nk-dim); }
+  .nuke-soon-title b { display:block; font-size:30px; color:var(--nk-green); letter-spacing:.1em;
+    text-shadow:0 0 12px rgba(57,255,20,.7); }
+  .nuke-soon-note { margin:16px 0 10px; font-size:11.5px; line-height:1.8; color:var(--nk-dim); }
+  .nuke-soon-see { font-size:11px; color:var(--nk-green); opacity:.75; }
+  .nuke-mono { color:var(--nk-amber); }
+  .nuke-soon-back { margin-top:18px; font-family:var(--nk-mono); font-size:12px; letter-spacing:.1em;
+    color:var(--nk-green); background:var(--nk-face); border:0; padding:9px 18px; cursor:pointer;
+    box-shadow:inset 1px 1px 0 var(--nk-lite), inset -2px -2px 0 var(--nk-dark); }
+  .nuke-soon-back:active { box-shadow:inset -1px -1px 0 var(--nk-lite), inset 2px 2px 0 var(--nk-dark); }
+
+  /* ===== windows (Win95 bevel, toxic) ===== */
+  .nuke-desk { flex:1; min-height:0; display:flex; }
+  .nuke-desk.term-open .nuke-home { display:none; }
+  .nuke-desk:not(.term-open) .nuke-term { display:none; }
+  .nuke-win {
+    display:flex; flex-direction:column; flex:1; min-height:0;
+    width:100%; max-width:520px; margin:0 auto;
+    background:var(--nk-face);
+    padding:3px;
+    box-shadow:
+      inset -1px -1px 0 #000, inset 1px 1px 0 var(--nk-lite),
+      inset -2px -2px 0 var(--nk-dark), inset 2px 2px 0 var(--nk-panel2),
+      0 0 0 1px #000, 0 6px 24px rgba(0,0,0,.6);
+  }
+
+  /* title bar */
+  .nuke-tbar {
+    display:flex; align-items:center; gap:7px; flex:0 0 auto;
+    height:26px; padding:0 4px 0 6px;
+    background:linear-gradient(90deg, #0d5c02, #39ff14 130%);
+    color:#031400; font-weight:700; letter-spacing:.06em;
+    text-shadow:0 1px 0 rgba(255,255,255,.25);
+  }
+  .nuke-tico { font-size:14px; filter:drop-shadow(0 0 3px rgba(0,0,0,.4)); }
+  .nuke-t-txt { flex:1; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    text-transform:uppercase; }
+  .nuke-tbtn {
+    width:19px; height:18px; display:inline-flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:700; color:#031400; cursor:pointer; user-select:none;
+    background:var(--nk-face);
+    box-shadow:inset 1px 1px 0 var(--nk-lite), inset -1px -1px 0 #000, inset -2px -2px 0 var(--nk-dark);
+  }
+  .nuke-tbtn:active { box-shadow:inset -1px -1px 0 var(--nk-lite), inset 1px 1px 0 #000; }
+
+  /* ---- home window ---- */
+  .nuke-home-bar { flex:0 0 auto; padding:7px; background:var(--nk-panel);
+    border-bottom:1px solid #000; box-shadow:inset 0 1px 0 var(--nk-dark); }
+  .nuke-newbtn {
+    width:100%; font-family:var(--nk-mono); font-size:13px; font-weight:700; letter-spacing:.08em;
+    color:var(--nk-green); background:linear-gradient(#0f3a06,#061c02);
+    border:0; padding:11px; cursor:pointer; text-transform:uppercase;
+    box-shadow:inset 1px 1px 0 var(--nk-lite), inset -2px -2px 0 #000, 0 0 10px rgba(57,255,20,.25);
+    text-shadow:0 0 6px rgba(57,255,20,.6);
+  }
+  .nuke-newbtn:active { box-shadow:inset -1px -1px 0 var(--nk-lite), inset 2px 2px 0 #000; }
+  .nuke-sesswrap { flex:1; min-height:0; display:flex; flex-direction:column;
+    background:var(--nk-blk); box-shadow:inset 0 0 0 2px var(--nk-dark); }
+  .nuke-list { flex:1; min-height:0; overflow:auto; padding:6px; }
+
+  /* session row */
+  .nuke-sess {
+    display:flex; align-items:center; gap:9px; padding:9px 8px; margin-bottom:5px; cursor:pointer;
+    background:var(--nk-panel); border:1px solid var(--nk-deep);
+    box-shadow:inset 1px 1px 0 rgba(57,255,20,.08);
+  }
+  .nuke-sess:hover { background:var(--nk-panel2); border-color:var(--nk-dim); }
+  .nuke-sess:active { transform:translateY(1px); }
+  .nuke-sess-ico { flex:0 0 auto; width:26px; height:26px; display:flex; align-items:center; justify-content:center;
+    font-size:15px; color:var(--nk-green); background:var(--nk-deep); border:1px solid var(--nk-dim);
+    box-shadow:0 0 8px rgba(57,255,20,.3); }
+  .nuke-sess-body { flex:1; min-width:0; }
+  .nuke-sess-title { display:block; font-size:12.5px; font-weight:700; color:var(--nk-green); white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
+  .nuke-sess-sub { display:block; font-size:10.5px; color:var(--nk-dim); white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; margin-top:2px; }
+  .nuke-sess-live { flex:0 0 auto; font-size:8.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    color:#031400; background:var(--nk-green); padding:2px 6px; box-shadow:0 0 8px rgba(57,255,20,.5); }
+  .nuke-sess-kill { flex:0 0 auto; width:20px; height:20px; display:flex; align-items:center; justify-content:center;
+    font-size:13px; color:var(--nk-red); background:transparent; border:1px solid transparent; cursor:pointer; }
+  .nuke-sess-kill:hover { border-color:var(--nk-red); background:rgba(255,61,110,.12); }
+
+  .nuke-empty { padding:30px 18px; text-align:center; color:var(--nk-dim); }
+  .nuke-empty-art { font-size:34px; margin-bottom:10px; filter:drop-shadow(0 0 8px rgba(57,255,20,.4)); }
+  .nuke-empty-t { font-size:13px; font-weight:700; color:var(--nk-green); letter-spacing:.08em; }
+  .nuke-empty-s { font-size:11px; margin-top:6px; line-height:1.7; }
+
+  .nuke-home-foot { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:6px 9px;
+    background:var(--nk-panel); border-top:1px solid #000; font-size:10.5px; color:var(--nk-dim); }
+  .nuke-me b { color:var(--nk-green); }
+  .nuke-badge { margin-left:auto; font-size:8.5px; font-weight:700; letter-spacing:.14em; color:var(--nk-mag);
+    border:1px solid var(--nk-mag); padding:2px 6px; text-shadow:0 0 6px rgba(255,43,214,.5); }
+
+  /* ---- terminal / agent chat window ---- */
+  .nuke-route { flex:0 0 auto; padding:5px 9px; font-size:10.5px; color:var(--nk-amber);
+    background:var(--nk-blk); border-bottom:1px solid var(--nk-deep); white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; text-shadow:0 0 6px rgba(255,210,63,.3); }
+  .nuke-route b { color:var(--nk-green); }
+  .nuke-log { flex:1; min-height:0; overflow:auto; padding:10px 11px; background:var(--nk-blk);
+    font-size:12.5px; line-height:1.65; box-shadow:inset 0 0 0 2px var(--nk-dark); }
+  .nuke-line { margin-bottom:7px; white-space:pre-wrap; word-break:break-word; }
+  .nuke-line.me { color:#d6ffce; }
+  .nuke-line.me::before { content:"you@w4r3z:~$ "; color:var(--nk-mag); }
+  .nuke-line.agent { color:var(--nk-green); text-shadow:0 0 5px rgba(57,255,20,.35); }
+  .nuke-line.tool { color:var(--nk-dim); font-size:11.5px; }
+  .nuke-line.tool::before { content:"▸ "; color:var(--nk-amber); }
+  .nuke-line.sys { color:var(--nk-amber); opacity:.85; font-size:11px; }
+  .nuke-cursor { display:inline-block; width:8px; background:var(--nk-green); animation:nuke-blink 1s steps(1) infinite;
+    box-shadow:0 0 6px rgba(57,255,20,.6); }
+  .nuke-typing { flex:0 0 auto; min-height:16px; padding:0 11px 4px; font-size:10.5px; color:var(--nk-dim); }
+
+  .nuke-cwrap { flex:0 0 auto; padding:7px; background:var(--nk-panel);
+    box-shadow:inset 0 1px 0 var(--nk-dark); }
+  .nuke-input {
+    width:100%; resize:none; font-family:var(--nk-mono); font-size:12.5px; color:var(--nk-green);
+    background:var(--nk-blk); border:0; padding:8px; caret-color:var(--nk-green);
+    box-shadow:inset 1px 1px 0 #000, inset -1px -1px 0 var(--nk-lite);
+  }
+  .nuke-input::placeholder { color:var(--nk-deep); }
+  .nuke-input:focus { outline:1px solid var(--nk-dim); }
+  .nuke-crow { display:flex; align-items:center; gap:8px; margin-top:6px; }
+  .nuke-warn { flex:1; font-size:10px; color:var(--nk-amber); min-height:12px; }
+  .nuke-send { flex:0 0 auto; font-family:var(--nk-mono); font-size:12px; font-weight:700; letter-spacing:.06em;
+    color:var(--nk-green); background:linear-gradient(#0f3a06,#061c02); border:0; padding:9px 14px; cursor:pointer;
+    box-shadow:inset 1px 1px 0 var(--nk-lite), inset -2px -2px 0 #000; text-shadow:0 0 5px rgba(57,255,20,.5); }
+  .nuke-send:active { box-shadow:inset -1px -1px 0 var(--nk-lite), inset 2px 2px 0 #000; }
+  .nuke-send:disabled { opacity:.5; cursor:default; }
+  .nuke-rr { color:var(--nk-mag); }
+
+  /* ===== target selector (wizard) ===== */
+  .nuke-dialog { position:absolute; inset:0; z-index:50; display:none;
+    align-items:center; justify-content:center; padding:16px;
+    background:rgba(1,6,0,.72); }
+  #nukePick:not([hidden]) { display:flex; }
+  .nuke-pick { max-width:400px; max-height:88%; }
+  .nuke-steps { flex:0 0 auto; display:flex; gap:2px; padding:6px; background:var(--nk-panel); }
+  .nuke-step { flex:1; display:flex; align-items:center; justify-content:center; gap:5px;
+    font-size:10.5px; font-weight:700; letter-spacing:.05em; color:var(--nk-deep);
+    padding:6px 3px; background:var(--nk-blk); box-shadow:inset 1px 1px 0 #000, inset -1px -1px 0 var(--nk-deep); }
+  .nuke-step i { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px;
+    font-style:normal; background:var(--nk-deep); color:var(--nk-dim); border-radius:50%; }
+  .nuke-step.on { color:var(--nk-green); text-shadow:0 0 6px rgba(57,255,20,.5); }
+  .nuke-step.on i { background:var(--nk-green); color:#031400; box-shadow:0 0 8px rgba(57,255,20,.6); }
+  .nuke-step.done { color:var(--nk-dim); }
+  .nuke-step.done i { background:var(--nk-dim); color:#031400; }
+  .nuke-pick-hint { flex:0 0 auto; padding:8px 10px; font-size:11px; color:var(--nk-amber);
+    background:var(--nk-blk); border-bottom:1px solid var(--nk-deep); }
+  .nuke-pick-body { flex:1; min-height:0; overflow:auto; padding:6px; background:var(--nk-blk);
+    box-shadow:inset 0 0 0 2px var(--nk-dark); }
+
+  /* wizard rows */
+  .nuke-grp { font-size:9.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--nk-dim); padding:8px 6px 3px; }
+  .nuke-row { display:flex; align-items:center; gap:9px; padding:9px 8px; margin-bottom:4px; cursor:pointer;
+    background:var(--nk-panel); border:1px solid var(--nk-deep); }
+  .nuke-row:hover { background:var(--nk-panel2); border-color:var(--nk-dim); }
+  .nuke-row.sel { border-color:var(--nk-green); box-shadow:0 0 10px rgba(57,255,20,.3); background:var(--nk-panel2); }
+  .nuke-row.off { opacity:.5; }
+  .nuke-row-ico { flex:0 0 auto; width:24px; height:24px; display:flex; align-items:center; justify-content:center;
+    font-size:13px; color:var(--nk-green); background:var(--nk-deep); border:1px solid var(--nk-dim); }
+  .nuke-row-body { flex:1; min-width:0; }
+  .nuke-row-name { display:block; font-size:12.5px; font-weight:700; color:var(--nk-green); white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
+  .nuke-row-sub { display:block; font-size:10px; color:var(--nk-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    margin-top:2px; }
+  .nuke-dot { flex:0 0 auto; width:8px; height:8px; border-radius:50%; background:var(--nk-green);
+    box-shadow:0 0 7px rgba(57,255,20,.7); }
+  .nuke-dot.off { background:var(--nk-deep); box-shadow:none; }
+  .nuke-tag { flex:0 0 auto; font-size:8.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--nk-amber); border:1px solid var(--nk-deep); padding:2px 5px; }
+  .nuke-tag.uid0 { color:var(--nk-red); border-color:var(--nk-red); }
+
+  /* group filter chips (user step) */
+  .nuke-chips { display:flex; flex-wrap:wrap; gap:5px; padding:2px 4px 8px; }
+  .nuke-chip { font-size:10px; font-weight:700; letter-spacing:.04em; color:var(--nk-dim);
+    background:var(--nk-panel); border:1px solid var(--nk-deep); padding:4px 9px; cursor:pointer; text-transform:uppercase; }
+  .nuke-chip.on { color:#031400; background:var(--nk-green); border-color:var(--nk-green);
+    box-shadow:0 0 8px rgba(57,255,20,.5); }
+
+  .nuke-pick-foot { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:7px;
+    background:var(--nk-panel); border-top:1px solid #000; }
+  .nuke-pick-back, .nuke-pick-go { font-family:var(--nk-mono); font-size:11px; font-weight:700; letter-spacing:.05em;
+    border:0; padding:9px 12px; cursor:pointer; }
+  .nuke-pick-back { color:var(--nk-dim); background:var(--nk-face);
+    box-shadow:inset 1px 1px 0 var(--nk-lite), inset -2px -2px 0 var(--nk-dark); }
+  .nuke-pick-back:active { box-shadow:inset -1px -1px 0 var(--nk-lite), inset 2px 2px 0 var(--nk-dark); }
+  .nuke-pick-sum { flex:1; font-size:10px; color:var(--nk-amber); white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; }
+  .nuke-pick-go { color:var(--nk-green); background:linear-gradient(#0f3a06,#061c02); text-transform:uppercase;
+    box-shadow:inset 1px 1px 0 var(--nk-lite), inset -2px -2px 0 #000; text-shadow:0 0 5px rgba(57,255,20,.5); }
+  .nuke-pick-go:active { box-shadow:inset -1px -1px 0 var(--nk-lite), inset 2px 2px 0 #000; }
+  .nuke-pick-go:disabled { opacity:.4; cursor:default; text-shadow:none; }
+
+  /* ===== Win95 taskbar ===== */
+  .nuke-taskbar { flex:0 0 auto; display:flex; align-items:center; gap:4px; height:36px; padding:3px 4px;
+    background:var(--nk-face);
+    box-shadow:inset 0 2px 0 var(--nk-lite), inset 0 -1px 0 #000; z-index:60; }
+  .nuke-start { display:flex; align-items:center; gap:6px; font-family:var(--nk-mono); font-size:13px; font-weight:700;
+    letter-spacing:.05em; color:var(--nk-green); background:var(--nk-face); border:0; padding:5px 12px 5px 9px; cursor:pointer;
+    box-shadow:inset 1px 1px 0 var(--nk-lite), inset -1px -1px 0 #000, inset -2px -2px 0 var(--nk-dark);
+    text-shadow:0 0 6px rgba(57,255,20,.5); }
+  .nuke-start.on, .nuke-start:active { box-shadow:inset -1px -1px 0 var(--nk-lite), inset 1px 1px 0 #000, inset 2px 2px 0 var(--nk-dark); }
+  .nuke-start-rad { font-size:15px; color:var(--nk-amber); filter:drop-shadow(0 0 4px rgba(255,210,63,.6)); }
+  .nuke-tb-sep { width:2px; align-self:stretch; margin:2px 2px; box-shadow:inset 1px 0 0 #000, inset -1px 0 0 var(--nk-lite); }
+  .nuke-tray { margin-left:auto; display:flex; align-items:center; gap:8px; padding:0 4px;
+    box-shadow:inset 1px 1px 0 #000, inset -1px -1px 0 var(--nk-lite); height:28px; }
+  .nuke-tray-net { font-size:10px; color:var(--nk-dim); }
+  .nuke-clock { font-size:11px; color:var(--nk-green); padding:0 4px; }
+  .nuke-back { display:flex; align-items:center; gap:5px; font-family:var(--nk-mono); font-size:11px; font-weight:700;
+    color:var(--nk-green); background:var(--nk-face); border:0; padding:5px 10px; cursor:pointer;
+    box-shadow:inset 1px 1px 0 var(--nk-lite), inset -2px -2px 0 var(--nk-dark); }
+  .nuke-back:active { box-shadow:inset -1px -1px 0 var(--nk-lite), inset 2px 2px 0 var(--nk-dark); }
+  .nuke-back-ar { color:var(--nk-amber); }
+
+  /* start menu */
+  .nuke-startmenu { position:absolute; left:4px; bottom:36px; z-index:61; width:200px; display:none;
+    background:var(--nk-face); padding:3px;
+    box-shadow:inset 1px 1px 0 var(--nk-lite), inset -2px -2px 0 #000, 0 0 0 1px #000, 0 8px 24px rgba(0,0,0,.7); }
+  .nuke-startmenu.on { display:flex; }
+  .nuke-sm-rail { flex:0 0 auto; width:26px; background:linear-gradient(#0d5c02,#021400); position:relative; }
+  .nuke-sm-rail span { position:absolute; bottom:8px; left:50%; transform:translateX(-50%) rotate(-90deg);
+    transform-origin:center; white-space:nowrap; font-size:13px; font-weight:700; letter-spacing:.12em; color:var(--nk-green);
+    text-shadow:0 0 6px rgba(57,255,20,.5); }
+  .nuke-sm-rail i { color:var(--nk-amber); font-style:normal; }
+  .nuke-sm-list { flex:1; padding:2px; }
+  .nuke-sm-item { display:flex; align-items:center; gap:9px; width:100%; font-family:var(--nk-mono); font-size:12px;
+    color:var(--nk-green); background:transparent; border:0; padding:8px 8px; cursor:pointer; text-align:left; }
+  .nuke-sm-item:hover { background:var(--nk-green); color:#031400; }
+  .nuke-sm-item u { text-underline-offset:2px; }
+  .nuke-sm-ico { width:18px; text-align:center; }
+  .nuke-sm-sep { height:0; margin:3px 4px; box-shadow:inset 0 1px 0 #000, inset 0 2px 0 var(--nk-lite); }
+
+  @media (max-width:420px){ .nuke-tray-net { display:none; } }
