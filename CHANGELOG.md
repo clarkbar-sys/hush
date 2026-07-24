@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.18.0](https://github.com/clarkbar-sys/hush/compare/v2.17.0...v2.18.0) (2026-07-24)
+
+
+### Features
+
+* **launcher:** new riff and forgecraft home-screen icons ([#259](https://github.com/clarkbar-sys/hush/issues/259)) ([440ab3a](https://github.com/clarkbar-sys/hush/commit/440ab3add5a47db5269e256a2c99ed2ae9264de8))
+* **web:** add LLMNUKE.EXE — warez agent-session console (demo) ([#262](https://github.com/clarkbar-sys/hush/issues/262)) ([95fb387](https://github.com/clarkbar-sys/hush/commit/95fb387ec46fb964b90d4a188424927fb7617e65))
+
+
+### Bug Fixes
+
+* **github-app:** point to kruddage org instead of clarkbar-sys ([#261](https://github.com/clarkbar-sys/hush/issues/261)) ([939709a](https://github.com/clarkbar-sys/hush/commit/939709a90a35f486fbd44224da24b82d40daf052))
+
+
+### Build System
+
+* **deps:** Bump actions/setup-python from 6 to 7 ([#258](https://github.com/clarkbar-sys/hush/issues/258)) ([f072f2a](https://github.com/clarkbar-sys/hush/commit/f072f2a3f298816003b08a6f80d55a9d9f81f62c))
+
 ## [2.17.0](https://github.com/clarkbar-sys/hush/compare/v2.16.0...v2.17.0) (2026-07-24)
 
 
