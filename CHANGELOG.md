@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.16.0](https://github.com/clarkbar-sys/hush/compare/v2.15.0...v2.16.0) (2026-07-24)
+
+
+### Features
+
+* **payphone:** saved chat sessions with a "new session?" pop-up ([#253](https://github.com/clarkbar-sys/hush/issues/253)) ([2c3abde](https://github.com/clarkbar-sys/hush/commit/2c3abdeb41bf21f18cfc944fa127e0effdd18eff))
+* **web:** render Markdown in payphone IM replies from real models ([#252](https://github.com/clarkbar-sys/hush/issues/252)) ([3a99efe](https://github.com/clarkbar-sys/hush/commit/3a99efed6a42ea9eb50099a452a1421c2f44f04e))
+
+
+### Code Refactoring
+
+* **web:** split index.html into per-app source partials ([#250](https://github.com/clarkbar-sys/hush/issues/250)) ([1e87996](https://github.com/clarkbar-sys/hush/commit/1e8799600998e4e99b3585ab40a079705c5293f1))
+
 ## [2.15.0](https://github.com/clarkbar-sys/hush/compare/v2.14.0...v2.15.0) (2026-07-23)
 
 
