@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.21.0](https://github.com/clarkbar-sys/hush/compare/v2.20.0...v2.21.0) (2026-07-24)
+
+
+### Features
+
+* **fleet:** make machine-view sections collapsible rollups ([#269](https://github.com/clarkbar-sys/hush/issues/269)) ([178f17d](https://github.com/clarkbar-sys/hush/commit/178f17d6f909e78dd080c8eb0e7349d61e850e3f))
+* **web:** add a Stop button for the opencode server section ([#270](https://github.com/clarkbar-sys/hush/issues/270)) ([ee4665f](https://github.com/clarkbar-sys/hush/commit/ee4665f7e9829ac96177d95b6d377eb596d6fa3f))
+
 ## [2.20.0](https://github.com/clarkbar-sys/hush/compare/v2.19.0...v2.20.0) (2026-07-24)
 
 
