@@ -1,0 +1,92 @@
+      <!-- forgecraft app: a stub. Reuses the gh-app slide-in shell to show a
+           90s-RTS-style crest — crossed sledgehammers over a metallic
+           FORGE / CRAFT wordmark, cast in molten gold with a riveted
+           COMING SOON plate. Nothing to wire yet. See launcher JS. -->
+      <div class="gh-app forge-app" id="forgeApp" role="dialog" aria-label="forgecraft" aria-modal="true">
+        <div class="gh-top">
+          <button class="gh-back" id="forgeBack" type="button" aria-label="Back to launcher">‹ Home</button>
+          <span class="gh-top-title">forgecraft</span>
+          <a class="gh-org" href="https://github.com/clarkbar-sys" target="_blank" rel="noopener" aria-label="Open clarkbar.sys on GitHub">↗</a>
+        </div>
+        <div class="gh-list forge-list">
+          <div class="forge-crest">
+            <svg class="forge-logo" viewBox="0 0 340 300" role="img" aria-label="Forgecraft">
+              <defs>
+                <linearGradient id="fcMetal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#fff4cf"/>
+                  <stop offset=".16" stop-color="#ffd268"/>
+                  <stop offset=".5" stop-color="#e18a2b"/>
+                  <stop offset=".74" stop-color="#9c4f18"/>
+                  <stop offset="1" stop-color="#f4b64c"/>
+                </linearGradient>
+                <linearGradient id="fcSteel" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#e7edf3"/>
+                  <stop offset=".5" stop-color="#8b96a2"/>
+                  <stop offset="1" stop-color="#3c454f"/>
+                </linearGradient>
+                <linearGradient id="fcEmber" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#ffe27a"/>
+                  <stop offset=".55" stop-color="#ff6a1f"/>
+                  <stop offset="1" stop-color="#b81e0a"/>
+                </linearGradient>
+                <radialGradient id="fcGlow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0" stop-color="#ff7b1f" stop-opacity=".55"/>
+                  <stop offset="1" stop-color="#ff7b1f" stop-opacity="0"/>
+                </radialGradient>
+                <filter id="fcDrop" x="-30%" y="-30%" width="160%" height="160%">
+                  <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".55"/>
+                </filter>
+                <filter id="fcSpark" x="-60%" y="-60%" width="220%" height="220%">
+                  <feGaussianBlur stdDeviation="1.5"/>
+                </filter>
+              </defs>
+
+              <!-- molten glow behind the crest -->
+              <ellipse cx="170" cy="150" rx="150" ry="120" fill="url(#fcGlow)"/>
+
+              <!-- crossed sledgehammers -->
+              <g transform="translate(170 80)" filter="url(#fcDrop)"
+                 stroke="#1b0d05" stroke-width="3" stroke-linejoin="round">
+                <g transform="rotate(-38)">
+                  <rect x="-5" y="-44" width="10" height="90" rx="5" fill="url(#fcSteel)"/>
+                  <circle cx="0" cy="44" r="6" fill="url(#fcSteel)"/>
+                  <rect x="-26" y="-58" width="52" height="28" rx="7" fill="url(#fcMetal)"/>
+                  <rect x="-26" y="-58" width="52" height="9" rx="7" fill="#fff4cf" opacity=".5" stroke="none"/>
+                </g>
+                <g transform="rotate(38)">
+                  <rect x="-5" y="-44" width="10" height="90" rx="5" fill="url(#fcSteel)"/>
+                  <circle cx="0" cy="44" r="6" fill="url(#fcSteel)"/>
+                  <rect x="-26" y="-58" width="52" height="28" rx="7" fill="url(#fcMetal)"/>
+                  <rect x="-26" y="-58" width="52" height="9" rx="7" fill="#fff4cf" opacity=".5" stroke="none"/>
+                </g>
+              </g>
+
+              <!-- flying sparks -->
+              <g fill="url(#fcEmber)">
+                <path d="M96 44 98 49 96 54 94 49Z"/>
+                <path d="M244 40 246 45 244 50 242 45Z" filter="url(#fcSpark)"/>
+                <path d="M70 96 72 100 70 104 68 100Z" filter="url(#fcSpark)"/>
+                <path d="M270 92 272 96 270 100 268 96Z"/>
+                <path d="M170 20 172 26 170 32 168 26Z"/>
+                <circle cx="118" cy="30" r="2"/>
+                <circle cx="222" cy="30" r="2" filter="url(#fcSpark)"/>
+              </g>
+
+              <!-- wordmark: FORGE / CRAFT cast in molten metal -->
+              <g text-anchor="middle" font-weight="900" letter-spacing="2"
+                 font-family="'Arial Black','Franklin Gothic Heavy',Impact,system-ui,sans-serif"
+                 style="paint-order:stroke" stroke="#1b0d05" stroke-width="9"
+                 stroke-linejoin="round" filter="url(#fcDrop)">
+                <text x="170" y="204" font-size="62" fill="url(#fcMetal)">FORGE</text>
+                <text x="170" y="262" font-size="62" fill="url(#fcMetal)">CRAFT</text>
+              </g>
+
+              <!-- molten seam under the wordmark -->
+              <ellipse cx="170" cy="278" rx="120" ry="7" fill="url(#fcEmber)" opacity=".8"/>
+            </svg>
+          </div>
+          <div class="forge-soon"><span>Coming Soon</span></div>
+          <p class="gh-note forge-note">forgecraft is on the anvil — still being hammered into shape.<br>
+            <a href="https://github.com/clarkbar-sys" target="_blank" rel="noopener">Follow along on GitHub ↗</a></p>
+        </div>
+      </div>
