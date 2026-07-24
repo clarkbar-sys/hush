@@ -149,9 +149,18 @@
   #homePlug .home-icon svg { position:absolute; inset:0; margin:auto;
     width:31px; height:31px; color:#d6f7e4; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
 
-  /* riff — a black plastic pager tile with a green-LCD beeper mark; opens the
-     "riff together" coming-soon screen that can page your phone. */
-  #homeRiff .home-icon { background:linear-gradient(#2b2f36,#0b0e12); }
+  /* riff — a dark handset tile with a green paging-wave mark: a dot broadcasting
+     concentric arcs (the page going out). Opens the "riff together" coming-soon
+     screen that can page your phone. */
+  #homeRiff .home-icon { background:linear-gradient(#213139,#07110f); }
   #homeRiff .home-icon svg { position:absolute; inset:0; margin:auto;
-    width:29px; height:29px; color:#5df2a0; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+    width:33px; height:33px; color:#5df2a0; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+
+  /* forgecraft — a dark-steel tile with a heavy F monogram cast in molten gold
+     (the same gold as the in-app FORGE/CRAFT crest) over a molten seam; the
+     launcher echo of that crest. Fills the tile via #homeForgeGold/Ember in the
+     glyph's own <defs>, so no glyph color is set here. */
+  #homeForge .home-icon { background:linear-gradient(#241a14,#0a0605); }
+  #homeForge .home-icon svg { position:absolute; inset:0; margin:auto;
+    width:42px; height:42px; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
 

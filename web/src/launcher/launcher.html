@@ -49,10 +49,11 @@
           <span class="home-label">plug</span>
         </button>
         <button class="home-app" id="homeRiff" data-tile="riff" type="button" aria-label="Open riff together">
-          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="6" y="2.5" width="12" height="19" rx="2.4"></rect>
-            <rect x="8.2" y="5" width="7.6" height="5" rx="1"></rect>
-            <path d="M9 13.5h6M9 16.2h6M9 18.9h3"></path>
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="16.5" r="2" fill="currentColor" stroke="none"></circle>
+            <path d="M8 13.5a5.5 5.5 0 0 1 8 0"></path>
+            <path d="M5.5 11a9 9 0 0 1 13 0" opacity=".7"></path>
+            <path d="M3 8.6a12.6 12.6 0 0 1 18 0" opacity=".42"></path>
           </svg></span>
           <span class="home-label">riff</span>
         </button>
@@ -84,10 +85,25 @@
           <span class="home-label">LLMNUKE.EXE</span>
         </button>
         <button class="home-app" id="homeForge" data-tile="forgecraft" type="button" aria-label="Open forgecraft">
-          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="m15 12-8.4 8.4a1.4 1.4 0 0 1-2-2L13 10"></path>
-            <path d="m18 15 3.5-3.5"></path>
-            <path d="M21.5 11.5 19.6 9.6A2 2 0 0 1 19 8.2V7l-2.3-2.3a6 6 0 0 0-4.2-1.7L9 3l.9.8A6 6 0 0 1 12 8.4V10l2 2h1.2a2 2 0 0 1 1.4.6l1.9 1.9"></path>
+          <span class="home-icon"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <defs>
+              <linearGradient id="homeForgeGold" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#fff4cf"></stop>
+                <stop offset=".18" stop-color="#ffd268"></stop>
+                <stop offset=".55" stop-color="#e18a2b"></stop>
+                <stop offset=".8" stop-color="#9c4f18"></stop>
+                <stop offset="1" stop-color="#f4b64c"></stop>
+              </linearGradient>
+              <linearGradient id="homeForgeEmber" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ffe27a"></stop>
+                <stop offset=".55" stop-color="#ff6a1f"></stop>
+                <stop offset="1" stop-color="#b81e0a"></stop>
+              </linearGradient>
+            </defs>
+            <text x="12" y="18.5" text-anchor="middle" font-size="19" font-weight="900"
+              font-family="'Arial Black',Impact,sans-serif" style="paint-order:stroke"
+              stroke="#1b0d05" stroke-width="2.4" stroke-linejoin="round" fill="url(#homeForgeGold)">F</text>
+            <ellipse cx="12" cy="20.5" rx="7" ry=".9" fill="url(#homeForgeEmber)" opacity=".85"></ellipse>
           </svg></span>
           <span class="home-label">forgecraft</span>
         </button>
