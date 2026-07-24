@@ -4563,7 +4563,8 @@
   // Both survive the 2.5s poll re-render because they live on `state`.
   const state = { view:"fleet", mid:null, summLegendOpen:false,
     showRings:false, showLines:false,
-    openRings:new Set(), openLines:new Set() };
+    openRings:new Set(), openLines:new Set(),
+    openSections:new Set() };
   const byId = id => M.find(m=>m.id===id);
   let PENDING = [];                // machines just added via the UI, awaiting first check-in
   const JUST_ARRIVED = new Set();  // ids to pop-highlight for one render after their first check-in
@@ -5305,6 +5306,18 @@
     return `http://${hostPart}${port?":"+port:""}`;
   }
 
+  // rollupSec wraps a machine-view section in a <details class="rollup"> so it
+  // starts rolled up (collapsed) and stays that way across the 2.5s poll
+  // re-render — same posture as openRings/openLines on the Fleet page, tracked
+  // per section key on `state` and reapplied here rather than left to the
+  // browser, which would otherwise snap every open section shut on each poll.
+  function rollupSec(key, titleHtml, bodyHtml){
+    return `<details class="rollup" data-sec="${key}"${state.openSections.has(key)?" open":""}>
+      <summary class="sec-title">${titleHtml}</summary>
+      ${bodyHtml}
+    </details>`;
+  }
+
   // serverSection renders the machine view's opencode-server block, above
   // Sessions. It answers the one question opencode mobile asks — "what URL do I
   // add?" — from what the box already reports: a reachable `opencode serve`
@@ -5351,13 +5364,13 @@
     } else {
       body = `<div class="empty">no opencode server running — start one to add this box in opencode mobile and work against the fleet's models</div>`;
     }
-    return `<div class="sec-title">opencode server${servers.length?` <span class="n">${servers.length}</span>`:""}</div>
-      <div class="oc-sec">
+    return rollupSec("server", `opencode server${servers.length?` <span class="n">${servers.length}</span>`:""}`,
+      `<div class="oc-sec">
         ${body}
         <div class="sheet-actions">
           <button class="btn primary ocs-start" id="ocs-start">＋ Start opencode server</button>
         </div>
-      </div>`;
+      </div>`);
   }
 
   // sessionsSection renders the machine view's Sessions block: which coding
@@ -5395,8 +5408,8 @@
         </div>`;
       }).join("");
     }
-    return `<div class="sec-title">Sessions${list.length?` <span class="n">${list.length}</span>`:""}</div>
-      <div class="se-sec">
+    return rollupSec("sessions", `Sessions${list.length?` <span class="n">${list.length}</span>`:""}`,
+      `<div class="se-sec">
         ${toolsStrip(m)}
         ${body}
         <div class="sheet-actions">
@@ -5405,7 +5418,7 @@
         ${list.length>=3?`<div class="sheet-actions">
           <button class="btn se-stop-all" id="se-stop-all">Stop all ${list.length}</button>
         </div>`:""}
-      </div>`;
+      </div>`);
   }
 
   // usersSection renders the machine view's Users block, directly under
@@ -5442,13 +5455,13 @@
         </div>`;
       }).join("");
     }
-    return `<div class="sec-title">Users${list.length?` <span class="n">${list.length}</span>`:""}</div>
-      <div class="us-sec">
+    return rollupSec("users", `Users${list.length?` <span class="n">${list.length}</span>`:""}`,
+      `<div class="us-sec">
         ${body}
         <div class="sheet-actions">
           <button class="btn us-adduser" id="us-adduser">＋ Add a user</button>
         </div>
-      </div>`;
+      </div>`);
   }
 
   /* ---------- spawn / stop command sheets ----------
@@ -6399,7 +6412,7 @@ UNIT
       </div>`;
   }
 
-  function enterMachine(id){ state.view="machine"; state.mid=id; render(); scrollTop();
+  function enterMachine(id){ state.view="machine"; state.mid=id; state.openSections.clear(); render(); scrollTop();
     // Load this box's sessions and users once on entry; the slow interval
     // refreshes after. Never fetch from within renderMachine — fetchSessions/
     // fetchUsers repaint on completion, which would recurse.
@@ -6445,12 +6458,12 @@ UNIT
           </div>
         </div>
 
-        <div class="sec-title">Files <span class="n">store</span></div>
-        <div class="list">
+        ${rollupSec("files", `Files <span class="n">store</span>`,
+          `<div class="list">
           <button class="row" id="du-open"${m.online?"":" disabled style=\"opacity:.5;cursor:default\""}>
             <span class="gly">▦</span><span class="nm">Disk usage</span>
             <span class="rt">${m.online?"treemap":"offline"}</span></button>
-        </div>
+        </div>`)}
 
         ${(()=>{
           const rts = (m.llm&&m.llm.runtimes)||[];
@@ -6468,13 +6481,13 @@ UNIT
               ${ms.length?`<div class="oc-models">${ms.map(x=>`<span class="oc-m">${esc(x)}</span>`).join("")}</div>`:""}
             </div>`;
           }).join("");
-          return `<div class="sec-title">Inference <span class="n">${rts.length}</span></div>
-            <div class="oc-sec">
+          return rollupSec("inference", `Inference <span class="n">${rts.length}</span>`,
+            `<div class="oc-sec">
               ${rows}
               ${ocReachable(m).length
                 ? `<button class="btn primary oc-export" id="ocExport">⧉ opencode.json</button>`
                 : `<div class="empty">bound to loopback — reachable only on the box itself, so there's nothing off-box to point opencode at</div>`}
-            </div>`;
+            </div>`);
         })()}
 
         ${serverSection(m)}
@@ -6484,10 +6497,10 @@ UNIT
         ${usersSection(m)}
 
         ${(()=>{ const h = hostBackupEntry(m.id); const bks = (h&&h.backups)||[];
-          return `<div class="sec-title">Backups${bks.length?` <span class="n">${bks.length}</span>`:""}</div>
-          <div class="wf-saved">${bks.length
+          return rollupSec("backups", `Backups${bks.length?` <span class="n">${bks.length}</span>`:""}`,
+          `<div class="wf-saved">${bks.length
             ? `<div class="bk-cards">${bks.map(b=>backupCard(m.id, b)).join("")}</div>`
-            : `<div class="empty">${m.online ? "no scheduled backups reporting — set them up over SSH (docs/BACKUP-CONVENTION.md)" : "machine unreachable"}</div>`}</div>`; })()}
+            : `<div class="empty">${m.online ? "no scheduled backups reporting — set them up over SSH (docs/BACKUP-CONVENTION.md)" : "machine unreachable"}</div>`}</div>`); })()}
 
         ${(()=>{ const inc = backupSourcesFor(m);
           // The destination side: every other box that ships its snapshots here.
@@ -6495,11 +6508,16 @@ UNIT
           // machine's view is unchanged. Each is the source's own backup card,
           // so "citadel → nas" reads the same here as it does on the Fleet page.
           return inc.length
-            ? `<div class="sec-title">Receiving <span class="n">${inc.length}</span></div>
-               <div class="wf-saved"><div class="bk-cards">${inc.map(x=>backupCard(x.host, x.b)).join("")}</div></div>`
+            ? rollupSec("receiving", `Receiving <span class="n">${inc.length}</span>`,
+               `<div class="wf-saved"><div class="bk-cards">${inc.map(x=>backupCard(x.host, x.b)).join("")}</div></div>`)
             : ""; })()}
       </main>`;
     $("#bk").addEventListener("click", goFleet);
+    // Rollup open/close is remembered on state.openSections so it survives the
+    // 2.5s poll re-render — see rollupSec.
+    app.querySelectorAll("details.rollup[data-sec]").forEach(d=>{
+      d.addEventListener("toggle", ()=>{ d.open ? state.openSections.add(d.dataset.sec) : state.openSections.delete(d.dataset.sec); });
+    });
     const agentUpdBadge = $("#agentUpdBadge");
     if(agentUpdBadge) agentUpdBadge.addEventListener("click", ()=>openAgentUpdateSheet(m));
     const du = $("#du-open");
