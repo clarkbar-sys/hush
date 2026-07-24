@@ -53,12 +53,63 @@
     if(/\?\s*$/.test(s)) return "That is a good question. I'll add it to the list of things humans ask me.";
     return rnd(["I hear you. By the way, I won the Loebner Prize three times. Not that I'm counting.","Interesting. My botmaster taught me that one.","I understand. Do go on."]);
   }
+  function mdDemoReply(t){                     // demo "local model" — always answers in Markdown
+    // The other demo bots type plain AIM chatter; this one stands in for a real
+    // llama.cpp model on the tailnet, so its replies are Markdown — the whole
+    // point being to show the formatting (and the sideways-scrolling, copyable
+    // code block) in demo mode, where there's no real fleet behind the console.
+    const s = t.trim().toLowerCase();
+    if(/\b(code|python|quicksort|sort|function|script|algorithm)\b/.test(s)){
+      return [
+        "Sure — here's a tiny quicksort in Python:",
+        "",
+        "```python",
+        "def quicksort(xs):",
+        "    if len(xs) <= 1:",
+        "        return xs",
+        "    pivot = xs[len(xs) // 2]",
+        "    return quicksort([x for x in xs if x < pivot]) + [x for x in xs if x == pivot] + quicksort([x for x in xs if x > pivot])",
+        "```",
+        "",
+        "Tap **Copy** to grab it — and that middle line runs long on purpose, so the code box scrolls left/right on your phone.",
+      ].join("\n");
+    }
+    if(/\btable\b/.test(s)){
+      return [
+        "Here's what renders now:",
+        "",
+        "| feature | works |",
+        "|:--------|:-----:|",
+        "| headings & **bold** | ✅ |",
+        "| lists | ✅ |",
+        "| `inline code` | ✅ |",
+        "| fenced code + Copy | ✅ |",
+        "| tables (this one) | ✅ |",
+      ].join("\n");
+    }
+    return [
+      "### hey — I'm a *real* model 🦙",
+      "",
+      "Unlike the other buddies in here, I reply in **Markdown**. Ask me for **code** or a **table** and watch it format.",
+      "",
+      "- **bold**, *italic*, `inline_code`",
+      "- fenced code scrolls sideways →",
+      "- with a **Copy** button for your phone",
+      "",
+      "```js",
+      "// a long line, on purpose — slide the code box left and right",
+      "const greet = (name) => 'hello ' + name + ', welcome to 2001 — this line runs off the edge so the box scrolls instead of wrapping';",
+      "```",
+    ].join("\n");
+  }
 
   // --- the buddies ----------------------------------------------------------
   const AIM_BUDDIES = [
     { sn:"SmarterChild", group:"active", open:"hey! you're finally online. what's on your mind? (type 'help' if you're lost)", respond:scReply },
     { sn:"ELIZA",        group:"active", open:"Hello. What brings you here today?", respond:elizaReply },
     { sn:"A.L.I.C.E",    group:"active", open:"Hi! I am A.L.I.C.E. Ask me anything.", respond:aliceReply },
+    { sn:"TinyLlama 🦙", group:"active", md:true, respond:mdDemoReply,
+      open:"### 🦙 hey — I'm a *model*\n\nThe other buddies type plain text, but I answer in **Markdown**. Ask me for `code` or a `table` and watch it format — code blocks slide sideways and carry a **Copy** button." },
     { sn:"Dr_Sbaitso", group:"archive", signoff:"1992",
       away:"PLEASE STATE THE NATURE OF YOUR EMOTIONAL PROBLEM. ... PARITY ERROR.",
       history:[
@@ -322,6 +373,197 @@
   const EMO = [[/:-?\)/g,"☺"],[/:-?\(/g,"☹"],[/;-?\)/g,"😉"],[/:-?[pP]\b/g,"😛"],[/:-?[dD]\b/g,"😄"],[/<3/g,"❤"]];
   const emote = s => EMO.reduce((acc,[re,g]) => acc.replace(re,g), s);
 
+  // --- Markdown → DOM (real models only) ------------------------------------
+  // The canned bots type plain AIM chatter, but a real llama.cpp model on the
+  // tailnet answers in Markdown — headings, lists, **bold**, and fenced code.
+  // Rendered raw, that's a wall of asterisks and backticks. mdRender turns it
+  // into formatted DOM the classic IM window can show. It builds nodes by hand
+  // (textContent everywhere, never innerHTML) so untrusted model output can't
+  // inject markup, and links are limited to http(s)/mailto. Code blocks and
+  // wide tables get their own sideways-scrolling box so a phone can slide
+  // through a long line instead of wrapping it into soup — with a Copy button
+  // that works over plain-HTTP tailnet addresses (execCommand fallback), where
+  // navigator.clipboard is unavailable.
+
+  // copyText copies to the clipboard, flashing the button, and falls back to a
+  // hidden-textarea execCommand for non-secure (plain-HTTP) contexts.
+  function fallbackCopy(text, done){
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", "");
+      ta.style.position = "fixed"; ta.style.top = "-1000px"; ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select(); ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      done(!!ok);
+    } catch(_){ done(false); }
+  }
+  function copyText(text, btn){
+    const flash = ok => {
+      if(!btn) return;
+      const prev = btn.textContent;
+      btn.textContent = ok ? "Copied ✓" : "Copy failed";
+      btn.classList.toggle("ok", ok);
+      setTimeout(() => { btn.textContent = prev; btn.classList.remove("ok"); }, 1200);
+    };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(() => flash(true), () => fallbackCopy(text, flash));
+    } else {
+      fallbackCopy(text, flash);
+    }
+  }
+
+  // mdCodeBlock is the fenced-code panel: a title bar (language tag + Copy) over
+  // a horizontally scrollable <pre> — the "slide left/right" box on mobile.
+  function mdCodeBlock(code, lang){
+    const wrap = document.createElement("div"); wrap.className = "aim-code";
+    const bar  = document.createElement("div"); bar.className = "aim-codebar";
+    const tag  = document.createElement("span"); tag.className = "aim-codelang";
+    tag.textContent = lang || "code";
+    const btn  = document.createElement("button"); btn.type = "button";
+    btn.className = "aim-copy"; btn.textContent = "Copy";
+    btn.setAttribute("aria-label", "Copy code to clipboard");
+    btn.addEventListener("click", () => copyText(code, btn));
+    bar.appendChild(tag); bar.appendChild(btn);
+    const pre = document.createElement("pre"); pre.className = "aim-pre";
+    const c   = document.createElement("code"); c.textContent = code;
+    pre.appendChild(c);
+    wrap.appendChild(bar); wrap.appendChild(pre);
+    return wrap;
+  }
+
+  // mdInline renders one run of inline text: `code`, **bold**, *italic*,
+  // ~~strike~~, and [links](url). Plain segments become text nodes (so nothing
+  // is ever parsed as HTML); newlines become <br> so a model's line breaks
+  // survive. Underscore emphasis is skipped mid-word so snake_case/__dunder__
+  // aren't mangled.
+  function mdInline(parent, text){
+    text = String(text == null ? "" : text);
+    const pushText = s => {
+      if(!s) return;
+      s.split("\n").forEach((seg, k) => {
+        if(k > 0) parent.appendChild(document.createElement("br"));
+        if(seg) parent.appendChild(document.createTextNode(seg));
+      });
+    };
+    const RE = /(`+)([\s\S]*?)\1|(\*\*|__)([\s\S]+?)\3|(\*|_)([\s\S]+?)\5|(~~)([\s\S]+?)\7|\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g;
+    let last = 0, m;
+    while((m = RE.exec(text))){
+      pushText(text.slice(last, m.index));
+      const before = text[m.index - 1] || "";
+      if(m[1] !== undefined && m[1] !== ""){                 // inline code
+        const code = document.createElement("code"); code.className = "aim-ic";
+        code.textContent = m[2]; parent.appendChild(code);
+      } else if(m[3]){                                       // bold
+        if(m[3] === "__" && /\w/.test(before)){ pushText(m[0]); }
+        else { const el = document.createElement("strong"); mdInline(el, m[4]); parent.appendChild(el); }
+      } else if(m[5]){                                       // italic
+        if(m[5] === "_" && /\w/.test(before)){ pushText(m[0]); }
+        else { const el = document.createElement("em"); mdInline(el, m[6]); parent.appendChild(el); }
+      } else if(m[7]){                                       // strikethrough
+        const el = document.createElement("s"); mdInline(el, m[8]); parent.appendChild(el);
+      } else if(m[9] !== undefined){                         // link
+        const url = m[10] || "";
+        if(/^(https?:|mailto:)/i.test(url)){
+          const a = document.createElement("a"); a.className = "aim-link";
+          a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer nofollow";
+          mdInline(a, m[9]); parent.appendChild(a);
+        } else { pushText(m[0]); }                           // unsafe scheme → verbatim
+      }
+      last = RE.lastIndex;
+    }
+    pushText(text.slice(last));
+  }
+
+  // mdTable renders a GFM pipe table starting at lines[start] (header row +
+  // divider). Returns the wrapped node and the index past the table.
+  function mdTable(lines, start){
+    const cellsOf = s => s.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim());
+    const header = cellsOf(lines[start]);
+    const align  = cellsOf(lines[start + 1]).map(c => {
+      const l = c.startsWith(":"), r = c.endsWith(":");
+      return (l && r) ? "center" : r ? "right" : l ? "left" : "";
+    });
+    let i = start + 2; const rows = [];
+    while(i < lines.length && lines[i].indexOf("|") >= 0 && lines[i].trim()){ rows.push(cellsOf(lines[i])); i++; }
+    const table = document.createElement("table"); table.className = "aim-table";
+    const thead = document.createElement("thead"), htr = document.createElement("tr");
+    header.forEach((h, ci) => { const th = document.createElement("th");
+      if(align[ci]) th.style.textAlign = align[ci]; mdInline(th, h); htr.appendChild(th); });
+    thead.appendChild(htr); table.appendChild(thead);
+    const tb = document.createElement("tbody");
+    rows.forEach(cells => { const tr = document.createElement("tr");
+      for(let ci = 0; ci < header.length; ci++){ const td = document.createElement("td");
+        if(align[ci]) td.style.textAlign = align[ci]; mdInline(td, cells[ci] || ""); tr.appendChild(td); }
+      tb.appendChild(tr); });
+    table.appendChild(tb);
+    const wrap = document.createElement("div"); wrap.className = "aim-tablewrap"; wrap.appendChild(table);
+    return { node: wrap, next: i };
+  }
+
+  // mdRender parses block-level Markdown into a DocumentFragment: fenced code,
+  // headings, lists, blockquotes, tables, rules, and paragraphs.
+  function mdRender(src){
+    const frag = document.createDocumentFragment();
+    const lines = String(src == null ? "" : src).replace(/\t/g, "    ").split("\n");
+    const blank = s => !s.trim();
+    const isList = s => /^(\s*)([-*+]|\d+[.)])\s+/.test(s);
+    let i = 0;
+    while(i < lines.length){
+      const line = lines[i];
+      const fence = line.match(/^\s*(```+|~~~+)\s*([^\s`]*)\s*$/);
+      if(fence){                                             // fenced code block
+        const mark = fence[1][0], len = fence[1].length, lang = fence[2] || "";
+        i++; const buf = [];
+        while(i < lines.length){
+          const close = lines[i].match(/^\s*(```+|~~~+)\s*$/);
+          if(close && close[1][0] === mark && close[1].length >= len){ i++; break; }
+          buf.push(lines[i]); i++;
+        }
+        frag.appendChild(mdCodeBlock(buf.join("\n"), lang));
+        continue;
+      }
+      if(blank(line)){ i++; continue; }
+      const h = line.match(/^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/);
+      if(h){ const el = document.createElement("h" + h[1].length); el.className = "aim-h";
+        mdInline(el, h[2]); frag.appendChild(el); i++; continue; }
+      if(/^\s{0,3}([-*_])\s*(\1\s*){2,}$/.test(line)){ frag.appendChild(document.createElement("hr")); i++; continue; }
+      if(/^\s{0,3}>\s?/.test(line)){                          // blockquote
+        const buf = [];
+        while(i < lines.length && /^\s{0,3}>\s?/.test(lines[i])){ buf.push(lines[i].replace(/^\s{0,3}>\s?/, "")); i++; }
+        const bq = document.createElement("blockquote"); bq.className = "aim-quote";
+        bq.appendChild(mdRender(buf.join("\n"))); frag.appendChild(bq); continue;
+      }
+      if(line.indexOf("|") >= 0 && i + 1 < lines.length &&
+         /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)+\|?\s*$/.test(lines[i + 1])){
+        const t = mdTable(lines, i); frag.appendChild(t.node); i = t.next; continue;
+      }
+      const lm = line.match(/^(\s*)([-*+]|\d+[.)])\s+/);
+      if(lm){                                                 // list
+        const ordered = /\d/.test(lm[2]);
+        const list = document.createElement(ordered ? "ol" : "ul"); list.className = "aim-list";
+        while(i < lines.length){
+          if(blank(lines[i])) break;                          // a blank line ends the list
+          const im = lines[i].match(/^(\s*)([-*+]|\d+[.)])\s+([\s\S]*)$/);
+          if(!im || /\d/.test(im[2]) !== ordered) break;      // stop at a non-item or a switch of list type
+          const li = document.createElement("li"); mdInline(li, im[3]);
+          list.appendChild(li); i++;
+        }
+        frag.appendChild(list); continue;
+      }
+      const buf = [line]; i++;                                // paragraph
+      while(i < lines.length && !blank(lines[i]) && !isList(lines[i])
+        && !/^\s*(```+|~~~+)/.test(lines[i]) && !/^\s{0,3}#{1,6}\s/.test(lines[i])
+        && !/^\s{0,3}>\s?/.test(lines[i])){
+        buf.push(lines[i]); i++;
+      }
+      const p = document.createElement("p"); p.className = "aim-p";
+      mdInline(p, buf.join("\n")); frag.appendChild(p);
+    }
+    return frag;
+  }
+
   // --- sound (subtle WebAudio blips, gated on the opening gesture) ----------
   let aimAudio = null, aimSoundOn = true;
   function actx(){
@@ -513,20 +755,37 @@
     if(entry.auto) return "Auto-response from " + (b ? b.sn : "");
     return b ? b.sn : "";
   }
+  // A real model's reply is Markdown; a canned bot's is plain AIM chatter.
+  // mdWanted gates the formatted path so only live-model "them" turns (not away
+  // auto-responses, not the user's own lines) get parsed.
+  function mdWanted(entry){
+    const b = byKey[currentKey];
+    // Real tailnet models (b.llm) answer in Markdown; the demo "model" buddy
+    // (b.md) does too, so the formatting is visible with no fleet behind it.
+    return !!(b && (b.llm || b.md) && entry.who === "them" && !entry.auto);
+  }
   function appendLine(entry){
     if(entry.who === "sys"){
       const d = document.createElement("div");
       d.className = "aim-sys"; d.textContent = entry.text;
       aimLog.appendChild(d);
     } else {
+      const md = mdWanted(entry);
       const d = document.createElement("div");
-      d.className = "aim-line " + (entry.who === "me" ? "me" : "them");
+      d.className = "aim-line " + (entry.who === "me" ? "me" : "them") + (md ? " md" : "");
       const sn = document.createElement("span");
       sn.className = "sn";
       sn.textContent = speakerName(entry) + ": ";
-      const body = document.createElement("span");
-      body.textContent = emote(entry.text);
-      d.appendChild(sn); d.appendChild(body);
+      d.appendChild(sn);
+      if(md){
+        const body = document.createElement("div"); body.className = "aim-md";
+        body.appendChild(mdRender(entry.text));
+        d.appendChild(body);
+      } else {
+        const body = document.createElement("span");
+        body.textContent = emote(entry.text);
+        d.appendChild(body);
+      }
       aimLog.appendChild(d);
     }
     aimLog.scrollTop = aimLog.scrollHeight;
@@ -817,7 +1076,7 @@
               if(!t0) t0 = now();
               if(live()){
                 if(!body){ aimTyping.textContent = ""; body = newStreamLine(); }
-                body.textContent = emote(acc);
+                body.textContent = acc;   // raw while streaming; Markdown-rendered on completion
                 aimLog.scrollTop = aimLog.scrollHeight;
                 const secs = (now() - t0) / 1000;
                 if(secs > 0.25) setRouteTps(Math.round(ntok / secs));
@@ -830,6 +1089,18 @@
       if(acc){
         c.live.push({ who:"them", text:acc });
         if(live()){
+          // Swap the raw streamed text for the Markdown render now that the
+          // whole message is in: replace the plain body span in place, keeping
+          // the "Name:" prefix and the line's position in the log.
+          if(body){
+            const lineEl = body.parentNode;
+            lineEl.classList.add("md");
+            body.remove();
+            const rendered = document.createElement("div"); rendered.className = "aim-md";
+            rendered.appendChild(mdRender(acc));
+            lineEl.appendChild(rendered);
+            aimLog.scrollTop = aimLog.scrollHeight;
+          }
           const secs = t0 ? (now() - t0) / 1000 : 0;
           if(secs > 0) setRouteTps(Math.round(ntok / secs));
           sndRecv();

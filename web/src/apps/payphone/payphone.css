@@ -140,6 +140,59 @@
   .aim-send:disabled { color:#808080; cursor:default; }
   .aim-send .rr { color:#c00000; }
 
+  /* ---- payphone → Markdown in a model's reply ------------------------------
+     A canned bot types plain chatter, but a real llama.cpp model answers in
+     Markdown. These rules format that reply inside the classic IM log: the
+     "Name:" prefix sits on its own line and the formatted body flows beneath.
+     Fenced code and wide tables get a sideways-scrolling box (slide it on a
+     phone) with a Win95 Copy button, instead of wrapping into soup. */
+  .aim-line.md { margin:7px 0; }
+  .aim-line.md .sn { display:block; margin-bottom:1px; }
+  .aim-md > :first-child { margin-top:0; }
+  .aim-md > :last-child { margin-bottom:0; }
+  .aim-md .aim-p { margin:.35em 0; }
+  .aim-md .aim-h { margin:.55em 0 .3em; line-height:1.25; color:#00248f;
+    font-family:"MS Sans Serif", Tahoma, Geneva, sans-serif; }
+  h1.aim-h { font-size:16px; } h2.aim-h { font-size:15px; } h3.aim-h { font-size:14px; }
+  h4.aim-h, h5.aim-h, h6.aim-h { font-size:13px; }
+  .aim-md strong { font-weight:700; } .aim-md em { font-style:italic; }
+  .aim-md .aim-list { margin:.35em 0; padding-left:1.5em; }
+  .aim-md .aim-list li { margin:.15em 0; }
+  .aim-md .aim-quote { margin:.4em 0; padding:2px 9px; color:#333;
+    border-left:3px solid #7a95c0; background:#eef1f7; }
+  .aim-md hr { border:0; border-top:1px solid #b0b0b0; margin:.55em 0; }
+  .aim-md .aim-link { color:#0000c0; text-decoration:underline; }
+  /* inline code */
+  .aim-md .aim-ic { font-family:"Courier New", Consolas, monospace; font-size:12px;
+    background:#ececec; border:1px solid #d2d2d2; border-radius:2px; padding:0 3px; }
+  /* fenced code block: a dark, terminal-like panel that scrolls sideways */
+  .aim-code { margin:.5em 0; border:2px inset #fff; background:#1e1e1e; }
+  .aim-codebar { display:flex; align-items:center; gap:6px; padding:2px 4px;
+    background:#c0c0c0; border-bottom:1px solid #808080;
+    font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .aim-codelang { flex:1; min-width:0; font-size:10px; color:#333; text-transform:lowercase;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .aim-copy { flex:0 0 auto; font-family:"MS Sans Serif", Tahoma, sans-serif;
+    font-size:11px; font-weight:700; color:#000; background:#c0c0c0;
+    border:2px solid #000; padding:1px 9px; cursor:pointer;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .aim-copy:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .aim-copy.ok { color:#0a660a; }
+  .aim-pre { margin:0; padding:7px 9px; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    background:#1e1e1e; color:#e6e6e6; }
+  .aim-pre code { font-family:"Courier New", Consolas, monospace; font-size:12px;
+    line-height:1.45; white-space:pre; }
+  /* keep the sideways scrollbar visible so "slide it" is discoverable on mobile */
+  .aim-pre::-webkit-scrollbar { height:9px; }
+  .aim-pre::-webkit-scrollbar-track { background:#2a2a2a; }
+  .aim-pre::-webkit-scrollbar-thumb { background:#5a5a5a; border-radius:4px; }
+  /* pipe tables scroll sideways too, rather than crushing on a narrow screen */
+  .aim-tablewrap { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:.5em 0; }
+  .aim-table { border-collapse:collapse; font-size:12px; }
+  .aim-table th, .aim-table td { border:1px solid #b0b0b0; padding:2px 8px;
+    text-align:left; white-space:nowrap; }
+  .aim-table th { background:#e6e6e6; font-weight:700; }
+
   /* ---- payphone → Win9x taskbar + Start menu -------------------------------
      A working Windows-95 taskbar pinned to the bottom of the teal desktop.
      Start (left) pops the classic menu whose "Shut Down…" clears the app and
