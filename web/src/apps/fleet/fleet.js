@@ -637,6 +637,14 @@
   const SESSIONS_POLL_MS = 6000;    // sessions/users change slowly; no need to ride the 2.5s fleet cadence
   const USER_RE = /^[a-z_][a-z0-9_-]*$/;   // a conservative POSIX login, to keep a typo out of the generated command
 
+  // OC_SERVER_USER is the one dedicated, unprivileged Unix account every
+  // opencode server runs as, on every box — never root, never a personal
+  // login. There's no picker for it: the composed Start command provisions
+  // the account itself (system user, own group, no shell, no login) the same
+  // way install.sh provisions the "hush" agent user, so there's nothing to
+  // type or get wrong.
+  const OC_SERVER_USER = "opencode";
+
   function onMachine(id){ return state.view==="machine" && state.mid===id; }
 
   // fetchSessions refreshes one machine's session list into SESSIONS, then
@@ -933,10 +941,12 @@
   const spawnScrim = $("#spawnScrim");
   const spawnBody = $("#spawnSheetBody");
   let spHost=null, spTool="opencode", spUser="", spTarget="";
-  // server-sheet state: the box, run-as user, chosen LLM target, port and the
-  // generated password. Kept beside the spawn state because both sheets share
-  // the one scrim/body and the same "compose a command you paste" posture.
-  let svUser="", svTarget="", svPort="4096", svPass="";
+  // server-sheet state: the box, chosen LLM target, port and the generated
+  // password. No run-as-user field — the server always runs as the one fixed
+  // OC_SERVER_USER account. Kept beside the spawn state because both sheets
+  // share the one scrim/body and the same "compose a command you paste"
+  // posture.
+  let svTarget="", svPort="4096", svPass="";
   function closeSpawn(){ spawnScrim.classList.remove("open"); }
   spawnScrim.addEventListener("click", e=>{ if(e.target===spawnScrim) closeSpawn(); });
 
@@ -1085,14 +1095,22 @@
   }
 
   // buildServerCmd composes the single sudo command that starts a hardened
-  // opencode server on the box. Every clause maps to a requirement:
+  // opencode server on the box, always as OC_SERVER_USER — the one dedicated,
+  // unprivileged account for this job, never root and never whichever user
+  // happens to be logged in. Every clause maps to a requirement:
   //
-  //   • sudo -u <user> is the whole preflight — a missing user fails it loudly.
-  //   • A per-user, hush-owned work tree (/var/lib/hush/opencode/<user>) is the
-  //     server's world: created up front, and bwrap binds it as the sandbox's
-  //     "/" so the served filesystem is that folder and nothing else on the box.
-  //     bubblewrap is the jail; the command checks for it and fails with a clear
-  //     line if it's absent rather than silently running unconfined.
+  //   • The account is provisioned inline, the same way install.sh provisions
+  //     the "hush" agent user: a system user with its own matching group, no
+  //     home directory, no login shell. Idempotent — `getent` skips creation
+  //     if it's already there from a previous paste. There's nothing to pick
+  //     and nothing that can be mistyped into an existing, more-privileged
+  //     account.
+  //   • A hush-owned work tree (/var/lib/hush/opencode-server) is the
+  //     server's whole world: created up front, and bwrap binds it as the
+  //     sandbox's "/" so the served filesystem is that folder and nothing
+  //     else on the box. bubblewrap is the jail; the command checks for it
+  //     and fails with a clear line if it's absent rather than silently
+  //     running unconfined.
   //   • The chosen LLM's opencode.json (the same export the Inference section
   //     builds) is written into that tree's ~/.config/opencode, base64-piped so
   //     the JSON's quotes can't collide with the command's own quoting — so the
@@ -1106,13 +1124,14 @@
   // server (systemctl enable --now), so tweaking the port or password is just a
   // re-paste. It binds 0.0.0.0 inside the jail; tailscale on the host is what
   // makes that reachable as the box's tailnet address, which is the URL the
-  // server section then shows once detection sees the new bind.
+  // server section then shows once detection sees the new bind. Only one
+  // server unit exists per box — re-pasting reconfigures it in place rather
+  // than standing up a second one.
   function buildServerCmd(){
-    const u = svUser.trim();
-    if(!USER_RE.test(u)) return { cmd:"", err:"enter a Linux username to run as" };
+    const u = OC_SERVER_USER;
     const port = String(parseInt(svPort,10)||4096);
     const pass = svPass || "";
-    const work = `/var/lib/hush/opencode/${u}`;
+    const work = `/var/lib/hush/opencode-server`;
     const unit = "opencode-server";
     const t = svTarget && byId(svTarget);
     let cfg = "";
@@ -1131,11 +1150,11 @@
     const cmd =
 `sudo bash -c '
   command -v bwrap >/dev/null 2>&1 || { echo "bubblewrap (bwrap) is required — install it, then re-run" >&2; exit 1; }
-  id ${u} >/dev/null 2>&1 || { echo "user ${u} does not exist" >&2; exit 1; }
+  getent passwd ${u} >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin --user-group ${u} &&
   install -d -o ${u} -g ${u} -m 700 "${work}" &&
 ${cfg ? cfg.replace(/^/gm,"") : ""}  cat > /etc/systemd/system/${unit}.service <<UNIT &&
 [Unit]
-Description=opencode server (hush) for ${u}
+Description=opencode server (hush)
 After=network-online.target
 Wants=network-online.target
 
@@ -1162,7 +1181,7 @@ UNIT
   }
 
   function openServerSheet(host){
-    spHost = host; svUser = ""; svPort = "4096"; svPass = genPassword();
+    spHost = host; svPort = "4096"; svPass = genPassword();
     const ts = spawnTargets();
     const here = ts.find(x=>x.id===host);
     svTarget = here ? here.id : (ts[0] ? ts[0].id : "");
@@ -1183,12 +1202,7 @@ UNIT
     spawnBody.innerHTML = `
       <h3>Start opencode server <span class="sd" style="font-family:var(--mono)">${esc(spHost)}</span></h3>
       <p class="sd">compose the command, then paste it into a root shell on ${esc(spHost)} (JuiceSSH) — hush never runs it for you</p>
-      <div class="field">
-        <label for="svUser">run as user</label>
-        <input id="svUser" type="text" autocapitalize="off" autocomplete="off" spellcheck="false"
-          placeholder="e.g. josh" value="${esc(svUser)}">
-        <div class="hint">the server runs as this user, jailed to <span style="font-family:var(--mono)">/var/lib/hush/opencode/${esc(svUser.trim()||"&lt;user&gt;")}</span> (that folder is its whole filesystem)</div>
-      </div>
+      <div class="hint">runs as the dedicated <span style="font-family:var(--mono)">${esc(OC_SERVER_USER)}</span> system account — created automatically if it doesn't exist yet — jailed to <span style="font-family:var(--mono)">/var/lib/hush/opencode-server</span> (that folder is its whole filesystem). One server per box; re-pasting reconfigures it in place.</div>
       <div class="field svrow">
         <div style="flex:1"><label for="svPort">port</label>
           <input id="svPort" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="${esc(svPort)}"></div>
@@ -1204,8 +1218,7 @@ UNIT
     const code = $("#svCmd"), copy = $("#svCopy");
     const refresh = ()=>{ const r = buildServerCmd(); code.textContent = r.cmd || r.err; copy.disabled = !r.cmd; };
     copy.disabled = !cmd;
-    const ui = $("#svUser"), pi = $("#svPort"), pw = $("#svPass");
-    ui.addEventListener("input", ()=>{ svUser = ui.value; refresh(); });
+    const pi = $("#svPort"), pw = $("#svPass");
     pi.addEventListener("input", ()=>{ svPort = pi.value; refresh(); });
     pw.addEventListener("input", ()=>{ svPass = pw.value; refresh(); });
     const sel = $("#svTarget");
@@ -1216,7 +1229,7 @@ UNIT
       catch(e){ toast("couldn't copy — select and copy manually"); }
     });
     $("#svClose").addEventListener("click", closeSpawn);
-    if(document.activeElement !== ui) ui.focus();
+    if(document.activeElement !== pi) pi.focus();
   }
 
   // openStopSheet composes the stop command for one running session: a plain
