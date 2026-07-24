@@ -1,11 +1,14 @@
 package sessions
 
 import (
+	"net"
 	"os"
 	"os/user"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/clarkbar-sys/hush/internal/netlisten"
 )
 
 // writeProc fabricates a /proc-like tree under a temp dir: one directory per
@@ -78,7 +81,7 @@ func TestDetect(t *testing.T) {
 	})
 
 	now := time.Unix(1_000_000, 0)
-	got := Detect(root, []string{"opencode", "claude"}, now)
+	got := Detect(root, []string{"opencode", "claude"}, now, nil)
 	if len(got) != 2 {
 		t.Fatalf("want 2 sessions, got %d: %+v", len(got), got)
 	}
@@ -120,10 +123,10 @@ func TestDetectEmptyMatchDisables(t *testing.T) {
 	}{
 		101: {"opencode\x00", stat(101, "opencode", 70000)},
 	})
-	if got := Detect(root, nil, time.Now()); got != nil {
+	if got := Detect(root, nil, time.Now(), nil); got != nil {
 		t.Errorf("empty match should detect nothing, got %+v", got)
 	}
-	if got := Detect(root, []string{"  "}, time.Now()); got != nil {
+	if got := Detect(root, []string{"  "}, time.Now(), nil); got != nil {
 		t.Errorf("all-whitespace match should detect nothing, got %+v", got)
 	}
 }
@@ -197,5 +200,108 @@ func TestSanitizeCmd(t *testing.T) {
 	got := sanitizeCmd(long)
 	if len([]rune(got)) > cmdMax {
 		t.Errorf("cmd not truncated: %d runes", len([]rune(got)))
+	}
+}
+
+func TestServerPort(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"no flag falls back to default", []string{"opencode", "serve"}, DefaultServerPort},
+		{"--port with space", []string{"opencode", "serve", "--port", "5000"}, "5000"},
+		{"--port=", []string{"opencode", "serve", "--port=5001"}, "5001"},
+		{"-p short", []string{"opencode", "serve", "-p", "5002"}, "5002"},
+		{"-p= short", []string{"opencode", "serve", "-p=5003"}, "5003"},
+		{"non-numeric falls back", []string{"opencode", "serve", "--port", "abc"}, DefaultServerPort},
+		{"out-of-range falls back", []string{"opencode", "serve", "--port", "70000"}, DefaultServerPort},
+		{"trailing flag with no value falls back", []string{"opencode", "serve", "--port"}, DefaultServerPort},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := serverPort(tc.args); got != tc.want {
+				t.Errorf("serverPort(%v) = %q, want %q", tc.args, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestResolveServer covers the whole judgement: is this a server, on what port,
+// and how far does it reach — including the two directions that must never be
+// gotten wrong (a loopback bind is not "reachable", and an unfound socket is
+// "unknown", never silently "loopback").
+func TestResolveServer(t *testing.T) {
+	tailnet := map[string][]netlisten.Binding{
+		"4096": {{IP: net.ParseIP("100.87.180.34"), Scope: netlisten.ExposureTailnet}},
+	}
+	loopback := map[string][]netlisten.Binding{
+		"4096": {{IP: net.ParseIP("127.0.0.1"), Scope: netlisten.ExposureLoopback}},
+	}
+
+	t.Run("interactive opencode is not a server", func(t *testing.T) {
+		s := Session{Tool: "opencode"}
+		resolveServer(&s, []string{"opencode"}, tailnet)
+		if s.Server {
+			t.Fatalf("plain opencode marked as server: %+v", s)
+		}
+	})
+
+	t.Run("claude with a stray serve token is not a server", func(t *testing.T) {
+		s := Session{Tool: "claude"}
+		resolveServer(&s, []string{"claude", "serve"}, tailnet)
+		if s.Server {
+			t.Fatalf("claude marked as server on a stray token: %+v", s)
+		}
+	})
+
+	t.Run("tailnet-bound server is reachable at its address", func(t *testing.T) {
+		s := Session{Tool: "opencode"}
+		resolveServer(&s, []string{"opencode", "serve", "--hostname", "0.0.0.0", "--port", "4096"}, tailnet)
+		if !s.Server || s.Addr != "100.87.180.34:4096" || s.Exposure != netlisten.ExposureTailnet {
+			t.Fatalf("got %+v, want a tailnet server at 100.87.180.34:4096", s)
+		}
+	})
+
+	t.Run("loopback-bound server is a server but not reachable off-box", func(t *testing.T) {
+		s := Session{Tool: "opencode"}
+		resolveServer(&s, []string{"opencode", "serve"}, loopback)
+		if !s.Server || s.Exposure != netlisten.ExposureLoopback || s.Addr != "127.0.0.1:4096" {
+			t.Fatalf("got %+v, want a loopback server the console will not hand out", s)
+		}
+	})
+
+	t.Run("server whose socket wasn't found reports unknown, not loopback", func(t *testing.T) {
+		s := Session{Tool: "opencode"}
+		resolveServer(&s, []string{"opencode", "serve", "--port", "4096"}, nil)
+		if !s.Server || s.Exposure != netlisten.ExposureUnknown {
+			t.Fatalf("got %+v, want exposure unknown when no listener matched", s)
+		}
+		if s.Addr != "0.0.0.0:4096" {
+			t.Errorf("addr = %q, want the wildcard at the resolved port", s.Addr)
+		}
+	})
+}
+
+// TestDetectResolvesServerFromProc is the end-to-end: a fabricated /proc plus a
+// listener table must produce a Session flagged as a reachable server, proving
+// Detect threads the listeners through to resolveServer.
+func TestDetectResolvesServerFromProc(t *testing.T) {
+	root := writeProc(t, "1000.00\n", map[int]struct {
+		cmdline string
+		stat    string
+	}{
+		201: {"opencode\x00serve\x00--port\x004096\x00", stat(201, "opencode", 50000)},
+	})
+	listeners := map[string][]netlisten.Binding{
+		"4096": {{IP: net.ParseIP("100.87.180.34"), Scope: netlisten.ExposureTailnet}},
+	}
+	got := Detect(root, []string{"opencode"}, time.Unix(1_000_000, 0), listeners)
+	if len(got) != 1 {
+		t.Fatalf("want 1 session, got %d: %+v", len(got), got)
+	}
+	s := got[0]
+	if !s.Server || s.Addr != "100.87.180.34:4096" || s.Exposure != netlisten.ExposureTailnet {
+		t.Fatalf("got %+v, want a tailnet-reachable opencode server", s)
 	}
 }
