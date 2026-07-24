@@ -53,7 +53,7 @@ and reports the bound address and exposure on the session:
 ```json
 {
   "pid": 40771,
-  "user": "josh",
+  "user": "opencode",
   "tool": "opencode",
   "cmd": "opencode serve --hostname 0.0.0.0 --port 4096",
   "uptime": 9000,
@@ -72,16 +72,22 @@ agent stays the unprivileged `hush` user.
 
 ## Starting — one `sudo` command you paste
 
-The **Start** sheet composes a single `sudo` command. You pick the **user** to
-run as, the **port** (default `4096`), a **password** (auto-generated, editable),
-and which of the fleet's tailnet-reachable LLM boxes to **expose models from**.
-Every part maps to a requirement:
+The **Start** sheet composes a single `sudo` command. There's no user to pick —
+you set the **port** (default `4096`), a **password** (auto-generated,
+editable), and which of the fleet's tailnet-reachable LLM boxes to **expose
+models from**. Every part maps to a requirement:
 
-- **Pick a user; fail if it doesn't exist.** The command checks `id <user>` and
-  bails loudly, before touching anything, if the account is missing.
-- **A hush-owned, per-user work tree.** The server lives in
-  `/var/lib/hush/opencode/<user>`, created up front — a dedicated tree hush
-  knows about, not scattered into a home directory.
+- **One dedicated account, always.** The server runs as a single fixed system
+  user, `opencode` — never root, never whichever account happens to be logged
+  in. The command provisions it itself (`useradd --system --no-create-home
+  --shell /usr/sbin/nologin --user-group opencode`) the same way `install.sh`
+  provisions the `hush` agent user, and skips creation if it's already there
+  from a previous paste. Nothing to type, nothing to get wrong.
+- **A hush-owned work tree.** The server lives in
+  `/var/lib/hush/opencode-server`, created up front — a dedicated tree hush
+  knows about, not scattered into a home directory. One server per box;
+  re-pasting the Start command reconfigures that same tree and unit in place
+  rather than standing up a second one.
 - **A real sandbox: that folder *is* the filesystem.** `opencode serve` runs
   inside a [bubblewrap](https://github.com/containers/bubblewrap) jail whose root
   (`--bind <work> /`) is the work tree, so the server can only ever see and work
