@@ -1308,6 +1308,12 @@
     text-shadow: 0 0 4px #ffdd66;
   }
 
+  .inst-status.offline {
+    border-color: #ff6666;
+    color: #ff6666;
+    text-shadow: 0 0 4px #ff6666;
+  }
+
   .inst-bar {
     height: 12px;
     background: #0a0a0a;
@@ -1441,6 +1447,11 @@
   .forge-unit.paused .unit-icon {
     color: #ffaa00;
     text-shadow: 0 0 6px rgba(255, 170, 0, 0.6);
+  }
+
+  .forge-unit.done .unit-icon {
+    color: #66ff66;
+    text-shadow: 0 0 6px rgba(102, 255, 102, 0.6);
   }
 
   /* ---- Action Buttons ---- */
@@ -4082,17 +4093,19 @@
   };
 
   let instances = [];
-  let agents = new Map(); // agent_id → {id, name, status, progress, cpu, mem, elapsed}
+  let agents = new Map(); // agent_id → {id, name, status, progress, cpu, mem, elapsed, tasks}
+
+  function esc(s){
+    return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
 
   function openForge(){
-    enterApp();
     forgeApp.classList.add("on");
     try { $("#forgeBack").focus({ preventScroll:true }); } catch(_){}
     poll();
   }
   function closeForge(){
     forgeApp.classList.remove("on");
-    exitToHome();
     try { $("#homeForge").focus({ preventScroll:true }); } catch(_){}
   }
 
@@ -4138,27 +4151,50 @@
     });
   }
 
+  function tickDemoAgents(){
+    agents.forEach(ag => {
+      if(ag.status === "running"){
+        ag.elapsed += 2;
+        if(ag.progress < 100){
+          ag.progress = Math.min(100, ag.progress + Math.floor(Math.random() * 4) + 1);
+        }
+        if(ag.progress >= 100){
+          ag.status = "done";
+          ag.cpu = 0;
+          ag.mem = 0;
+        } else {
+          ag.cpu = Math.max(5, Math.min(95, ag.cpu + Math.floor(Math.random() * 11) - 5));
+          ag.mem = Math.max(10, Math.min(90, ag.mem + Math.floor(Math.random() * 5) - 2));
+        }
+      }
+    });
+    const activeCount = Array.from(agents.values()).filter(a => a.status === "running" || a.status === "queued").length;
+    const selectedInst = instances.find(i => i.id === (state.selectedInstance || "prod"));
+    if(selectedInst){
+      selectedInst.workflows = activeCount;
+    }
+  }
+
   function poll(){
     // In real app: fetch(/api/forgecraft/instances) and /api/forgecraft/instances/<id>/agents
-    // For now, demo data with jitter
-    if(state.view === "instances") renderInstances();
-    else if(state.view === "warroom") renderWarroom();
+    tickDemoAgents();
+    render();
   }
 
   function renderInstances(){
     const instanceCards = instances.map(inst => `
-      <div class="forge-inst-card" data-id="${inst.id}">
-        <div class="inst-name">${inst.name}</div>
-        <div class="inst-status ${inst.status}">${inst.status}</div>
+      <div class="forge-inst-card" data-id="${esc(inst.id)}">
+        <div class="inst-name">${esc(inst.name)}</div>
+        <div class="inst-status ${esc(inst.status)}">${esc(inst.status)}</div>
         <div class="inst-bar">
-          <div class="inst-fill" style="width: ${(inst.workflows / inst.capacity) * 100}%"></div>
+          <div class="inst-fill" style="width: ${Math.min(100, Math.round((inst.workflows / inst.capacity) * 100))}%"></div>
         </div>
         <div class="inst-meta">${inst.workflows}/${inst.capacity} agents</div>
       </div>
     `).join("");
 
-    const totalCpu = Array.from(agents.values()).reduce((a, b) => a + b.cpu, 0);
-    const totalMem = Array.from(agents.values()).reduce((a, b) => a + b.mem, 0);
+    const totalCpu = Array.from(agents.values()).reduce((a, b) => a + (b.status === "running" ? b.cpu : 0), 0);
+    const totalMem = Array.from(agents.values()).reduce((a, b) => a + (b.status === "running" ? b.mem : 0), 0);
     const totalAgents = agents.size;
 
     const html = `
@@ -4182,16 +4218,6 @@
       </div>
     `;
     forgeList.innerHTML = html;
-
-    // Wire up instance selection
-    forgeList.querySelectorAll(".forge-inst-card").forEach(card => {
-      card.addEventListener("click", () => {
-        const id = card.getAttribute("data-id");
-        state.selectedInstance = id;
-        state.view = "warroom";
-        render();
-      });
-    });
   }
 
   function renderWarroom(){
@@ -4199,34 +4225,38 @@
     if(!inst) { state.view = "instances"; render(); return; }
 
     const agentCards = Array.from(agents.values()).map(ag => {
-      const statusClass = ag.status === "running" ? "active" : ag.status === "done" ? "victory" : "paused";
+      const statusClass = ag.status === "running" ? "active" : ag.status === "done" ? "done" : "paused";
       const healthColor = ag.progress < 33 ? "#ff6666" : ag.progress < 66 ? "#ffdd66" : "#66ff66";
+      const icon = ag.status === "running" ? "▶" : ag.status === "done" ? "✓" : "⏸";
       return `
         <div class="forge-unit ${statusClass}">
-          <div class="unit-label">${ag.name}</div>
+          <div class="unit-label">${esc(ag.name)}</div>
           <div class="unit-health">
             <div class="health-bar">
-              <div class="health-fill" style="width: ${ag.progress}%; background: linear-gradient(90deg, #00ff00, #ffff00, #ff6600); box-shadow: 0 0 4px rgba(255, 100, 0, 0.6);"></div>
+              <div class="health-fill" style="width: ${ag.progress}%; background: ${healthColor}; box-shadow: 0 0 6px ${healthColor};"></div>
             </div>
-            <span class="health-pct">${ag.progress}%</span>
+            <span class="health-pct" style="color: ${healthColor}; text-shadow: 0 0 2px ${healthColor};">${ag.progress}%</span>
           </div>
           <div class="unit-stats">
             <span class="stat">CPU: ${ag.cpu}%</span>
             <span class="stat">MEM: ${ag.mem}%</span>
             <span class="stat">${formatElapsed(ag.elapsed)}</span>
           </div>
-          <div class="unit-icon">${ag.status === "running" ? "▶" : ag.status === "done" ? "✓" : "⏸"}</div>
+          <div class="unit-icon">${icon}</div>
         </div>
       `;
     }).join("");
 
-    const totalCpu = Array.from(agents.values()).reduce((a, b) => a + b.cpu, 0);
-    const totalMem = Array.from(agents.values()).reduce((a, b) => a + b.mem, 0);
+    const totalCpu = Array.from(agents.values()).reduce((a, b) => a + (b.status === "running" ? b.cpu : 0), 0);
+    const totalMem = Array.from(agents.values()).reduce((a, b) => a + (b.status === "running" ? b.mem : 0), 0);
+
+    const hasRunning = Array.from(agents.values()).some(a => a.status === "running");
+    const pauseBtnText = hasRunning ? "⏸ PAUSE ALL" : "▶ RESUME ALL";
 
     const html = `
       <div class="forge-view warroom">
         <div class="forge-header">
-          <span class="forge-title">${inst.name}</span>
+          <span class="forge-title">${esc(inst.name)}</span>
           <div class="forge-stats">
             <span class="stat">CPU: ${Math.round(totalCpu)}%</span>
             <span class="stat">MEM: ${Math.round(totalMem)}%</span>
@@ -4238,26 +4268,12 @@
         </div>
         <div class="forge-actions">
           <button class="forge-btn" id="forgeSpawn">+ SPAWN AGENT</button>
-          <button class="forge-btn" id="forgePause">⏸ PAUSE ALL</button>
+          <button class="forge-btn" id="forgePause">${pauseBtnText}</button>
           <button class="forge-btn" id="forgeBack2">← INSTANCES</button>
         </div>
       </div>
     `;
     forgeList.innerHTML = html;
-
-    // Wire up actions
-    document.getElementById("forgeSpawn")?.addEventListener("click", () => {
-      // TODO: spawn modal
-      console.log("Spawn new agent");
-    });
-    document.getElementById("forgePause")?.addEventListener("click", () => {
-      // TODO: pause all agents
-      console.log("Pause all agents");
-    });
-    document.getElementById("forgeBack2")?.addEventListener("click", () => {
-      state.view = "instances";
-      render();
-    });
   }
 
   function formatElapsed(seconds){
@@ -4267,8 +4283,82 @@
   }
 
   function render(){
-    poll();
+    if(state.view === "instances") renderInstances();
+    else if(state.view === "warroom") renderWarroom();
   }
+
+  const AGENT_NAMES = ["code-audit", "ci-builder", "docker-pack", "sec-scan", "db-migrate", "test-runner"];
+  function spawnAgent(){
+    const id = "a" + (agents.size + 1);
+    const name = AGENT_NAMES[agents.size % AGENT_NAMES.length];
+    agents.set(id, {
+      id: id,
+      name: name,
+      status: "running",
+      progress: 0,
+      cpu: Math.floor(Math.random() * 30) + 20,
+      mem: Math.floor(Math.random() * 40) + 30,
+      elapsed: 0,
+      tasks: Math.floor(Math.random() * 10) + 1
+    });
+    render();
+  }
+
+  function togglePauseAll(){
+    const running = Array.from(agents.values()).some(a => a.status === "running");
+    agents.forEach(ag => {
+      if(running && ag.status === "running"){
+        ag.status = "paused";
+        ag.lastCpu = ag.cpu;
+        ag.lastMem = ag.mem;
+        ag.cpu = 0;
+        ag.mem = 0;
+      } else if(!running && ag.status === "paused"){
+        ag.status = "running";
+        ag.cpu = ag.lastCpu || 30;
+        ag.mem = ag.lastMem || 40;
+      }
+    });
+    render();
+  }
+
+  function spawnInstance(){
+    const idx = instances.length + 1;
+    instances.push({
+      id: "node" + idx,
+      name: "forgejo-node-" + idx,
+      status: "online",
+      workflows: 0,
+      capacity: 16
+    });
+    render();
+  }
+
+  forgeList.addEventListener("click", e => {
+    const card = e.target.closest(".forge-inst-card");
+    if(card){
+      const id = card.getAttribute("data-id");
+      if(id){
+        state.selectedInstance = id;
+        state.view = "warroom";
+        render();
+      }
+      return;
+    }
+    const btn = e.target.closest(".forge-btn");
+    if(btn){
+      if(btn.id === "forgeBack2"){
+        state.view = "instances";
+        render();
+      } else if(btn.id === "forgeSpawn"){
+        spawnAgent();
+      } else if(btn.id === "forgePause"){
+        togglePauseAll();
+      } else if(btn.id === "forgeNewInst"){
+        spawnInstance();
+      }
+    }
+  });
 
   initDemoInstances();
   initDemoAgents();
