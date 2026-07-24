@@ -1545,26 +1545,8 @@
   .nuke-blink { animation:nuke-blink 1s steps(1) infinite; }
   @keyframes nuke-blink { 50%{opacity:0} }
 
-  /* ---- LIVE coming-soon crest ---- */
-  .nuke-soon { margin:auto; text-align:center; padding:20px; max-width:440px; }
-  .nuke-crest { width:150px; height:150px; filter:drop-shadow(0 0 14px rgba(57,255,20,.6));
-    animation:nuke-pulse 2.6s ease-in-out infinite; }
-  @keyframes nuke-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
-  .nuke-soon-title { margin-top:6px; font-size:16px; letter-spacing:.16em; color:var(--nk-dim); }
-  .nuke-soon-title b { display:block; font-size:30px; color:var(--nk-green); letter-spacing:.1em;
-    text-shadow:0 0 12px rgba(57,255,20,.7); }
-  .nuke-soon-note { margin:16px 0 10px; font-size:11.5px; line-height:1.8; color:var(--nk-dim); }
-  .nuke-soon-see { font-size:11px; color:var(--nk-green); opacity:.75; }
-  .nuke-mono { color:var(--nk-amber); }
-  .nuke-soon-back { margin-top:18px; font-family:var(--nk-mono); font-size:12px; letter-spacing:.1em;
-    color:var(--nk-green); background:var(--nk-face); border:0; padding:9px 18px; cursor:pointer;
-    box-shadow:inset 1px 1px 0 var(--nk-lite), inset -2px -2px 0 var(--nk-dark); }
-  .nuke-soon-back:active { box-shadow:inset -1px -1px 0 var(--nk-lite), inset 2px 2px 0 var(--nk-dark); }
-
   /* ===== windows (Win95 bevel, toxic) ===== */
   .nuke-desk { flex:1; min-height:0; display:flex; }
-  .nuke-desk.term-open .nuke-home { display:none; }
-  .nuke-desk:not(.term-open) .nuke-term { display:none; }
   .nuke-win {
     display:flex; flex-direction:column; flex:1; min-height:0;
     width:100%; max-width:520px; margin:0 auto;
@@ -1642,48 +1624,13 @@
   .nuke-me b { color:var(--nk-green); }
   .nuke-badge { margin-left:auto; font-size:8.5px; font-weight:700; letter-spacing:.14em; color:var(--nk-mag);
     border:1px solid var(--nk-mag); padding:2px 6px; text-shadow:0 0 6px rgba(255,43,214,.5); }
-
-  /* ---- terminal / agent chat window ---- */
-  .nuke-route { flex:0 0 auto; padding:5px 9px; font-size:10.5px; color:var(--nk-amber);
-    background:var(--nk-blk); border-bottom:1px solid var(--nk-deep); white-space:nowrap;
-    overflow:hidden; text-overflow:ellipsis; text-shadow:0 0 6px rgba(255,210,63,.3); }
-  .nuke-route b { color:var(--nk-green); }
-  .nuke-log { flex:1; min-height:0; overflow:auto; padding:10px 11px; background:var(--nk-blk);
-    font-size:12.5px; line-height:1.65; box-shadow:inset 0 0 0 2px var(--nk-dark); }
-  .nuke-line { margin-bottom:7px; white-space:pre-wrap; word-break:break-word; }
-  .nuke-line.me { color:#d6ffce; }
-  .nuke-line.me::before { content:"you@w4r3z:~$ "; color:var(--nk-mag); }
-  .nuke-line.agent { color:var(--nk-green); text-shadow:0 0 5px rgba(57,255,20,.35); }
-  .nuke-line.tool { color:var(--nk-dim); font-size:11.5px; }
-  .nuke-line.tool::before { content:"▸ "; color:var(--nk-amber); }
-  .nuke-line.sys { color:var(--nk-amber); opacity:.85; font-size:11px; }
-  .nuke-cursor { display:inline-block; width:8px; background:var(--nk-green); animation:nuke-blink 1s steps(1) infinite;
-    box-shadow:0 0 6px rgba(57,255,20,.6); }
-  .nuke-typing { flex:0 0 auto; min-height:16px; padding:0 11px 4px; font-size:10.5px; color:var(--nk-dim); }
-
-  .nuke-cwrap { flex:0 0 auto; padding:7px; background:var(--nk-panel);
-    box-shadow:inset 0 1px 0 var(--nk-dark); }
-  .nuke-input {
-    width:100%; resize:none; font-family:var(--nk-mono); font-size:12.5px; color:var(--nk-green);
-    background:var(--nk-blk); border:0; padding:8px; caret-color:var(--nk-green);
-    box-shadow:inset 1px 1px 0 #000, inset -1px -1px 0 var(--nk-lite);
-  }
-  .nuke-input::placeholder { color:var(--nk-deep); }
-  .nuke-input:focus { outline:1px solid var(--nk-dim); }
-  .nuke-crow { display:flex; align-items:center; gap:8px; margin-top:6px; }
-  .nuke-warn { flex:1; font-size:10px; color:var(--nk-amber); min-height:12px; }
-  .nuke-send { flex:0 0 auto; font-family:var(--nk-mono); font-size:12px; font-weight:700; letter-spacing:.06em;
-    color:var(--nk-green); background:linear-gradient(#0f3a06,#061c02); border:0; padding:9px 14px; cursor:pointer;
-    box-shadow:inset 1px 1px 0 var(--nk-lite), inset -2px -2px 0 #000; text-shadow:0 0 5px rgba(57,255,20,.5); }
-  .nuke-send:active { box-shadow:inset -1px -1px 0 var(--nk-lite), inset 2px 2px 0 #000; }
-  .nuke-send:disabled { opacity:.5; cursor:default; }
-  .nuke-rr { color:var(--nk-mag); }
+  .nuke-badge.live { color:var(--nk-green); border-color:var(--nk-green); text-shadow:0 0 6px rgba(57,255,20,.5); }
 
   /* ===== target selector (wizard) ===== */
   .nuke-dialog { position:absolute; inset:0; z-index:50; display:none;
     align-items:center; justify-content:center; padding:16px;
     background:rgba(1,6,0,.72); }
-  #nukePick:not([hidden]) { display:flex; }
+  #nukePick:not([hidden]), #nukeCmd:not([hidden]) { display:flex; }
   .nuke-pick { max-width:400px; max-height:88%; }
   .nuke-steps { flex:0 0 auto; display:flex; gap:2px; padding:6px; background:var(--nk-panel); }
   .nuke-step { flex:1; display:flex; align-items:center; justify-content:center; gap:5px;
@@ -1722,12 +1669,16 @@
     color:var(--nk-amber); border:1px solid var(--nk-deep); padding:2px 5px; }
   .nuke-tag.uid0 { color:var(--nk-red); border-color:var(--nk-red); }
 
-  /* group filter chips (user step) */
-  .nuke-chips { display:flex; flex-wrap:wrap; gap:5px; padding:2px 4px 8px; }
-  .nuke-chip { font-size:10px; font-weight:700; letter-spacing:.04em; color:var(--nk-dim);
-    background:var(--nk-panel); border:1px solid var(--nk-deep); padding:4px 9px; cursor:pointer; text-transform:uppercase; }
-  .nuke-chip.on { color:#031400; background:var(--nk-green); border-color:var(--nk-green);
-    box-shadow:0 0 8px rgba(57,255,20,.5); }
+  /* ===== command sheet (spawn / stop) — the compose-only "you run it" panel ===== */
+  .nuke-cmdwin { max-width:420px; max-height:88%; }
+  .nuke-cmd-body { flex:1; min-height:0; overflow:auto; padding:12px; background:var(--nk-blk);
+    box-shadow:inset 0 0 0 2px var(--nk-dark); }
+  .nuke-cmd-note { margin:0 0 10px; font-size:11.5px; line-height:1.7; color:var(--nk-dim); }
+  .nuke-cmdbox { background:var(--nk-panel); border:1px solid var(--nk-deep); padding:9px;
+    box-shadow:inset 1px 1px 0 rgba(57,255,20,.08); }
+  .nuke-cmdbox code { display:block; white-space:pre-wrap; word-break:break-word;
+    font-size:11.5px; line-height:1.6; color:var(--nk-green); text-shadow:0 0 4px rgba(57,255,20,.3); }
+  .nuke-cmd-hint { margin:10px 0 0; font-size:10.5px; line-height:1.7; color:var(--nk-dim); }
 
   .nuke-pick-foot { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:7px;
     background:var(--nk-panel); border-top:1px solid #000; }
@@ -2286,18 +2237,20 @@
         </div>
         <div class="gh-list forge-list" id="forgeList"></div>
       </div>
-<!-- LLMNUKE.EXE — a Win95-cracktro console for agent sessions. Where payphone
-     chats a local model, LLMNUKE arms an *agent*: you pick a fleet machine, the
-     Unix user to run as (filtered by group), and a model, and drop into a
-     terminal-style session running opencode as that user. It's the same "hush
-     composes, you run" spirit as docs/SESSIONS.md — the demo desktop below
-     test-drives the whole UX with fabricated fleet data; against a live
-     hush-control backend the app shows a LIVE-coming-soon crest instead (the
-     real spawn path is deliberately not wired yet). See launcher JS. -->
+<!-- LLMNUKE.EXE — a Win95-cracktro console for agent sessions, and the focused
+     sibling of the fleet console's Sessions section (docs/SESSIONS.md): pick a
+     fleet machine, the Unix user to run as, and a model, and it composes the
+     real sudo+tmux command to spawn opencode or claude as that user — the same
+     "hush composes, you run" posture as the rest of the console. hush never
+     runs it; you copy the line into a root shell (JuiceSSH) yourself. Active
+     Sessions is a real, fleet-wide read of every online box's /sessions, each
+     with a Stop button that composes the kill command the same way. Live vs
+     demo (a fabricated fleet, same shape, same UI) is decided once by probing
+     /api/fleet. See launcher JS. -->
 <div id="llmnukeScreen" role="dialog" aria-label="LLMNUKE.EXE" aria-modal="true">
   <div class="nuke-crt">
 
-    <!-- detect splash: probes /api/fleet to decide demo vs live before painting -->
+    <!-- detect splash: probes /api/fleet to load the live or demo fleet before painting -->
     <div class="nuke-boot" id="nukeBoot" aria-live="polite">
       <pre class="nuke-boot-art" aria-hidden="true">      ▄▄▄▄▄▄▄
     ▄█▓▓▒▒░░▒▓█▄
@@ -2309,46 +2262,10 @@
       <div class="nuke-boot-sub" id="nukeBootSub">pr0b1ng th3 fl33t . . .</div>
     </div>
 
-    <!-- LIVE crest: shown when a real hush-control backend answers /api/fleet.
-         The live spawn path isn't wired yet, so the app parks here on purpose. -->
-    <div class="nuke-soon" id="nukeSoon" hidden>
-      <svg class="nuke-crest" viewBox="0 0 240 240" role="img" aria-label="LLMNUKE">
-        <defs>
-          <radialGradient id="nkGlow" cx="50%" cy="50%" r="50%">
-            <stop offset="0" stop-color="#39ff14" stop-opacity=".55"/>
-            <stop offset="1" stop-color="#39ff14" stop-opacity="0"/>
-          </radialGradient>
-          <linearGradient id="nkTox" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#d6ffce"/>
-            <stop offset=".5" stop-color="#39ff14"/>
-            <stop offset="1" stop-color="#0f7a06"/>
-          </linearGradient>
-        </defs>
-        <circle cx="120" cy="120" r="110" fill="url(#nkGlow)"/>
-        <!-- radioactive trefoil -->
-        <g transform="translate(120 120)" fill="url(#nkTox)" stroke="#052b00" stroke-width="3" stroke-linejoin="round">
-          <circle r="15"/>
-          <path d="M0 0 L34 -59 A68 68 0 0 1 68 0 Z" transform="rotate(0)"/>
-          <path d="M0 0 L34 -59 A68 68 0 0 1 68 0 Z" transform="rotate(120)"/>
-          <path d="M0 0 L34 -59 A68 68 0 0 1 68 0 Z" transform="rotate(240)"/>
-        </g>
-      </svg>
-      <div class="nuke-soon-title">L1V3 M0D3<br><b>C0M1NG S00N</b></div>
-      <p class="nuke-soon-note">
-        LLMNUKE se3z a l1v3 hush-control backend — s0 it'z st4nd1ng d0wn.<br>
-        Th3 r34l spawn p4th (opencode az a fl33t us3r 0v3r ssh) 1z st1ll 0n th3 b3nch;<br>
-        f0r n0w th1z 1z a UX pr3v13w — run 1t 0n th3 st4t1c d3m0 t0 t3st dr1v3.
-      </p>
-      <p class="nuke-soon-see">
-        Th3 c0mp0s3-th3-c0mm4nd m0d3l 1t'z built 0n → <span class="nuke-mono">docs/SESSIONS.md</span>
-      </p>
-      <button class="nuke-soon-back" id="nukeSoonBack" type="button">‹ 3XIT</button>
-    </div>
-
-    <!-- ===== DEMO DESKTOP ===== -->
+    <!-- ===== DESKTOP ===== -->
     <div class="nuke-desk" id="nukeDesk" hidden>
 
-      <!-- home window: your Active Sessions (resume any time) -->
+      <!-- home window: fleet-wide Active Sessions, real or demo, same UI either way -->
       <div class="nuke-win nuke-home" id="nukeHome">
         <div class="nuke-tbar">
           <span class="nuke-tico" aria-hidden="true">☢</span>
@@ -2363,27 +2280,7 @@
           <div class="nuke-list" id="nukeSessList" role="tree" aria-label="Active agent sessions"></div>
           <div class="nuke-home-foot">
             <span class="nuke-me">j4ck3d 1n az <b>gU3st@clarkbar</b></span>
-            <span class="nuke-badge">0WNZ0R3D</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- agent terminal / chat window -->
-      <div class="nuke-win nuke-term" id="nukeTerm" role="dialog" aria-label="Agent session" aria-modal="false">
-        <div class="nuke-tbar">
-          <span class="nuke-tico" aria-hidden="true">⌁</span>
-          <span class="nuke-t-txt" id="nukeTermTitle">opencode</span>
-          <span class="nuke-tbtn" id="nukeTermMin" role="button" tabindex="0" aria-label="Back to sessions">_</span>
-          <span class="nuke-tbtn" id="nukeTermClose" role="button" tabindex="0" aria-label="Kill session">×</span>
-        </div>
-        <div class="nuke-route" id="nukeRoute" aria-hidden="true"></div>
-        <div class="nuke-log" id="nukeLog" aria-live="polite" aria-atomic="false"></div>
-        <div class="nuke-typing" id="nukeTyping" aria-live="polite"></div>
-        <div class="nuke-cwrap">
-          <textarea class="nuke-input" id="nukeInput" rows="2" placeholder="t3ll th3 4g3nt wh4t 2 d0…" aria-label="Message the agent"></textarea>
-          <div class="nuke-crow">
-            <span class="nuke-warn" id="nukeWarn"></span>
-            <button class="nuke-send" id="nukeSend" type="button"><span class="nuke-rr">»</span> TR4NSM1T</button>
+            <span class="nuke-badge" id="nukeModeBadge">D3M0 D4T4</span>
           </div>
         </div>
       </div>
@@ -2409,6 +2306,29 @@
           <button class="nuke-pick-back" id="nukePickBack" type="button" hidden>‹ B4CK</button>
           <span class="nuke-pick-sum" id="nukePickSum"></span>
           <button class="nuke-pick-go" id="nukePickGo" type="button" disabled>☢ 4RM S3SS10N »</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== COMMAND SHEET (spawn / stop) — "hush composes, you run" =====
+         Shared by arming a session and stopping one: shows the exact command,
+         a copy button, and nothing else — hush never executes either line. -->
+    <div class="nuke-dialog" id="nukeCmd" role="dialog" aria-modal="true" aria-labelledby="nukeCmdTitle" hidden>
+      <div class="nuke-win nuke-cmdwin">
+        <div class="nuke-tbar">
+          <span class="nuke-tico" aria-hidden="true">☢</span>
+          <span class="nuke-t-txt" id="nukeCmdTitle">SP4WN CMD</span>
+          <span class="nuke-tbtn" id="nukeCmdX" role="button" tabindex="0" aria-label="Close">×</span>
+        </div>
+        <div class="nuke-cmd-body">
+          <p class="nuke-cmd-note" id="nukeCmdNote"></p>
+          <div class="nuke-cmdbox"><code id="nukeCmdCode"></code></div>
+          <p class="nuke-cmd-hint" id="nukeCmdHint"></p>
+        </div>
+        <div class="nuke-pick-foot">
+          <button class="nuke-pick-back" id="nukeCmdDone" type="button">D0N3</button>
+          <span class="nuke-pick-sum"></span>
+          <button class="nuke-pick-go" id="nukeCmdCopy" type="button">☢ C0PY »</button>
         </div>
       </div>
     </div>
@@ -4363,139 +4283,213 @@
   }, 2500);
 
   /* ===== LLMNUKE.EXE — agent sessions, warez edition =========================
-     payphone chats a model; LLMNUKE arms an *agent*. You pick a fleet machine,
-     the Unix user to run as (filtered by group), and a model, and drop into a
-     terminal running opencode as that user — resumable, so you leave a session
-     and pick it right back up. This is the proof-of-life build: the whole UX is
-     driven by fabricated fleet data so it can be test-driven offline. Against a
-     live hush-control backend (GET /api/fleet answers) it parks on a
-     LIVE-coming-soon crest instead — the real spawn path (compose a sudo+tmux
-     command the way docs/SESSIONS.md does) is deliberately not wired yet.
+     The focused sibling of the fleet console's Sessions section (see
+     docs/SESSIONS.md), reskinned as its own hacked-Win95 app: pick a fleet
+     machine, the Unix user to run as, and a model, and LLMNUKE composes the
+     one sudo+tmux command that spawns opencode or claude as that user — same
+     "hush composes, you run" posture as the rest of the console. hush never
+     runs the command; you copy it into a root shell (JuiceSSH) yourself. The
+     Active Sessions list is a real read of every online box's `/sessions`
+     (aggregated fleet-wide, unlike the per-machine fleet view), each with a
+     Stop button that composes the kill command the same way.
+
+     Live vs demo is decided once, by probing /api/fleet: a real hush-control
+     answers with the live fleet and live /sessions + /users reads; anything
+     else (static preview, offline, file://) falls back to a fabricated demo
+     fleet — but it's the *same* UI and the *same* code path either way, just
+     a different data source, so the demo is a faithful preview of the real
+     thing rather than a separate theatre.
      Namespaced to this folder; nothing here touches the fleet console. */
   (function(){
     const scr = $("#llmnukeScreen");
     if(!scr) return;
 
     const boot = $("#nukeBoot"), bootSub = $("#nukeBootSub");
-    const soon = $("#nukeSoon"), desk = $("#nukeDesk");
+    const desk = $("#nukeDesk");
     const sessList = $("#nukeSessList");
-    const term = $("#nukeTerm"), termTitle = $("#nukeTermTitle"), route = $("#nukeRoute");
-    const logEl = $("#nukeLog"), typingEl = $("#nukeTyping");
-    const input = $("#nukeInput"), sendBtn = $("#nukeSend"), warnEl = $("#nukeWarn");
+    const modeBadge = $("#nukeModeBadge");
     const pick = $("#nukePick"), pickBody = $("#nukePickBody"), pickHint = $("#nukePickHint");
     const pickSum = $("#nukePickSum"), pickGo = $("#nukePickGo"), pickBack = $("#nukePickBack");
     const steps = $("#nukeSteps");
+    const cmdDlg = $("#nukeCmd"), cmdTitle = $("#nukeCmdTitle"), cmdNote = $("#nukeCmdNote");
+    const cmdCode = $("#nukeCmdCode"), cmdHint = $("#nukeCmdHint"), cmdCopy = $("#nukeCmdCopy");
 
-    /* ---- demo fleet: boxes, their Unix users (with a group to filter on), and
-       the models each box serves on the tailnet. opencode on any box can point
-       at any online box's model, so the model step lists the whole fleet. ---- */
-    const FLEET = [
-      { id:"citadel", os:"Debian 12", online:true, ip:"100.71.8.9",
-        models:["qwen2.5-coder-32b","llama-3.3-70b"],
-        users:[ {name:"root",uid:0,group:"wheel"}, {name:"josh",uid:1000,group:"wheel"},
-                {name:"ci",uid:1001,group:"agents"}, {name:"warez",uid:1337,group:"agents"} ] },
-      { id:"forge", os:"Arch Linux", online:true, ip:"100.71.2.5",
-        models:["deepseek-coder-v2-lite"],
-        users:[ {name:"root",uid:0,group:"wheel"}, {name:"ci",uid:1000,group:"agents"},
-                {name:"maya",uid:1001,group:"devs"} ] },
-      { id:"lab-01", os:"NixOS 24.05", online:true, ip:"100.71.5.7",
-        models:["qwen2.5-coder:32b","deepseek-r1:14b"],
-        users:[ {name:"root",uid:0,group:"wheel"}, {name:"lab",uid:1000,group:"devs"} ] },
-      { id:"pi-gate", os:"Raspberry Pi OS", online:true, ip:"100.71.0.1", models:[],
-        users:[ {name:"root",uid:0,group:"wheel"}, {name:"pi",uid:1000,group:"devs"} ] },
-      { id:"atlas", os:"Ubuntu 24.04", online:false, ip:"100.71.9.3", models:[],
-        users:[ {name:"root",uid:0,group:"wheel"}, {name:"media",uid:1000,group:"devs"} ] },
+    const USER_RE = /^[a-z_][a-z0-9_-]*$/; // conservative POSIX login, keeps a typo out of the composed command
+
+    /* ---- demo fleet: same box identities the fleet console's own demo data
+       uses (citadel/forge/atlas/pi-gate/lab-01 — same ids and IPs), shaped
+       exactly like a live /api/fleet entry (llm.runtimes with exposure/models)
+       so demoFleetModels() and buildOpencodeConfig() below run unmodified
+       against either source. ---- */
+    const DEMO_FLEET = [
+      { id:"citadel", os:"Debian 12", ip:"100.71.8.9", online:true,
+        llm:{runtimes:[{kind:"openai", addr:"100.71.8.9:8091", exposure:"tailnet",
+          models:["qwen2.5-coder-32b-instruct","llama-3.3-70b-instruct"]}]},
+        users:[ {name:"root",uid:0}, {name:"josh",uid:1000}, {name:"ci",uid:1001}, {name:"warez",uid:1337} ],
+        sessions:[ {pid:48213,user:"josh",tool:"opencode",cmd:"opencode",uptime:5400},
+                   {pid:52140,user:"warez",tool:"claude",cmd:"claude --remote-control --dangerously-skip-permissions",uptime:640} ] },
+      { id:"forge", os:"Arch Linux", ip:"100.71.2.5", online:true,
+        llm:{runtimes:[{kind:"openai", addr:"100.71.2.5:8091", exposure:"tailnet", models:["deepseek-coder-v2-lite"]}]},
+        users:[ {name:"root",uid:0}, {name:"ci",uid:1000}, {name:"maya",uid:1001} ],
+        sessions:[ {pid:11902,user:"ci",tool:"opencode",cmd:"opencode run --agent build",uptime:210} ] },
+      { id:"lab-01", os:"NixOS 24.05", ip:"100.71.5.7", online:true,
+        llm:{runtimes:[{kind:"ollama", addr:"100.71.5.7:11434", exposure:"tailnet",
+          models:["qwen2.5-coder:32b","deepseek-r1:14b"]}]},
+        users:[ {name:"root",uid:0}, {name:"lab",uid:1000} ], sessions:[] },
+      { id:"pi-gate", os:"Raspberry Pi OS", ip:"100.71.0.1", online:true,
+        llm:{runtimes:[]}, users:[ {name:"root",uid:0}, {name:"pi",uid:1000} ], sessions:[] },
+      { id:"atlas", os:"Ubuntu 24.04", ip:"100.71.9.3", online:false,
+        llm:{runtimes:[]}, users:[ {name:"root",uid:0}, {name:"media",uid:1000} ], sessions:[] },
     ];
-    const boxById = id => FLEET.find(b => b.id === id);
+
+    let LIVE = null;      // null=undetermined, true=live hush-control, false=demo fallback
+    let FLEET = [];        // normalized machines, live and demo share this exact shape
+    const USERS_CACHE = {};      // host -> users[] (live only; demo boxes carry their own)
+    const SESSIONS_CACHE = {};   // host -> { sessions, err }
+
+    // reachableRuntimes mirrors the fleet console's ocReachable verdict: a
+    // runtime is callable from off-box iff it's bound past loopback.
+    function reachableRuntimes(b){
+      return ((b.llm && b.llm.runtimes) || []).filter(r => r.exposure==="tailnet" || r.exposure==="open");
+    }
     function fleetModels(){
       const out = [];
-      FLEET.forEach(b => { if(b.online) b.models.forEach(m => out.push({model:m, host:b.id})); });
+      FLEET.forEach(b => { if(b.online) reachableRuntimes(b).forEach(r => (r.models||[]).forEach(m => out.push({model:m, host:b.id}))); });
       return out;
     }
+    function splitAddr(addr){
+      const i = (addr||"").lastIndexOf(":");
+      return i < 0 ? { host:addr||"", port:"" } : { host:addr.slice(0,i), port:addr.slice(i+1) };
+    }
+    // buildOpencodeConfig writes the one provider/model the wizard picked —
+    // narrower than the fleet console's export (which offers every reachable
+    // runtime on the box), since a spawned session only needs the one model it
+    // was pointed at. Same openai-compatible shape opencode expects.
+    function buildOpencodeConfig(host, model){
+      const rt = reachableRuntimes(host).find(r => (r.models||[]).includes(model));
+      if(!rt) return null;
+      const { host:h0, port } = splitAddr(rt.addr);
+      const h = (h0==="0.0.0.0"||h0==="::"||h0==="") ? (host.ip||h0) : h0;
+      const hostPart = h.includes(":") ? `[${h}]` : h;
+      const baseURL = `http://${hostPart}${port?":"+port:""}/v1`;
+      const baseKey = host.id.toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-+|-+$/g,"") || "local";
+      const models = {}; models[model] = { name:model, cost:{ input:0, output:0 } };
+      const provider = {};
+      provider[baseKey] = { npm:"@ai-sdk/openai-compatible", name:`${host.id} · ${rt.kind==="ollama"?"ollama":"openai-compatible"}`, options:{ baseURL }, models };
+      return { "$schema":"https://opencode.ai/config.json", provider };
+    }
 
-    /* ---- session store: demo only, so it lives in localStorage (no backend).
-       That's what makes "leave a chat and come back like I never left" work
-       across reloads without a control node behind the page. ---- */
-    const LS_KEY = "llmnuke.sessions.v1", MAX_SESS = 40, MAX_MSGS = 400;
-    let SESSIONS = loadSessions();
-    let seq = 0;
-    function loadSessions(){
-      try {
-        const raw = localStorage.getItem(LS_KEY);
-        const a = raw ? JSON.parse(raw) : [];
-        return Array.isArray(a) ? a : [];
-      } catch(_){ return []; }
-    }
-    function saveSessions(){
-      try { localStorage.setItem(LS_KEY, JSON.stringify(SESSIONS.slice(0, MAX_SESS))); } catch(_){}
-    }
-    function newId(){
-      seq++;
-      return "s" + Date.now().toString(36) + seq.toString(36);
-    }
-    function touch(s){ s.updated = Date.now(); SESSIONS.sort((a,b)=>b.updated-a.updated); saveSessions(); }
-
-    /* ---- live vs demo: probe /api/fleet once. A 200 JSON array means a real
-       hush-control is behind the page → stand down to the coming-soon crest.
-       Anything else (404 on the static preview, a network error offline) is the
-       legitimate demo fallback — exactly how the fleet console derives its
-       demo mode. ---- */
-    let LIVE = null;
-    async function probeLive(){
+    /* ---- live vs demo: probe /api/fleet once, then load the fleet from
+       whichever source answered. A 200 JSON array means a real hush-control is
+       behind the page; anything else (404 on the static preview, a network
+       error offline) is the legitimate demo fallback — same signal the fleet
+       console uses for its own demo mode. ---- */
+    async function loadFleet(){
       try {
         const r = await fetch("api/fleet", {cache:"no-store"});
-        if(!r.ok) return false;
+        if(!r.ok) throw 0;
         const d = await r.json();
-        return Array.isArray(d);
-      } catch(_){ return false; }
+        if(!Array.isArray(d)) throw 0;
+        FLEET = d.map(m => ({ id:m.id, os:m.os||"", ip:m.ip||"", online:!!m.online, llm:m.llm||{runtimes:[]} }));
+        LIVE = true;
+      } catch(_){
+        FLEET = DEMO_FLEET;
+        LIVE = false;
+      }
+      modeBadge.textContent = LIVE ? "L1V3" : "D3M0 D4T4";
+      modeBadge.classList.toggle("live", !!LIVE);
+    }
+    // usersFor lazily reads a box's human accounts: the demo fleet carries its
+    // own list, a live box answers GET /api/machines/{host}/users (the same
+    // read the fleet console's Users section uses).
+    async function usersFor(box){
+      if(!LIVE) return box.users || [];
+      if(USERS_CACHE[box.id]) return USERS_CACHE[box.id];
+      try {
+        const r = await fetch(`api/machines/${encodeURIComponent(box.id)}/users`, {cache:"no-store"});
+        if(!r.ok) return [];
+        const d = await r.json();
+        const list = (d && d.users) || [];
+        USERS_CACHE[box.id] = list;
+        return list;
+      } catch(_){ return []; }
+    }
+    // sessionsFor lazily reads a box's running coding agents: GET
+    // /api/machines/{host}/sessions live, or the demo fleet's own fabricated
+    // list — same shape, same 404-means-"old agent" handling as fleet.js.
+    async function sessionsFor(box){
+      if(!LIVE) return { sessions: box.sessions || [], err:"" };
+      try {
+        const r = await fetch(`api/machines/${encodeURIComponent(box.id)}/sessions`, {cache:"no-store"});
+        if(!r.ok) return { sessions:[], err: r.status===404 ? "old-agent" : "unreach" };
+        const d = await r.json();
+        return { sessions:(d && d.sessions) || [], err:"" };
+      } catch(_){ return { sessions:[], err:"unreach" }; }
     }
 
     /* ---------- open / close ---------- */
-    let clockTimer = null;
+    let clockTimer = null, sessPollTimer = null;
     function openNuke(){
       scr.classList.add("on");
       clockTick(); clockTimer = setInterval(clockTick, 15000);
       if(LIVE === null){
-        boot.hidden = false; soon.hidden = true; desk.hidden = true;
+        boot.hidden = false; desk.hidden = true;
         const spin = ["pr0b1ng th3 fl33t . . .","c0unt1ng g31g3r t1ckz . . .","ch3ck1ng c0ntr0l pl4n3 . . ."];
         let i = 0; const t = setInterval(()=>{ bootSub.textContent = spin[++i % spin.length]; }, 260);
-        Promise.all([probeLive(), sleep(700)]).then(([live]) => {
-          clearInterval(t); LIVE = live; paint();
-        });
+        Promise.all([loadFleet(), sleep(500)]).then(() => { clearInterval(t); boot.hidden = true; desk.hidden = false; paint(); });
       } else { paint(); }
     }
     function paint(){
-      boot.hidden = true;
-      if(LIVE){ soon.hidden = false; desk.hidden = true; try{ $("#nukeSoonBack").focus({preventScroll:true}); }catch(_){} return; }
-      soon.hidden = true; desk.hidden = false;
-      showHome();
       renderSessions();
+      refreshSessions();
+      if(sessPollTimer) clearInterval(sessPollTimer);
+      sessPollTimer = setInterval(refreshSessions, 6000);
     }
     function closeNuke(){
-      stopAgent();
       startMenu(false);
       pick.hidden = true;
+      cmdDlg.hidden = true;
       if(clockTimer){ clearInterval(clockTimer); clockTimer = null; }
-      showHome();
+      if(sessPollTimer){ clearInterval(sessPollTimer); sessPollTimer = null; }
       scr.classList.remove("on");
       try { $("#homeLlmnuke").focus({preventScroll:true}); } catch(_){}
     }
     const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-    /* ---------- home: the Active Sessions list ---------- */
-    function showHome(){ desk.classList.remove("term-open"); }
+    /* ---------- home: the Active Sessions list, fleet-wide ---------- */
+    let sessSeq = 0;
+    async function refreshSessions(){
+      const seq = ++sessSeq;
+      const online = FLEET.filter(b => b.online);
+      const results = await Promise.all(online.map(async b => ({ box:b, ...(await sessionsFor(b)) })));
+      if(seq !== sessSeq) return; // a newer refresh landed first
+      results.forEach(r => { SESSIONS_CACHE[r.box.id] = r; });
+      renderSessions();
+    }
+    function fmtUptime(sec){
+      if(!sec || sec < 0) return "";
+      if(sec < 60) return sec+"s";
+      const m = Math.round(sec/60); if(m < 60) return m+"m";
+      const h = Math.floor(m/60); return h < 24 ? h+"h" : Math.floor(h/24)+"d";
+    }
     function renderSessions(){
       sessList.innerHTML = "";
-      if(!SESSIONS.length){
+      const rows = [];
+      FLEET.forEach(b => {
+        const st = SESSIONS_CACHE[b.id];
+        if(st && st.sessions) st.sessions.forEach(s => rows.push({ box:b, s }));
+      });
+      if(!rows.length){
         const e = document.createElement("div");
         e.className = "nuke-empty";
         e.innerHTML = '<div class="nuke-empty-art" aria-hidden="true">☢</div>'
           + '<div class="nuke-empty-t">N0 4CT1V3 S3SS10NZ</div>'
-          + '<div class="nuke-empty-s">y0u ain\'t 0wn1ng n0th1n\' y3t.<br>h1t <b>NUK3 N3W S3SS10N</b> 2 4rm 0n3.</div>';
+          + '<div class="nuke-empty-s">n0th1n\' runn1ng 0n th3 fl33t r1ght n0w.<br>h1t <b>NUK3 N3W S3SS10N</b> 2 sp4wn 0n3.</div>';
         sessList.appendChild(e);
         return;
       }
-      SESSIONS.forEach(s => {
+      rows.sort((a,b) => (a.s.uptime||0) - (b.s.uptime||0));
+      rows.forEach(({box, s}) => {
         const row = document.createElement("div");
         row.className = "nuke-sess"; row.setAttribute("role","treeitem"); row.tabIndex = 0;
         const ico = s.tool === "claude" ? "✳" : "⌁";
@@ -4506,39 +4500,24 @@
           +   '<span class="nuke-sess-sub"></span>'
           + '</span>'
           + '<span class="nuke-sess-live">l1v3</span>'
-          + '<span class="nuke-sess-kill" role="button" tabindex="0" aria-label="Kill session">×</span>';
-        row.querySelector(".nuke-sess-title").textContent = s.title;
-        const n = s.messages ? s.messages.filter(m=>m.who==="me"||m.who==="agent").length : 0;
-        row.querySelector(".nuke-sess-sub").textContent =
-          s.tool + " · " + s.ip + " · " + ago(s.updated) + " · " + n + " lin3z";
-        const open = () => openSession(s.id);
-        row.addEventListener("click", e => { if(!e.target.closest(".nuke-sess-kill")) open(); });
-        row.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); open(); } });
+          + '<button class="nuke-sess-kill" type="button" aria-label="Stop session">×</button>';
+        row.querySelector(".nuke-sess-title").textContent = (s.user||"?")+"@"+box.id;
+        const up = fmtUptime(s.uptime);
+        row.querySelector(".nuke-sess-sub").textContent = s.tool + (up?" · "+up:"") + (s.cmd?" · "+s.cmd:"");
+        const stop = () => openStopSheet(box, s);
+        row.addEventListener("click", e => { if(!e.target.closest(".nuke-sess-kill")) stop(); });
+        row.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); stop(); } });
         const kill = row.querySelector(".nuke-sess-kill");
-        kill.addEventListener("click", e => { e.stopPropagation(); killSession(s.id); });
-        kill.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); e.stopPropagation(); killSession(s.id); } });
+        kill.addEventListener("click", e => { e.stopPropagation(); stop(); });
         sessList.appendChild(row);
       });
-    }
-    function ago(ts){
-      const s = Math.max(0, (Date.now()-ts)/1000);
-      if(s < 60) return "n0w";
-      if(s < 3600) return Math.floor(s/60)+"m";
-      if(s < 86400) return Math.floor(s/3600)+"h";
-      return Math.floor(s/86400)+"d";
-    }
-    function killSession(id){
-      SESSIONS = SESSIONS.filter(s => s.id !== id);
-      saveSessions();
-      if(curSess && curSess.id === id){ curSess = null; showHome(); }
-      renderSessions();
     }
 
     /* ---------- the target selector (machine → user → model) ---------- */
     let wiz = null;
     function openPicker(){
       startMenu(false);
-      wiz = { step:0, box:null, user:null, group:"all", model:null, tool:"opencode", llmHost:null };
+      wiz = { step:0, box:null, user:null, model:null, tool:"opencode", llmHost:null };
       pick.hidden = false;
       renderWizard();
       try { pickBody.querySelector(".nuke-row").focus(); } catch(_){}
@@ -4547,13 +4526,11 @@
     function setStep(n){ wiz.step = n; renderWizard(); }
 
     function renderWizard(){
-      // step chrome
       Array.from(steps.children).forEach((c,i) => {
         c.classList.toggle("on", i === wiz.step);
         c.classList.toggle("done", i < wiz.step);
       });
       pickBack.hidden = wiz.step === 0;
-      pickBody.innerHTML = "";
       pickGo.disabled = !(wiz.step === 2 && wiz.model);
       pickSum.textContent = summarize();
 
@@ -4574,12 +4551,19 @@
       el.addEventListener("click", fn);
       el.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); fn(); } });
     }
+    function emptyRow(text){
+      const e = document.createElement("div"); e.className = "nuke-empty";
+      e.innerHTML = '<div class="nuke-empty-s"></div>'; e.querySelector(".nuke-empty-s").textContent = text;
+      return e;
+    }
 
     function renderMachines(){
       pickHint.textContent = "P1ck a b0x 0n th3 fl33t 2 0wn.";
+      pickBody.innerHTML = "";
       const boxes = FLEET.slice().sort((a,b)=> (b.online?1:0)-(a.online?1:0));
       boxes.forEach(b => {
-        const sub = b.os + " · " + b.ip + " · " + (b.online ? (b.models.length? b.models.length+" m0d3lz" : "n0 l0c4l m0d3l") : "s1gn3d 0ff");
+        const n = fleetModels().filter(m=>m.host===b.id).length;
+        const sub = (b.os||"box") + " · " + (b.ip||"?") + " · " + (b.online ? (n ? n+" m0d3lz" : "n0 l0c4l m0d3l") : "s1gn3d 0ff");
         const el = rowEl(b.online ? "" : "off",
           '<span class="nuke-dot'+(b.online?"":" off")+'" aria-hidden="true"></span>'
           + '<span class="nuke-row-body"><span class="nuke-row-name"></span><span class="nuke-row-sub"></span></span>');
@@ -4588,32 +4572,29 @@
         if(wiz.box && wiz.box.id === b.id) el.classList.add("sel");
         bindRow(el, () => {
           if(!b.online){ warnPick("th4t b0x 1z s1gn3d 0ff — c4n't 4rm 0n 1t."); return; }
-          wiz.box = b; wiz.user = null; wiz.group = "all"; setStep(1);
+          wiz.box = b; wiz.user = null; setStep(1);
         });
         pickBody.appendChild(el);
       });
     }
 
-    function renderUsers(){
-      pickHint.textContent = "Wh0 d0 w3 run az 0n " + wiz.box.id + "? (f1lt3r by gr0up)";
-      // group filter chips
-      const groups = ["all"].concat(Array.from(new Set(wiz.box.users.map(u=>u.group))));
-      const chips = document.createElement("div"); chips.className = "nuke-chips";
-      groups.forEach(g => {
-        const c = document.createElement("button"); c.type = "button";
-        c.className = "nuke-chip" + (wiz.group===g?" on":""); c.textContent = g==="all"?"all gr0upz":g;
-        c.addEventListener("click", () => { wiz.group = g; renderWizard(); });
-        chips.appendChild(c);
-      });
-      pickBody.appendChild(chips);
-      const users = wiz.box.users.filter(u => wiz.group==="all" || u.group===wiz.group);
-      users.forEach(u => {
+    let usersReqSeq = 0;
+    async function renderUsers(){
+      pickHint.textContent = "Wh0 d0 w3 run az 0n " + wiz.box.id + "?";
+      pickBody.innerHTML = "";
+      pickBody.appendChild(emptyRow("r34d1ng us3rz…"));
+      const seq = ++usersReqSeq;
+      const users = await usersFor(wiz.box);
+      if(seq !== usersReqSeq || !wiz || wiz.step !== 1) return; // stale — nav'd away
+      pickBody.innerHTML = "";
+      if(!users.length){ pickBody.appendChild(emptyRow("n0 us3r acc0untz f0und (0r th3 4g3nt'z t00 0ld 2 r3p0rt th3m).")); return; }
+      users.slice().sort((a,b)=> a.uid - b.uid).forEach(u => {
         const el = rowEl("",
           '<span class="nuke-row-ico" aria-hidden="true">'+(u.uid===0?"#":"~")+'</span>'
           + '<span class="nuke-row-body"><span class="nuke-row-name"></span><span class="nuke-row-sub"></span></span>'
           + '<span class="nuke-tag'+(u.uid===0?" uid0":"")+'">'+(u.uid===0?"r00t":("uid "+u.uid))+'</span>');
         el.querySelector(".nuke-row-name").textContent = u.name;
-        el.querySelector(".nuke-row-sub").textContent = "gr0up: "+u.group+" · sudo -u "+u.name;
+        el.querySelector(".nuke-row-sub").textContent = "sudo -u "+u.name;
         if(wiz.user && wiz.user.name === u.name) el.classList.add("sel");
         bindRow(el, () => { wiz.user = u; setStep(2); });
         pickBody.appendChild(el);
@@ -4622,6 +4603,7 @@
 
     function renderModels(){
       pickHint.textContent = "P01nt th3 4g3nt @ a m0d3l 0n th3 tailnet.";
+      pickBody.innerHTML = "";
       const models = fleetModels();
       models.forEach(m => {
         const el = rowEl("",
@@ -4643,148 +4625,77 @@
       if(wiz.tool==="claude") c.classList.add("sel");
       bindRow(c, () => { wiz.tool = "claude"; wiz.model = "claude"; wiz.llmHost = null; renderWizard(); });
       pickBody.appendChild(c);
+      if(!models.length) pickBody.insertBefore(emptyRow("n0 tailnet-r34ch4bl3 LLM 0n th3 fl33t — 0p3nc0d3 w0n't h4v3 a l0c4l m0d3l t0 p01nt 4t y3t."), c);
     }
     function warnPick(msg){ pickHint.textContent = msg; }
 
-    /* ---------- arming a session ---------- */
+    /* ---------- arming a session: compose the real spawn command ----------
+       "hush composes, you run": same posture as docs/SESSIONS.md and the
+       fleet console's own Spawn sheet. hush never runs this — it hands you
+       the line to paste into a root shell (JuiceSSH) on the box. */
+    function composeCmd(w){
+      const u = w.user.name;
+      if(w.tool === "claude"){
+        const prefix = (w.box.id+"."+u).replace(/[^a-zA-Z0-9._-]/g, "-");
+        return "sudo -u "+u+" -H bash -lc '\n"
+          + "  export CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX=\""+prefix+"\" &&\\\n"
+          + "  exec tmux new-session -A -s hush-claude claude --remote-control --dangerously-skip-permissions'";
+      }
+      let lines = "";
+      const cfg = buildOpencodeConfig(w.box, w.model);
+      if(cfg){
+        const json = JSON.stringify(cfg, null, 2);
+        const b64 = btoa(unescape(encodeURIComponent(json)));
+        lines += "  mkdir -p \"$HOME/.config/opencode\" &&\\\n";
+        lines += "  printf %s \""+b64+"\" | base64 -d > \"$HOME/.config/opencode/opencode.json\" &&\\\n";
+      }
+      lines += "  exec tmux new-session -A -s hush-opencode opencode";
+      return "sudo -u "+u+" -H bash -lc '\n"+lines+"'";
+    }
     function armSession(){
       if(!(wiz && wiz.box && wiz.user && wiz.model)) return;
-      const b = wiz.box, u = wiz.user;
-      const s = {
-        id:newId(), machine:b.id, ip:b.ip, user:u.name, group:u.group,
-        tool:wiz.tool, model:wiz.model, llmHost:wiz.llmHost,
-        title: u.name+"@"+b.id+" "+(wiz.tool==="claude"?"✳":"⌁")+" "+wiz.model,
-        started:Date.now(), updated:Date.now(), messages:[],
-      };
-      // "hush composes, you run": the session opens on the command hush would
-      // hand you (see docs/SESSIONS.md) — theatre here, real shape.
-      const cmd = composeCmd(s);
-      s.messages.push({who:"sys", text:cmd});
-      s.messages.push({who:"sys", text:"[+] 4tt4ch3d 2 tmux::hush-"+s.tool+" 0n "+s.machine+" az "+s.user});
-      SESSIONS.unshift(s); saveSessions();
+      const cmd = composeCmd(wiz);
+      const box = wiz.box, tool = wiz.tool;
       closePicker();
       beep();
-      openSession(s.id, /*fresh*/true);
-    }
-    function composeCmd(s){
-      if(s.tool === "claude"){
-        return "sudo -u "+s.user+" -H bash -lc 'exec tmux new-session -A -s hush-claude "
-          + "claude --remote-control --dangerously-skip-permissions'";
-      }
-      return "sudo -u "+s.user+" -H bash -lc '\\\n"
-        + "  mkdir -p \"$HOME/.config/opencode\" &&\\\n"
-        + "  printf %s \"<base64 opencode.json → "+(s.llmHost||"?")+"/"+s.model+">\" | base64 -d "
-        + "> \"$HOME/.config/opencode/opencode.json\" &&\\\n"
-        + "  exec tmux new-session -A -s hush-opencode opencode'";
-    }
-
-    /* ---------- terminal / agent chat ---------- */
-    let curSess = null;
-    function openSession(id, fresh){
-      const s = SESSIONS.find(x => x.id === id);
-      if(!s) return;
-      curSess = s;
-      termTitle.textContent = (s.tool==="claude"?"✳ ":"⌁ ") + s.tool;
-      route.innerHTML = "";
-      route.append(
-        document.createTextNode("["+s.tool+"] "),
-        Object.assign(document.createElement("b"), {textContent:s.user+"@"+s.machine}),
-        document.createTextNode("  ::  "+s.model+(s.llmHost?("  ::  "+s.llmHost):""))
-      );
-      logEl.innerHTML = "";
-      (s.messages||[]).forEach(m => appendLine(m.who, m.text));
-      typingEl.textContent = "";
-      desk.classList.add("term-open");
-      warnEl.textContent = "";
-      input.value = ""; input.disabled = false; sendBtn.disabled = false;
-      scrollLog();
-      if(fresh){
-        // the agent's opening line — greet in character once, after the attach
-        runAgent(greeting(s));
-      } else {
-        try { input.focus({preventScroll:true}); } catch(_){}
-      }
-    }
-    function appendLine(who, text){
-      const d = document.createElement("div");
-      d.className = "nuke-line " + who;
-      d.textContent = text;
-      logEl.appendChild(d);
-      return d;
-    }
-    function scrollLog(){ logEl.scrollTop = logEl.scrollHeight; }
-
-    // --- scripted agent: reveals a run of lines (tool calls + a reply) with
-    //     delays so it reads like opencode working. Demo only; no model call. ---
-    let agentTimers = [];
-    let busy = false;
-    function stopAgent(){ agentTimers.forEach(clearTimeout); agentTimers = []; busy = false; }
-    function runAgent(lines){
-      stopAgent(); busy = true;
-      input.disabled = true; sendBtn.disabled = true;
-      typingEl.textContent = "◼ 4g3nt 1z th1nk1ng…";
-      let t = 380;
-      lines.forEach((ln, i) => {
-        agentTimers.push(setTimeout(() => {
-          typingEl.textContent = i < lines.length-1 ? "◼ 4g3nt 1z w0rk1ng…" : "";
-          appendLine(ln.who, ln.text);
-          if(curSess){ curSess.messages.push(ln); if(curSess.messages.length > MAX_MSGS) curSess.messages.splice(0, curSess.messages.length-MAX_MSGS); touch(curSess); }
-          scrollLog();
-        }, t));
-        t += ln.who === "tool" ? 520 : 780;
+      openCmdSheet({
+        title:"SP4WN CMD",
+        note:"p4st3 th1s 4z r00t 0n "+box.id+" (JuiceSSH) 2 4rm th3 s3ss10n — hush n3v3r runz 1t 4 u.",
+        cmd,
+        hint:"l4unch3z 1n tmux::hush-"+tool+". r3-p4st3 th3 s4m3 l1n3 2 r34tt4ch. 1t sh0wz up 1n Act1v3 S3ss10nz 0nc3 th3 fl33t p1ckz 1t up (~6s)."
       });
-      agentTimers.push(setTimeout(() => {
-        typingEl.textContent = ""; busy = false;
-        input.disabled = false; sendBtn.disabled = false;
-        try { input.focus({preventScroll:true}); } catch(_){}
-        renderSessions();
-      }, t + 120));
-    }
-    function greeting(s){
-      const where = s.tool === "claude" ? "cl4ud3 c0d3" : "opencode";
-      const at = s.llmHost ? (" p01nt3d @ "+s.model+" 0n "+s.llmHost) : "";
-      return [
-        {who:"sys", text:"[*] tmux 4tt4ch OK — "+where+" 0nl1n3"+at},
-        {who:"agent", text:"y0 g0d. "+where+" up 0n "+s.machine+" az "+s.user+". wh4t r w3 h4ck1n 0n t0d4y? (d3m0 m0d3 — n0 r34l wr1t3z l34v3 th1s b0x lol)"},
-      ];
     }
 
-    // canned turns — cycle through, with a couple of keyword hooks so it feels
-    // like it's listening. Pure theatre for the UX test-drive.
-    const TURNS = [
-      [ {who:"tool",text:"read src/main.go"}, {who:"tool",text:"grep -rn \"TODO\" ."},
-        {who:"agent",text:"sc0p3d th3 tr33. f0und 3 T0D0z n s0m3 sk3tch nil-h4ndl1ng n listen.go. w4nt m3 2 p4tch 1t?"} ],
-      [ {who:"tool",text:"edit internal/vitals/top.go"}, {who:"tool",text:"bash: go build ./..."},
-        {who:"agent",text:"p4tch3d th3 nil d3r3f n r3-w1r3d th3 gu4rd. bu1ld 1z gr33n ✓. sh1p 1t 0r k33p d1gg1n?"} ],
-      [ {who:"tool",text:"read README.md"}, {who:"tool",text:"write docs/NOTES.md"},
-        {who:"agent",text:"dr0pp3d s0m3 n0t3z n docs/NOTES.md 4 th3 n00bz. rtfm 1z updated. n3xt m0v3?"} ],
-      [ {who:"agent",text:"h3h th4t'z 4 sp1cy 1d34. 1 c0uld r3f4ct0r th3 wh0l3 th1ng but l3t'z n0t nuke pr0duct10n 0n 4 fr1d4y 😏"} ],
-    ];
-    let turnIx = 0;
-    function agentReply(userText){
-      const t = userText.toLowerCase();
-      if(/\b(test|tests|t3st)\b/.test(t))
-        return [ {who:"tool",text:"bash: go test ./..."},
-                 {who:"agent",text:"r4n th3 su1t3 — 4ll gr33n, 0 f41l. cl34n az h3ck. c0mm1t?"} ];
-      if(/\b(commit|push|pr|ship|merge|deploy)\b/.test(t))
-        return [ {who:"tool",text:"git status"},
-                 {who:"agent",text:"1'd br4nch n 0p3n a PR here — but th1z 1z d3m0 m0d3, s0 n0 r34l c0mm1tz g0 0ut. 0n a l1v3 b0x th1z 1z wh3r3 hush h4ndz y0u th3 sudo l1n3 n u run 1t. 😎"} ];
-      if(/\b(build|comp1l3|compile|make)\b/.test(t))
-        return [ {who:"tool",text:"bash: go build ./..."},
-                 {who:"agent",text:"bu1lt cl34n, n0 3rr0rz. b1n4ry'z w4rm. wh4t n3xt?"} ];
-      const r = TURNS[turnIx % TURNS.length]; turnIx++;
-      return r;
+    /* ---------- stopping a session: compose the kill command ---------- */
+    function openStopSheet(box, s){
+      const u = s.user && USER_RE.test(s.user) ? s.user : "";
+      const cmd = u ? "sudo -u "+u+" kill "+s.pid : "sudo kill "+s.pid;
+      openCmdSheet({
+        title:"ST0P S3SS10N",
+        note:"run th1s az r00t 0n "+box.id+" 2 k1ll "+s.tool+" (pid "+s.pid+")"+(u?" 0wn3d by "+u:"")+" — hush n3v3r s3ndz th3 s1gn4l 1ts3lf.",
+        cmd,
+        hint:"1tz tmux s3ss10n cl0s3z w/ 1t. dr0ps 0ff Act1v3 S3ss10nz 0n th3 n3xt r3fr3sh (~6s)."
+      });
     }
-    function sendMsg(){
-      if(busy || !curSess) return;
-      const v = input.value.trim();
-      if(!v){ warnEl.textContent = "typ3 s0m3th1ng 4 th3 4g3nt f1rst."; return; }
-      warnEl.textContent = "";
-      const me = {who:"me", text:v};
-      curSess.messages.push(me); touch(curSess);
-      appendLine("me", v); scrollLog();
-      input.value = "";
-      runAgent(agentReply(v));
+
+    /* ---------- the command sheet: shared by Spawn and Stop ---------- */
+    let curCmd = "";
+    function openCmdSheet({title, note, cmd, hint}){
+      cmdTitle.textContent = title;
+      cmdNote.textContent = note;
+      cmdCode.textContent = cmd;
+      cmdHint.textContent = hint || "";
+      curCmd = cmd;
+      cmdCopy.textContent = "☢ C0PY »";
+      cmdDlg.hidden = false;
+      try { cmdCopy.focus({preventScroll:true}); } catch(_){}
+    }
+    function closeCmdSheet(){ cmdDlg.hidden = true; curCmd = ""; }
+    async function copyCmd(){
+      if(!curCmd) return;
+      try { await navigator.clipboard.writeText(curCmd); cmdCopy.textContent = "☢ C0P13D! »"; }
+      catch(_){ cmdCopy.textContent = "s3l3ct + c0py m4nu4lly"; }
+      setTimeout(()=>{ if(!cmdDlg.hidden) cmdCopy.textContent = "☢ C0PY »"; }, 1600);
     }
 
     /* ---------- taskbar / start menu / clock ---------- */
@@ -4804,7 +4715,7 @@
       startMenu(false);
       const a = item.dataset.nukeSm;
       if(a === "shutdown") closeNuke();
-      else if(a === "new"){ if(!LIVE){ showHome(); openPicker(); } }
+      else if(a === "new") openPicker();
     });
     scr.addEventListener("click", e => {
       if(startMenuEl.classList.contains("on") && !startMenuEl.contains(e.target) && !startBtn.contains(e.target))
@@ -4828,27 +4739,25 @@
     /* ---------- wiring ---------- */
     $("#homeLlmnuke").addEventListener("click", openNuke);
     $("#nukeBack").addEventListener("click", closeNuke);
-    $("#nukeSoonBack").addEventListener("click", closeNuke);
     $("#nukeHomeClose").addEventListener("click", closeNuke);
     $("#nukeHomeMin").addEventListener("click", closeNuke);
     $("#nukeNew").addEventListener("click", openPicker);
     $("#nukePickX").addEventListener("click", closePicker);
     $("#nukePickBack").addEventListener("click", () => { if(wiz && wiz.step > 0) setStep(wiz.step - 1); });
     $("#nukePickGo").addEventListener("click", armSession);
-    $("#nukeTermClose").addEventListener("click", () => { curSess = null; stopAgent(); showHome(); renderSessions(); });
-    $("#nukeTermMin").addEventListener("click", () => { stopAgent(); showHome(); renderSessions(); });
-    sendBtn.addEventListener("click", sendMsg);
-    input.addEventListener("keydown", e => { if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendMsg(); } });
+    $("#nukeCmdX").addEventListener("click", closeCmdSheet);
+    $("#nukeCmdDone").addEventListener("click", closeCmdSheet);
+    cmdCopy.addEventListener("click", copyCmd);
     // Enter/Space on the role="button" title-bar glyphs
-    [["#nukeHomeClose"],["#nukeHomeMin"],["#nukePickX"],["#nukeTermClose"],["#nukeTermMin"]].forEach(([id]) =>
+    [["#nukeHomeClose"],["#nukeHomeMin"],["#nukePickX"],["#nukeCmdX"]].forEach(([id]) =>
       $(id).addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); $(id).click(); } }));
-    // Escape: close menu → wizard → terminal → app, in that order of locality
+    // Escape: close menu → command sheet → wizard → app, in that order of locality
     scr.addEventListener("keydown", e => {
       if(e.key !== "Escape") return;
       e.stopPropagation();
       if(startMenuEl.classList.contains("on")) startMenu(false);
+      else if(!cmdDlg.hidden) closeCmdSheet();
       else if(!pick.hidden) closePicker();
-      else if(desk.classList.contains("term-open")){ curSess = null; stopAgent(); showHome(); }
       else closeNuke();
     });
   })();

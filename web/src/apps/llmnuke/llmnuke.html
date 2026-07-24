@@ -1,15 +1,17 @@
-<!-- LLMNUKE.EXE — a Win95-cracktro console for agent sessions. Where payphone
-     chats a local model, LLMNUKE arms an *agent*: you pick a fleet machine, the
-     Unix user to run as (filtered by group), and a model, and drop into a
-     terminal-style session running opencode as that user. It's the same "hush
-     composes, you run" spirit as docs/SESSIONS.md — the demo desktop below
-     test-drives the whole UX with fabricated fleet data; against a live
-     hush-control backend the app shows a LIVE-coming-soon crest instead (the
-     real spawn path is deliberately not wired yet). See launcher JS. -->
+<!-- LLMNUKE.EXE — a Win95-cracktro console for agent sessions, and the focused
+     sibling of the fleet console's Sessions section (docs/SESSIONS.md): pick a
+     fleet machine, the Unix user to run as, and a model, and it composes the
+     real sudo+tmux command to spawn opencode or claude as that user — the same
+     "hush composes, you run" posture as the rest of the console. hush never
+     runs it; you copy the line into a root shell (JuiceSSH) yourself. Active
+     Sessions is a real, fleet-wide read of every online box's /sessions, each
+     with a Stop button that composes the kill command the same way. Live vs
+     demo (a fabricated fleet, same shape, same UI) is decided once by probing
+     /api/fleet. See launcher JS. -->
 <div id="llmnukeScreen" role="dialog" aria-label="LLMNUKE.EXE" aria-modal="true">
   <div class="nuke-crt">
 
-    <!-- detect splash: probes /api/fleet to decide demo vs live before painting -->
+    <!-- detect splash: probes /api/fleet to load the live or demo fleet before painting -->
     <div class="nuke-boot" id="nukeBoot" aria-live="polite">
       <pre class="nuke-boot-art" aria-hidden="true">      ▄▄▄▄▄▄▄
     ▄█▓▓▒▒░░▒▓█▄
@@ -21,46 +23,10 @@
       <div class="nuke-boot-sub" id="nukeBootSub">pr0b1ng th3 fl33t . . .</div>
     </div>
 
-    <!-- LIVE crest: shown when a real hush-control backend answers /api/fleet.
-         The live spawn path isn't wired yet, so the app parks here on purpose. -->
-    <div class="nuke-soon" id="nukeSoon" hidden>
-      <svg class="nuke-crest" viewBox="0 0 240 240" role="img" aria-label="LLMNUKE">
-        <defs>
-          <radialGradient id="nkGlow" cx="50%" cy="50%" r="50%">
-            <stop offset="0" stop-color="#39ff14" stop-opacity=".55"/>
-            <stop offset="1" stop-color="#39ff14" stop-opacity="0"/>
-          </radialGradient>
-          <linearGradient id="nkTox" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#d6ffce"/>
-            <stop offset=".5" stop-color="#39ff14"/>
-            <stop offset="1" stop-color="#0f7a06"/>
-          </linearGradient>
-        </defs>
-        <circle cx="120" cy="120" r="110" fill="url(#nkGlow)"/>
-        <!-- radioactive trefoil -->
-        <g transform="translate(120 120)" fill="url(#nkTox)" stroke="#052b00" stroke-width="3" stroke-linejoin="round">
-          <circle r="15"/>
-          <path d="M0 0 L34 -59 A68 68 0 0 1 68 0 Z" transform="rotate(0)"/>
-          <path d="M0 0 L34 -59 A68 68 0 0 1 68 0 Z" transform="rotate(120)"/>
-          <path d="M0 0 L34 -59 A68 68 0 0 1 68 0 Z" transform="rotate(240)"/>
-        </g>
-      </svg>
-      <div class="nuke-soon-title">L1V3 M0D3<br><b>C0M1NG S00N</b></div>
-      <p class="nuke-soon-note">
-        LLMNUKE se3z a l1v3 hush-control backend — s0 it'z st4nd1ng d0wn.<br>
-        Th3 r34l spawn p4th (opencode az a fl33t us3r 0v3r ssh) 1z st1ll 0n th3 b3nch;<br>
-        f0r n0w th1z 1z a UX pr3v13w — run 1t 0n th3 st4t1c d3m0 t0 t3st dr1v3.
-      </p>
-      <p class="nuke-soon-see">
-        Th3 c0mp0s3-th3-c0mm4nd m0d3l 1t'z built 0n → <span class="nuke-mono">docs/SESSIONS.md</span>
-      </p>
-      <button class="nuke-soon-back" id="nukeSoonBack" type="button">‹ 3XIT</button>
-    </div>
-
-    <!-- ===== DEMO DESKTOP ===== -->
+    <!-- ===== DESKTOP ===== -->
     <div class="nuke-desk" id="nukeDesk" hidden>
 
-      <!-- home window: your Active Sessions (resume any time) -->
+      <!-- home window: fleet-wide Active Sessions, real or demo, same UI either way -->
       <div class="nuke-win nuke-home" id="nukeHome">
         <div class="nuke-tbar">
           <span class="nuke-tico" aria-hidden="true">☢</span>
@@ -75,27 +41,7 @@
           <div class="nuke-list" id="nukeSessList" role="tree" aria-label="Active agent sessions"></div>
           <div class="nuke-home-foot">
             <span class="nuke-me">j4ck3d 1n az <b>gU3st@clarkbar</b></span>
-            <span class="nuke-badge">0WNZ0R3D</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- agent terminal / chat window -->
-      <div class="nuke-win nuke-term" id="nukeTerm" role="dialog" aria-label="Agent session" aria-modal="false">
-        <div class="nuke-tbar">
-          <span class="nuke-tico" aria-hidden="true">⌁</span>
-          <span class="nuke-t-txt" id="nukeTermTitle">opencode</span>
-          <span class="nuke-tbtn" id="nukeTermMin" role="button" tabindex="0" aria-label="Back to sessions">_</span>
-          <span class="nuke-tbtn" id="nukeTermClose" role="button" tabindex="0" aria-label="Kill session">×</span>
-        </div>
-        <div class="nuke-route" id="nukeRoute" aria-hidden="true"></div>
-        <div class="nuke-log" id="nukeLog" aria-live="polite" aria-atomic="false"></div>
-        <div class="nuke-typing" id="nukeTyping" aria-live="polite"></div>
-        <div class="nuke-cwrap">
-          <textarea class="nuke-input" id="nukeInput" rows="2" placeholder="t3ll th3 4g3nt wh4t 2 d0…" aria-label="Message the agent"></textarea>
-          <div class="nuke-crow">
-            <span class="nuke-warn" id="nukeWarn"></span>
-            <button class="nuke-send" id="nukeSend" type="button"><span class="nuke-rr">»</span> TR4NSM1T</button>
+            <span class="nuke-badge" id="nukeModeBadge">D3M0 D4T4</span>
           </div>
         </div>
       </div>
@@ -121,6 +67,29 @@
           <button class="nuke-pick-back" id="nukePickBack" type="button" hidden>‹ B4CK</button>
           <span class="nuke-pick-sum" id="nukePickSum"></span>
           <button class="nuke-pick-go" id="nukePickGo" type="button" disabled>☢ 4RM S3SS10N »</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== COMMAND SHEET (spawn / stop) — "hush composes, you run" =====
+         Shared by arming a session and stopping one: shows the exact command,
+         a copy button, and nothing else — hush never executes either line. -->
+    <div class="nuke-dialog" id="nukeCmd" role="dialog" aria-modal="true" aria-labelledby="nukeCmdTitle" hidden>
+      <div class="nuke-win nuke-cmdwin">
+        <div class="nuke-tbar">
+          <span class="nuke-tico" aria-hidden="true">☢</span>
+          <span class="nuke-t-txt" id="nukeCmdTitle">SP4WN CMD</span>
+          <span class="nuke-tbtn" id="nukeCmdX" role="button" tabindex="0" aria-label="Close">×</span>
+        </div>
+        <div class="nuke-cmd-body">
+          <p class="nuke-cmd-note" id="nukeCmdNote"></p>
+          <div class="nuke-cmdbox"><code id="nukeCmdCode"></code></div>
+          <p class="nuke-cmd-hint" id="nukeCmdHint"></p>
+        </div>
+        <div class="nuke-pick-foot">
+          <button class="nuke-pick-back" id="nukeCmdDone" type="button">D0N3</button>
+          <span class="nuke-pick-sum"></span>
+          <button class="nuke-pick-go" id="nukeCmdCopy" type="button">☢ C0PY »</button>
         </div>
       </div>
     </div>
