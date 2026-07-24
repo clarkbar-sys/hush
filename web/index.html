@@ -5324,8 +5324,9 @@
   // shows its URL with a Copy button; a running-but-loopback server is shown as
   // present-but-unreachable (so you know it's there and why you can't add it);
   // and when none is running, a Start button composes the sandboxed launch
-  // command (see buildServerCmd). Like Sessions, hush only reads and composes —
-  // it never starts or stops the server itself.
+  // command (see buildServerCmd). Either running state also gets a Stop button
+  // (see openServerStopSheet) — same posture as Sessions' Stop: hush only reads
+  // and composes, it never starts or stops the server itself.
   function serverSection(m){
     const st = SESSIONS[m.id];
     const servers = serverSessions(m.id);
@@ -5339,6 +5340,7 @@
         const url = serverURL(m, s);
         const meta = LLM_SCOPE[s.exposure] || LLM_SCOPE.unknown;
         const up = fmtUptime(s.uptime);
+        const stopBtn = `<button class="btn ocs-stop">Stop</button>`;
         if(url){
           return `<div class="oc-rt good">
             <div class="oc-rt-hd">
@@ -5347,7 +5349,8 @@
               <span class="oc-scope">${meta.word}${up?` · ${up}`:""}</span>
             </div>
             <div class="ocs-url"><code class="ocs-url-t">${esc(url)}</code>
-              <button class="btn ocs-copy" data-url="${esc(url)}">Copy URL</button></div>
+              <button class="btn ocs-copy" data-url="${esc(url)}">Copy URL</button>
+              ${stopBtn}</div>
             <div class="hint">add this in opencode mobile → Servers → add — it exposes the fleet's models this box was pointed at</div>
           </div>`;
         }
@@ -5359,6 +5362,7 @@
             <span class="oc-scope">local only${up?` · ${up}`:""}</span>
           </div>
           <div class="hint">running but bound to loopback — a phone can't reach it. Restart it bound to the tailnet (Start below) to get a URL.</div>
+          <div class="sheet-actions">${stopBtn}</div>
         </div>`;
       }).join("");
     } else {
@@ -5776,6 +5780,29 @@ UNIT
       catch(e){ toast("couldn't copy — select and copy manually"); }
     });
     $("#stClose").addEventListener("click", closeSpawn);
+    spawnScrim.classList.add("open");
+  }
+
+  // openServerStopSheet composes the stop command for the machine's opencode
+  // server: because the Start sheet stands it up as a systemd unit (see
+  // buildServerCmd), stopping it means disabling that unit, not killing the
+  // pid directly — a bare `kill` would just get restarted by the unit's
+  // `Restart=on-failure`. Same posture as every other sheet: hush hands you
+  // the line, it never runs it.
+  function openServerStopSheet(host){
+    const cmd = "sudo systemctl disable --now opencode-server";
+    spHost = host;
+    spawnBody.innerHTML = `
+      <h3>Stop opencode server <span class="sd" style="font-family:var(--mono)">${esc(host)}</span></h3>
+      <p class="sd">run this as root on ${esc(host)} to stop it — hush never stops a server itself</p>
+      <div class="cmdbox"><code>${esc(cmd)}</code><button class="btn" id="ocsStopCopy">Copy</button></div>
+      <div class="field-note">Stops and un-enables the <span style="font-family:var(--mono)">opencode-server</span> systemd unit, so it won't come back on reboot either. Re-run the Start command any time to stand it back up. It drops off this section on the next refresh.</div>
+      <div class="sheet-actions"><button class="btn primary" id="ocsStopClose" style="flex:1">Done</button></div>`;
+    $("#ocsStopCopy").addEventListener("click", async ()=>{
+      try { await navigator.clipboard.writeText(cmd); toast("copied — paste into JuiceSSH on "+host); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
+    $("#ocsStopClose").addEventListener("click", closeSpawn);
     spawnScrim.classList.add("open");
   }
 
@@ -6533,6 +6560,9 @@ UNIT
         try { await navigator.clipboard.writeText(b.dataset.url); toast("server URL copied — add it in opencode mobile"); }
         catch(e){ toast("couldn't copy — select and copy manually"); }
       });
+    });
+    app.querySelectorAll(".ocs-stop").forEach(b=>{
+      b.addEventListener("click", ()=>openServerStopSheet(m.id));
     });
     const adduser = $("#us-adduser");
     if(adduser) adduser.addEventListener("click", ()=>openUserSheet(m.id));

@@ -34,6 +34,8 @@ session flagged `server: true`), and shows one of three states:
 - **No server is running.** A **＋ Start opencode server** button opens the sheet
   that composes the launch command.
 
+Either running state also gets a **Stop** button next to it.
+
 The reachability verdict is not a guess. The agent reads the kernel's own
 listener table (`/proc/net/tcp{,6}`, see `internal/netlisten`) to learn where
 the server actually bound, exactly the way LLM reach is judged — so a
@@ -108,10 +110,13 @@ server, so changing the port or password is just a re-paste from a new phone.
 
 ## Stopping / changing
 
-There's no separate stop button for the server (that's a follow-up): because
-it's a systemd unit, `sudo systemctl disable --now opencode-server` on the box
-stops and un-enables it, and re-pasting the Start command with a different port
-or password reconfigures it in place.
+The server section's **Stop** button opens a sheet with the one command that
+stops it: `sudo systemctl disable --now opencode-server`. Because the server
+runs under a systemd unit with `Restart=on-failure`, a bare `kill` of the
+process would just come back — disabling the unit is what actually stops it
+and keeps it from returning on reboot. As with Start, hush only composes the
+command; you paste it into a root shell yourself. Re-pasting the Start command
+with a different port or password reconfigures the server in place.
 
 ## Permissions — same open question as Sessions
 
