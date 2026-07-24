@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.17.0](https://github.com/clarkbar-sys/hush/compare/v2.16.0...v2.17.0) (2026-07-24)
+
+
+### Features
+
+* **payphone:** make Active Chats the home, New Session picks a buddy ([#255](https://github.com/clarkbar-sys/hush/issues/255)) ([fd90fc9](https://github.com/clarkbar-sys/hush/commit/fd90fc948df470222eee5bf327c3cf94865eb8a9))
+* **web:** add forgecraft stub app with coming-soon crest ([#254](https://github.com/clarkbar-sys/hush/issues/254)) ([6756418](https://github.com/clarkbar-sys/hush/commit/67564181f80b4198a603189e9b52a8b0ab927f23))
+
 ## [2.16.0](https://github.com/clarkbar-sys/hush/compare/v2.15.0...v2.16.0) (2026-07-24)
 
 
