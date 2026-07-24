@@ -1131,6 +1131,38 @@
   .home-btn::after { content:""; position:absolute; inset:0; margin:auto; width:13px; height:13px;
     border-radius:3px; border:1.5px solid #565b64; }
 
+  /* ---- forgecraft app: a stub. Reuses the gh-app slide-in shell but re-skins it
+     as a forge — an ember-lit backdrop behind a 90s-RTS crest (crossed
+     sledgehammers over a molten FORGE / CRAFT wordmark) and a riveted
+     COMING SOON plate. Nothing to hand off to yet. ---- */
+  .forge-app { background: radial-gradient(120% 75% at 50% 12%, #3a1c0c 0%, #1a0d08 52%, #070403 100%); }
+  .forge-list { align-items:center; justify-content:center; gap:14px; padding:14px 16px 26px; }
+  .forge-crest { width:100%; max-width:320px; }
+  .forge-logo { display:block; width:100%; height:auto;
+    filter: drop-shadow(0 6px 18px rgba(255,90,20,.28)); }
+
+  /* riveted COMING SOON plate, ember-lit */
+  .forge-soon { position:relative; padding:9px 22px; border-radius:8px;
+    background:linear-gradient(#2a2420,#0f0b09);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.12), inset 0 0 0 1px rgba(255,150,60,.28),
+      0 3px 10px rgba(0,0,0,.5); }
+  .forge-soon span { font-size:15px; font-weight:800; letter-spacing:.34em;
+    text-transform:uppercase; padding-left:.34em;
+    background:linear-gradient(#ffe9a8,#ff7a1e); -webkit-background-clip:text;
+    background-clip:text; color:transparent;
+    filter: drop-shadow(0 1px 0 rgba(0,0,0,.6));
+    animation: forge-ember 2.4s ease-in-out infinite; }
+  /* rivets in the plate corners */
+  .forge-soon::before, .forge-soon::after { content:""; position:absolute; top:50%;
+    width:4px; height:4px; margin-top:-2px; border-radius:50%;
+    background:radial-gradient(#ffcf8a,#6a3a16); box-shadow:0 0 2px rgba(0,0,0,.6); }
+  .forge-soon::before { left:8px; }
+  .forge-soon::after { right:8px; }
+  @keyframes forge-ember { 0%,100% { opacity:.82; } 50% { opacity:1; } }
+  @media (prefers-reduced-motion: reduce) { .forge-soon span { animation:none; } }
+
+  .forge-note { padding:6px 18px 0; }
+
   /* ---- payphone app: a deliberate 1990s "gateway" page — the joke is you tap
      a neon HUD tile and fall through 30 years into a beige Netscape-era
      under-construction screen. Owns its own retro palette on purpose. ---- */
@@ -1497,6 +1529,14 @@
           </svg></span>
           <span class="home-label">riff</span>
         </button>
+        <button class="home-app" id="homeForge" data-tile="forgecraft" type="button" aria-label="Open forgecraft">
+          <span class="home-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m15 12-8.4 8.4a1.4 1.4 0 0 1-2-2L13 10"></path>
+            <path d="m18 15 3.5-3.5"></path>
+            <path d="M21.5 11.5 19.6 9.6A2 2 0 0 1 19 8.2V7l-2.3-2.3a6 6 0 0 0-4.2-1.7L9 3l.9.8A6 6 0 0 1 12 8.4V10l2 2h1.2a2 2 0 0 1 1.4.6l1.9 1.9"></path>
+          </svg></span>
+          <span class="home-label">forgecraft</span>
+        </button>
       </div>
       <div class="home-edit-hint" id="homeEditHint" aria-hidden="true">Drag to rearrange · tap the wallpaper when you're done</div>
       <div class="home-dots" aria-hidden="true"><i class="on"></i></div>
@@ -1569,6 +1609,98 @@
           <button class="riff-try" id="riffTry" type="button">📟 Try me</button>
           <p class="gh-note riff-note">riff together is warming up.<br>
             Tap <b>Try me</b> and we'll page your phone. 📟</p>
+        </div>
+      </div>
+      <!-- forgecraft app: a stub. Reuses the gh-app slide-in shell to show a
+           90s-RTS-style crest — crossed sledgehammers over a metallic
+           FORGE / CRAFT wordmark, cast in molten gold with a riveted
+           COMING SOON plate. Nothing to wire yet. See launcher JS. -->
+      <div class="gh-app forge-app" id="forgeApp" role="dialog" aria-label="forgecraft" aria-modal="true">
+        <div class="gh-top">
+          <button class="gh-back" id="forgeBack" type="button" aria-label="Back to launcher">‹ Home</button>
+          <span class="gh-top-title">forgecraft</span>
+          <a class="gh-org" href="https://github.com/clarkbar-sys" target="_blank" rel="noopener" aria-label="Open clarkbar.sys on GitHub">↗</a>
+        </div>
+        <div class="gh-list forge-list">
+          <div class="forge-crest">
+            <svg class="forge-logo" viewBox="0 0 340 300" role="img" aria-label="Forgecraft">
+              <defs>
+                <linearGradient id="fcMetal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#fff4cf"/>
+                  <stop offset=".16" stop-color="#ffd268"/>
+                  <stop offset=".5" stop-color="#e18a2b"/>
+                  <stop offset=".74" stop-color="#9c4f18"/>
+                  <stop offset="1" stop-color="#f4b64c"/>
+                </linearGradient>
+                <linearGradient id="fcSteel" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#e7edf3"/>
+                  <stop offset=".5" stop-color="#8b96a2"/>
+                  <stop offset="1" stop-color="#3c454f"/>
+                </linearGradient>
+                <linearGradient id="fcEmber" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#ffe27a"/>
+                  <stop offset=".55" stop-color="#ff6a1f"/>
+                  <stop offset="1" stop-color="#b81e0a"/>
+                </linearGradient>
+                <radialGradient id="fcGlow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0" stop-color="#ff7b1f" stop-opacity=".55"/>
+                  <stop offset="1" stop-color="#ff7b1f" stop-opacity="0"/>
+                </radialGradient>
+                <filter id="fcDrop" x="-30%" y="-30%" width="160%" height="160%">
+                  <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".55"/>
+                </filter>
+                <filter id="fcSpark" x="-60%" y="-60%" width="220%" height="220%">
+                  <feGaussianBlur stdDeviation="1.5"/>
+                </filter>
+              </defs>
+
+              <!-- molten glow behind the crest -->
+              <ellipse cx="170" cy="150" rx="150" ry="120" fill="url(#fcGlow)"/>
+
+              <!-- crossed sledgehammers -->
+              <g transform="translate(170 80)" filter="url(#fcDrop)"
+                 stroke="#1b0d05" stroke-width="3" stroke-linejoin="round">
+                <g transform="rotate(-38)">
+                  <rect x="-5" y="-44" width="10" height="90" rx="5" fill="url(#fcSteel)"/>
+                  <circle cx="0" cy="44" r="6" fill="url(#fcSteel)"/>
+                  <rect x="-26" y="-58" width="52" height="28" rx="7" fill="url(#fcMetal)"/>
+                  <rect x="-26" y="-58" width="52" height="9" rx="7" fill="#fff4cf" opacity=".5" stroke="none"/>
+                </g>
+                <g transform="rotate(38)">
+                  <rect x="-5" y="-44" width="10" height="90" rx="5" fill="url(#fcSteel)"/>
+                  <circle cx="0" cy="44" r="6" fill="url(#fcSteel)"/>
+                  <rect x="-26" y="-58" width="52" height="28" rx="7" fill="url(#fcMetal)"/>
+                  <rect x="-26" y="-58" width="52" height="9" rx="7" fill="#fff4cf" opacity=".5" stroke="none"/>
+                </g>
+              </g>
+
+              <!-- flying sparks -->
+              <g fill="url(#fcEmber)">
+                <path d="M96 44 98 49 96 54 94 49Z"/>
+                <path d="M244 40 246 45 244 50 242 45Z" filter="url(#fcSpark)"/>
+                <path d="M70 96 72 100 70 104 68 100Z" filter="url(#fcSpark)"/>
+                <path d="M270 92 272 96 270 100 268 96Z"/>
+                <path d="M170 20 172 26 170 32 168 26Z"/>
+                <circle cx="118" cy="30" r="2"/>
+                <circle cx="222" cy="30" r="2" filter="url(#fcSpark)"/>
+              </g>
+
+              <!-- wordmark: FORGE / CRAFT cast in molten metal -->
+              <g text-anchor="middle" font-weight="900" letter-spacing="2"
+                 font-family="'Arial Black','Franklin Gothic Heavy',Impact,system-ui,sans-serif"
+                 style="paint-order:stroke" stroke="#1b0d05" stroke-width="9"
+                 stroke-linejoin="round" filter="url(#fcDrop)">
+                <text x="170" y="204" font-size="62" fill="url(#fcMetal)">FORGE</text>
+                <text x="170" y="262" font-size="62" fill="url(#fcMetal)">CRAFT</text>
+              </g>
+
+              <!-- molten seam under the wordmark -->
+              <ellipse cx="170" cy="278" rx="120" ry="7" fill="url(#fcEmber)" opacity=".8"/>
+            </svg>
+          </div>
+          <div class="forge-soon"><span>Coming Soon</span></div>
+          <p class="gh-note forge-note">forgecraft is on the anvil — still being hammered into shape.<br>
+            <a href="https://github.com/clarkbar-sys" target="_blank" rel="noopener">Follow along on GitHub ↗</a></p>
         </div>
       </div>
     </div>
@@ -3280,6 +3412,22 @@
       }
     });
   })();
+
+  /* forgecraft tile — opens an in-app panel (reusing the github app's slide-in
+     shell) showing a coming-soon crest. forgecraft is a stub with nothing to
+     wire yet, so this is just the open/close plumbing, mirroring plug/riff. */
+  const forgeApp = $("#forgeApp");
+  function openForge(){
+    forgeApp.classList.add("on");
+    try { $("#forgeBack").focus({ preventScroll:true }); } catch(_){}
+  }
+  function closeForge(){
+    forgeApp.classList.remove("on");
+    try { $("#homeForge").focus({ preventScroll:true }); } catch(_){}
+  }
+  $("#homeForge").addEventListener("click", openForge);
+  $("#forgeBack").addEventListener("click", closeForge);
+  forgeApp.addEventListener("keydown", e => { if(e.key === "Escape"){ e.stopPropagation(); closeForge(); } });
 
   /* tally tile — a plain hand-off to the tally node on the tailnet, no
      in-app overlay. hush and tally each join the tailnet as their own tsnet
