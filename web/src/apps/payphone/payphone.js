@@ -1,9 +1,10 @@
   /* payphone app — the launcher's other tile. Opens a full-screen teal
-     "desktop" holding an AOL-era buddy list. The buddies are LLM chats split
-     into Active (online, they answer via tiny scripted personalities) and
-     Archive (signed-off, read-only transcripts that reply with an away
-     message when poked). Clicking a buddy opens a classic IM window. It's all
-     client-side theatre — no network, no model — same joke as before, alive. */
+     "desktop" whose home window is your Active Chats: the saved sessions you
+     can pick back up any time. "New Session" pops the AOL-era Buddy List — the
+     fleet's models, grouped online (on the tailnet) and signed-off (local
+     only), plus scripted demo bots when there's no fleet behind the page. Pick
+     one and a classic IM window opens; the whole conversation is logged on
+     hush-control so it's waiting in the sessions list when you come back. */
   const payScreen = $("#payphoneScreen");
   const aimStage  = $("#aimStage");
   const aimIM     = $("#aimIM");
@@ -11,6 +12,8 @@
   const aimInput  = $("#aimInput");
   const aimTyping = $("#aimTyping");
   const aimGroups = $("#aimGroups");
+  const aimNewSess    = $("#aimNewSess");
+  const aimBuddiesTab = $("#aimBuddiesTab");
 
   // --- tiny scripted personalities -----------------------------------------
   const rnd  = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -233,20 +236,25 @@
     return { buddies, groups };
   }
 
-  // refreshBuddies rebuilds the list from buddyModel and repaints — but only
-  // when the derived list actually changed, so the 2.5s poll doesn't churn the
-  // DOM (or steal row focus) every cycle while the window sits open.
+  // refreshBuddies keeps the fleet-derived buddy model current (it backs the
+  // "New Session" picker, liveModelFor, and streaming) and repaints the home
+  // sessions list. The buddy model itself is only rebuilt when it actually
+  // changed — so the 2.5s poll doesn't churn the DOM or steal focus in an open
+  // picker — while the sessions list follows its own throttled poll. Nothing
+  // renders the fleet into the home window any more: the home is your chats.
   function refreshBuddies(force){
     pullSessions(force);       // keep the saved-chats list live alongside the fleet
     const model = buddyModel();
     const sig = model.buddies.map(b => b.key + (b.online?"1":"0")).join("|") + "#" + model.groups.map(g=>g.key).join(",");
-    if(!force && sig === buddySig) return;
-    buddySig = sig;
-    BUDDIES = model.buddies;
-    GROUPS = model.groups;
-    for(const k in byKey) delete byKey[k];
-    BUDDIES.forEach(b => { byKey[b.key] = b; });
-    renderBuddyList();
+    if(force || sig !== buddySig){
+      buddySig = sig;
+      BUDDIES = model.buddies;
+      GROUPS = model.groups;
+      for(const k in byKey) delete byKey[k];
+      BUDDIES.forEach(b => { byKey[b.key] = b; });
+      if(!payPickDlg.hidden) renderPicker();   // keep an open picker in step with the fleet
+    }
+    renderSessionRows();
     if(currentKey) selectBuddyRow(currentKey);
   }
 
@@ -296,13 +304,17 @@
     renderSessionRows();
   }
 
-  // persistSession mirrors one conversation up to control and reflects it locally
-  // first. Skipped in demo mode (no backend) and for non-session convs (canned).
+  // persistSession reflects one conversation into the local sessions list right
+  // away, then mirrors it up to control. Non-session convs (a signed-off model,
+  // an archive bot) have no id and are skipped. Demo mode has no backend, so the
+  // row is kept for the visit — it just isn't written anywhere — which lets the
+  // public preview show the full new-session → chat → resume loop with the
+  // scripted bots standing in for a real fleet.
   function persistSession(convKey){
-    if(MODE === "demo") return;
     const sess = sessionFor(convKey);
     if(!sess) return;
     upsertLocalSession(sess);
+    if(MODE === "demo") return;
     fetch("api/payphone/sessions/" + encodeURIComponent(sess.id), {
       method:"PUT",
       headers:{ "Content-Type":"application/json" },
@@ -595,8 +607,13 @@
   // loopback models) render greyed with an idle tag, like the old archive group.
   function isOnline(b){ return b.online || (b.canned && b.group === "active"); }
 
-  function renderBuddyList(){
-    aimGroups.textContent = "";
+  // renderPicker paints the fleet buddy list into the "New Session" pop-up:
+  // the online models under "On the tailnet", signed-off ones under "Local
+  // only", and the scripted bots in demo mode. Picking a buddy starts a fresh
+  // chat (see startFrom). It's the same group/row markup the home used to show;
+  // now it lives in the chooser instead of the main window.
+  function renderPicker(){
+    payPickGroups.textContent = "";
     GROUPS.forEach(g => {
       const mates = BUDDIES.filter(b => b.group === g.key);
       if(!mates.length) return;
@@ -640,22 +657,17 @@
           idle.className = "aim-idle"; idle.textContent = "(signed off)";
           li.appendChild(idle);
         }
-        // Clicking a real, reachable model asks whether to start a new session
-        // (or resume the latest one) rather than dropping straight in — the
-        // pop-up the sessions feature adds. Canned bots, signed-off models, and
-        // the empty placeholder open directly, as before.
-        const open = () => {
-          if(b.llm && b.online) askNewSession(b);
-          else openIM(b.key);
-        };
+        // Picking a buddy starts from it: a reachable model (or a demo bot)
+        // opens a brand-new saved session; a signed-off model or archive bot
+        // opens read-only with its away note. Either way the picker closes.
+        const open = () => startFrom(b);
         li.addEventListener("click", open);
         li.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); open(); } });
         list.appendChild(li);
       });
       wrap.appendChild(list);
-      aimGroups.appendChild(wrap);
+      payPickGroups.appendChild(wrap);
     });
-    renderSessionRows();       // the saved-chats group sits above the fleet
   }
 
   // agoText renders a coarse "how long ago" for a session row's last activity —
@@ -678,18 +690,45 @@
     return BUDDIES.find(b => b.llm && b.online && b.host === sess.host && b.model === sess.model) || null;
   }
 
-  // renderSessionRows paints the "Active Chats" group at the top of the buddy
-  // list from PAY_SESSIONS. It manages its own node so the throttled session poll
-  // can repaint it without disturbing the fleet groups below; a signature guard
-  // skips the repaint (and the focus churn) when nothing changed. An empty list
-  // removes the group entirely, so the window reads exactly as it did before when
-  // no chats are saved.
+  // sessionLive answers whether a saved chat can still take a new turn: a
+  // reachable fleet model, or — in the demo preview — the scripted bot we
+  // remember for that window. It drives the online dot on a session row and
+  // mirrors what resumeSession will reconnect to.
+  function sessionLive(sess){
+    const live = liveModelFor(sess);
+    if(live) return live;
+    const remembered = convBuddy[convKeyOf(sess.id)];
+    return (remembered && remembered.canned && remembered.group === "active") ? remembered : null;
+  }
+
+  // renderSessionRows paints the home window from PAY_SESSIONS: the "Active
+  // Chats" group of saved conversations, newest first, or a friendly empty
+  // state pointing at New Session when there are none. It owns the whole scroll
+  // area now (the fleet lives in the picker), and a signature guard skips the
+  // repaint — and the focus churn — when nothing changed, so the throttled poll
+  // doesn't churn an open window.
   function renderSessionRows(){
-    const existing = aimGroups.querySelector("#aimSessGroup");
-    if(!PAY_SESSIONS.length){ if(existing) existing.remove(); paySessSig = ""; return; }
-    const sig = PAY_SESSIONS.map(s => s.id + ":" + s.updated).join("|");
-    if(existing && sig === paySessSig) return;
+    const sig = PAY_SESSIONS.length
+      ? PAY_SESSIONS.map(s => s.id + ":" + s.updated).join("|")
+      : "empty";
+    if(sig === paySessSig && aimGroups.childNodes.length) return;
     paySessSig = sig;
+    aimGroups.textContent = "";
+
+    if(!PAY_SESSIONS.length){
+      const empty = document.createElement("div");
+      empty.className = "aim-empty";
+      empty.innerHTML = '<div class="aim-empty-ico" aria-hidden="true">💬</div>'
+        + '<p class="aim-empty-h">No active chats yet</p>'
+        + '<p class="aim-empty-p">Start a conversation with a model on your fleet — it\'s saved here so you can pick it back up any time.</p>';
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.className = "aim-newbtn aim-empty-btn";
+      btn.innerHTML = '<span class="aim-newico" aria-hidden="true">✚</span> New Session';
+      btn.addEventListener("click", openPicker);
+      empty.appendChild(btn);
+      aimGroups.appendChild(empty);
+      return;
+    }
 
     const wrap = document.createElement("div");
     wrap.className = "aim-group open"; wrap.id = "aimSessGroup";
@@ -707,7 +746,7 @@
     const list = document.createElement("ul");
     list.className = "aim-blist";
     PAY_SESSIONS.forEach(sess => {
-      const on = !!liveModelFor(sess);
+      const on = !!sessionLive(sess);
       const li = document.createElement("li");
       li.className = "aim-buddy" + (on ? "" : " off");
       li.tabIndex = 0; li.dataset.key = convKeyOf(sess.id);
@@ -715,7 +754,7 @@
       li.querySelector(".aim-bname").textContent = sess.model || sess.title || "chat";
       const sub = document.createElement("span");
       sub.className = "aim-idle";
-      sub.textContent = "@ " + (sess.host || "?") + " · " + agoText(sess.updated);
+      sub.textContent = (sess.host ? "@ " + sess.host + " · " : "") + agoText(sess.updated);
       li.appendChild(sub);
       // A small × forgets the saved chat — the AIM way to clear an old window.
       const del = document.createElement("span");
@@ -732,7 +771,7 @@
       list.appendChild(li);
     });
     wrap.appendChild(list);
-    if(existing) existing.replaceWith(wrap); else aimGroups.insertBefore(wrap, aimGroups.firstChild);
+    aimGroups.appendChild(wrap);
     if(currentKey) selectBuddyRow(currentKey);
   }
 
@@ -883,73 +922,78 @@
   // rows: the conversation key is just the buddy key.
   function openIM(key){ openConv(byKey[key], key); }
 
-  // startNewSession begins a fresh chat with a live model: mint a session id, open
-  // an empty conversation on it, and register it with control right away so the
-  // "Active Chats" row shows up the instant you start — before you've said a word.
+  // startNewSession begins a fresh chat with a buddy: mint a session id, open a
+  // conversation on it, and register it with control right away so the "Active
+  // Chats" row shows up the instant you start — before you've said a word. A
+  // demo bot keeps its scripted AIM greeting as the opening line, so the public
+  // preview shows a live-looking chat with no fleet behind the page.
   function startNewSession(b){
     const id = genSessionId();
     const key = convKeyOf(id);
-    CONVOS[key] = { live:[], _awaySent:false, sessionId:id, started:Date.now() };
+    const live = (b.canned && b.group === "active" && b.open) ? [{ who:"them", text:b.open }] : [];
+    CONVOS[key] = { live, _awaySent:false, sessionId:id, started:Date.now() };
     openConv(b, key);
     persistSession(key);
   }
 
-  // resumeSession reopens a saved chat. When its box is still online the live
-  // buddy backs the window so a new turn streams for real; otherwise it opens
-  // read-only over the saved transcript with an away note. The transcript is
-  // seeded from the server record the first time, then kept in CONVOS.
+  // resumeSession reopens a saved chat from the sessions list. When its box is
+  // still reachable the live buddy backs the window so a new turn streams for
+  // real; a demo bot reconnects to the buddy we remembered for this window
+  // (convBuddy) so the scripted chat stays alive in the preview; otherwise it
+  // opens read-only over the saved transcript with an away note. The transcript
+  // is seeded from the server record the first time, then kept in CONVOS.
   function resumeSession(id){
     const sess = PAY_SESSIONS.find(s => s.id === id);
     if(!sess) return;
     const key = convKeyOf(id);
     const live = liveModelFor(sess);
-    const b = live || {
+    const remembered = convBuddy[key];
+    const b = live || (remembered && remembered.canned ? remembered : null) || {
       key, sn:sess.model || sess.title || "chat", host:sess.host, model:sess.model,
       kind:sess.kind || "openai", exposure:"unknown", llm:true, online:false, group:"sessions",
     };
     if(!CONVOS[key]){
-      const head = live
-        ? { who:"sys", text:sess.model + " on " + sess.host + " · resuming your session." }
-        : { who:"sys", text:sess.model + " on " + sess.host + " is offline — this is your saved conversation." };
+      const where = sess.host ? " on " + sess.host : "";
+      const head = (live || b.canned)
+        ? { who:"sys", text:(sess.model || b.sn) + where + " · resuming your session." }
+        : { who:"sys", text:(sess.model || b.sn) + where + " is offline — this is your saved conversation." };
       const lines = [head].concat((sess.messages || []).map(m => ({ who:m.role === "user" ? "me" : "them", text:m.text })));
       CONVOS[key] = { live:lines, _awaySent:false, sessionId:id, started:sess.started };
     }
     openConv(b, key);
   }
 
-  // --- the "start a new session?" pop-up ------------------------------------
-  // Clicking a live model no longer drops straight into a chat: it asks first, so
-  // starting a brand-new session is a deliberate choice and any existing chat with
-  // that model is one tap to resume. A Win95 dialog, same beige theatre.
-  const paySessDlg    = $("#paySessDlg");
-  const paySessDlgMsg = $("#paySessDlgMsg");
-  const paySessNew    = $("#paySessNew");
-  const paySessResume = $("#paySessResume");
-  const paySessCancel = $("#paySessCancel");
-  const paySessDlgX   = $("#paySessDlgX");
-  let paySessPending  = null;      // { buddy, resumeId } while the dialog is up
+  // --- the "New Session" buddy picker ---------------------------------------
+  // New Session pops the Buddy List over the desktop; picking a buddy starts a
+  // chat from it. A reachable model (or a demo bot) opens a brand-new saved
+  // session; a signed-off model or archive bot opens read-only with its away
+  // note; the "nobody's online" placeholder just shows its hint. Either way the
+  // picker closes first.
+  const payPickDlg    = $("#payPickDlg");
+  const payPickGroups = $("#payPickGroups");
+  const payPickX      = $("#payPickX");
 
-  function askNewSession(b){
-    // The most recent saved chat with this exact model (host + id), if any, is the
-    // one "Resume" reopens.
-    const prior = PAY_SESSIONS.find(s => s.host === b.host && s.model === b.model);
-    paySessPending = { buddy:b, resumeId: prior ? prior.id : null };
-    paySessDlgMsg.textContent = "Start a new session with " + (b.model || b.sn) + " on " + b.host + "?";
-    paySessResume.hidden = !prior;
-    paySessDlg.hidden = false;
-    try { paySessNew.focus({ preventScroll:true }); } catch(_){}
+  function startFrom(b){
+    closePicker();
+    if(b.empty){ openIM(b.key); return; }
+    if((b.llm && b.online) || (b.canned && b.group === "active")) startNewSession(b);
+    else openIM(b.key);
   }
-  function closeSessDlg(){
-    paySessDlg.hidden = true;
-    const p = paySessPending; paySessPending = null;
-    // Return focus to the buddy row that opened the dialog.
-    if(p && p.buddy){ const row = rowFor(p.buddy.key); try { (row || $("#aimBlClose")).focus({ preventScroll:true }); } catch(_){} }
+  function openPicker(){
+    renderPicker();
+    payPickDlg.hidden = false;
+    const first = payPickGroups.querySelector(".aim-buddy");
+    try { (first || payPickX).focus({ preventScroll:true }); } catch(_){}
   }
-  paySessNew.addEventListener("click", () => { const p = paySessPending; closeSessDlg(); if(p) startNewSession(p.buddy); });
-  paySessResume.addEventListener("click", () => { const p = paySessPending; closeSessDlg(); if(p && p.resumeId) resumeSession(p.resumeId); });
-  paySessCancel.addEventListener("click", closeSessDlg);
-  paySessDlgX.addEventListener("click", closeSessDlg);
-  [paySessDlgX].forEach(el => el.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); closeSessDlg(); } }));
+  function closePicker(){
+    payPickDlg.hidden = true;
+    try { aimNewSess.focus({ preventScroll:true }); } catch(_){}
+  }
+  aimNewSess.addEventListener("click", openPicker);
+  aimBuddiesTab.addEventListener("click", openPicker);
+  aimBuddiesTab.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openPicker(); } });
+  payPickX.addEventListener("click", closePicker);
+  payPickX.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); closePicker(); } });
   function closeIM(){
     abortStream();
     aimIM.classList.remove("on"); aimStage.classList.remove("im-open");
@@ -1166,21 +1210,23 @@
     payScreen.classList.add("on");
     payClockTick(); payClockTimer = setInterval(payClockTick, 15000);
     sndSignon();
-    const first = aimGroups.querySelector(".aim-buddy");
-    try { (first || $("#aimBlClose")).focus({ preventScroll:true }); } catch(_){}
+    // Focus the first saved chat, or the New Session button when the list is empty.
+    const first = aimGroups.querySelector(".aim-buddy") || aimNewSess;
+    try { first.focus({ preventScroll:true }); } catch(_){}
   }
   function closePayphone(){
     abortStream();
     payMenu(false);
-    paySessDlg.hidden = true; paySessPending = null;
+    payPickDlg.hidden = true;
     if(payClockTimer){ clearInterval(payClockTimer); payClockTimer = null; }
     aimIM.classList.remove("on"); aimStage.classList.remove("im-open"); currentKey = null;
     payScreen.classList.remove("on");
     try { $("#homePayphone").focus({ preventScroll:true }); } catch(_){}
   }
-  // While the buddy list is open, track the fleet: a box coming online (or
-  // signing off) updates the list on the next poll. refreshBuddies is a no-op
-  // when the derived list is unchanged, so this doesn't churn the open window.
+  // While the app is open, track the fleet: a box coming online (or signing off)
+  // updates the sessions' reachability and the picker on the next poll.
+  // refreshBuddies is a no-op when the derived list is unchanged, so this
+  // doesn't churn the open window.
   function payphoneOpen(){ return payScreen.classList.contains("on"); }
 
   // sound toggle
@@ -1215,7 +1261,7 @@
   });
   payScreen.addEventListener("keydown", e => {
     if(e.key === "Escape"){ e.preventDefault();
-      if(!paySessDlg.hidden) closeSessDlg();
+      if(!payPickDlg.hidden) closePicker();
       else if(payStartMenu.classList.contains("on")) payMenu(false);
       else if(aimIM.classList.contains("on")) closeIM();
       else closePayphone(); }

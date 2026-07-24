@@ -80,6 +80,29 @@
     box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
   .aim-icobtn:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
   .aim-icobtn svg { width:13px; height:13px; }
+  /* the "Buddies" tab doubles as a second way to open the New Session picker */
+  #aimBuddiesTab { cursor:pointer; }
+  #aimBuddiesTab:hover { color:#00248f; }
+
+  /* "New Session" bar under the tabs — the home window's primary action. Raised
+     Win95 button; the little ✚ carries the AOL green so it reads as "add". */
+  .aim-newbar { padding:5px 6px 1px; }
+  .aim-newbtn { display:flex; align-items:center; justify-content:center; gap:6px; width:100%;
+    padding:5px 10px; cursor:pointer; font-family:"MS Sans Serif", Tahoma, sans-serif;
+    font-size:12px; font-weight:700; color:#000; background:#c0c0c0; border:2px solid #000;
+    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
+  .aim-newbtn:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+  .aim-newbtn:focus-visible { outline:1px dotted #000; outline-offset:2px; }
+  .aim-newico { color:#0a8f2a; font-weight:700; }
+
+  /* empty state: the home window before you've started any chat */
+  .aim-empty { display:flex; flex-direction:column; align-items:center; text-align:center;
+    gap:6px; padding:26px 18px; color:#404040;
+    font-family:"MS Sans Serif", Tahoma, sans-serif; }
+  .aim-empty-ico { font-size:34px; line-height:1; }
+  .aim-empty-h { margin:2px 0 0; font-size:13px; font-weight:700; color:#00248f; }
+  .aim-empty-p { margin:0; font-size:12px; line-height:1.4; color:#505050; max-width:210px; }
+  .aim-empty-btn { width:auto; margin-top:6px; padding:5px 16px; }
 
   /* IM window */
   .aim-im { display:none; right:0; top:24px; width:372px; max-width:96vw;
@@ -243,10 +266,11 @@
   .pay-sm-sep { height:0; margin:3px 3px 3px 33px; border-top:1px solid #808080;
     box-shadow:0 1px 0 #fff; }
 
-  /* ---- payphone → "start a new session?" dialog ----------------------------
-     A classic Win95 message box centred over the teal desktop, asking before a
-     click on a live model opens a fresh chat. Reuses the beige bevel and the
-     blue .aim-tbar the buddy windows already use. */
+  /* ---- payphone → "New Session" buddy picker -------------------------------
+     A classic Win95 chooser centred over the teal desktop: New Session pops it
+     to pick which fleet model (or demo bot) to chat with. Reuses the beige
+     bevel and the blue .aim-tbar the buddy windows already use; the buddy rows
+     inside reuse the .aim-group / .aim-buddy vocabulary from the home list. */
   .pay-dialog { position:absolute; inset:0; z-index:8; display:flex;
     align-items:center; justify-content:center; padding:16px;
     background:rgba(0,0,0,.28); font-family:"MS Sans Serif", Tahoma, sans-serif; }
@@ -254,17 +278,12 @@
   .pay-dlg-win { width:min(340px,92vw); background:#c0c0c0; border:2px solid #000;
     box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #dfdfdf,
       inset -2px -2px 0 #000, inset 2px 2px 0 #fff, 3px 3px 0 rgba(0,0,0,.5); }
-  .pay-dlg-body { display:flex; align-items:center; gap:12px; padding:16px 14px 10px; }
-  .pay-dlg-ico { font-size:30px; line-height:1; flex:0 0 auto; }
-  .pay-dlg-msg { font-size:13px; color:#000; line-height:1.35; }
-  .pay-dlg-btns { display:flex; justify-content:flex-end; gap:8px; padding:6px 12px 14px; }
-  .pay-dlg-btn { min-width:82px; padding:4px 12px; cursor:pointer; font-size:12px; color:#000;
-    font-family:"MS Sans Serif", Tahoma, sans-serif; background:#c0c0c0; border:2px solid #000;
-    box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #fff; }
-  .pay-dlg-btn:active { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
-  .pay-dlg-btn.def { font-weight:700; }
-  .pay-dlg-btn:focus-visible { outline:1px dotted #000; outline-offset:2px; }
-  .pay-dlg-btn[hidden] { display:none; }
+  /* picker window: wider, with a bordered white list that scrolls its buddies */
+  .pay-dlg-win.pay-pick { width:min(300px,94vw); display:flex; flex-direction:column;
+    max-height:min(460px,84vh); }
+  .pay-pick-hint { padding:9px 12px 6px; font-size:12px; color:#303030; }
+  .pay-pick-scroll { flex:1; min-height:0; margin:0 8px 10px; padding:3px 0;
+    background:#fff; border:2px inset #fff; }
 
   @media (max-width:560px){
     .aim-stage { width:100%; height:100%; }
