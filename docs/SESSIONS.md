@@ -40,8 +40,11 @@ tool, the user it runs as, how long it's been up, and its command line. Each
 running session has a **Stop** button; a **＋ Spawn a session** button composes a
 new launch command. It all reads one agent endpoint, `/sessions`.
 
-Directly below it sits the **Users** section — the box's human accounts and a
-**＋ Add a user** button — covered on its own further down.
+Directly above it sits the **opencode server** section — a headless
+`opencode serve` a phone attaches to, distinct from an interactive session —
+covered in [`docs/OPENCODE-SERVER.md`](./OPENCODE-SERVER.md). Directly below sits
+the **Users** section — the box's human accounts and a **＋ Add a user** button —
+covered on its own further down.
 
 ## Installed vs running — two reads, one endpoint
 

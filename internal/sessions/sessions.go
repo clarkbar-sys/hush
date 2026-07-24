@@ -27,6 +27,7 @@
 package sessions
 
 import (
+	"net"
 	"os"
 	"os/user"
 	"path"
@@ -36,11 +37,19 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/clarkbar-sys/hush/internal/netlisten"
 )
 
 // DefaultProcs are the program names counted as coding-agent sessions when the
 // agent isn't told otherwise — the two the console knows how to spawn.
 var DefaultProcs = []string{"opencode", "claude"}
+
+// DefaultServerPort is where `opencode serve` listens when no --port is given,
+// and the port the console offers to start a server on. Detection uses it only
+// to resolve a server whose argv didn't spell the port out; a server that names
+// a different port is reported at that port, never overridden by this default.
+const DefaultServerPort = "4096"
 
 // Session is one running coding-agent process as the console understands it.
 type Session struct {
@@ -50,6 +59,16 @@ type Session struct {
 	Cmd     string `json:"cmd,omitempty"`     // sanitised, truncated argv, for a glance at what it's doing
 	Started int64  `json:"started,omitempty"` // unix seconds the process started, best-effort
 	Uptime  int64  `json:"uptime,omitempty"`  // seconds it has been running, best-effort
+
+	// Server marks an `opencode serve` — a headless server an opencode mobile
+	// client attaches to, distinct from an interactive session. When true the
+	// fields below describe how far that client can reach it, resolved from the
+	// kernel's listener table the same honest way LLM reach is (see
+	// internal/netlisten): a server bound to loopback is real but unreachable
+	// from a phone, and the console must not hand out its URL as if it were.
+	Server   bool   `json:"server,omitempty"`
+	Addr     string `json:"addr,omitempty"`     // where the server listens, as the kernel reports it (host:port); empty when the socket wasn't found
+	Exposure string `json:"exposure,omitempty"` // loopback | tailnet | open | unknown — only set for a server
 }
 
 // InstalledTool reports whether a known coding-agent CLI is present on the box
@@ -97,7 +116,7 @@ func Collect(match []string) Snapshot {
 	host, _ := os.Hostname()
 	return Snapshot{
 		Host:      host,
-		Sessions:  Detect("/proc", match, time.Now()),
+		Sessions:  Detect("/proc", match, time.Now(), netlisten.Listeners()),
 		Match:     match,
 		Installed: DetectInstalled(match, binDirs()),
 	}
@@ -178,14 +197,18 @@ func isExecutable(p string) bool {
 
 // Detect scans procRoot for coding-agent processes, resolving each to a
 // Session. procRoot and now are parameters so the walk is testable against a
-// fabricated /proc without root; production passes "/proc" and time.Now().
+// fabricated /proc without root; production passes "/proc" and time.Now(). The
+// listeners map (a port→bindings view of the kernel's listener table, see
+// internal/netlisten) is used to resolve where an `opencode serve` is reachable
+// — it's a parameter for the same testability reason, and a nil map simply
+// leaves a server's reach unresolved rather than guessing.
 //
 // A process matches when either its comm (the kernel's short name) or the base
 // name of its argv[0] is one of match — the launcher's own name, case-folded.
 // Detection deliberately keys on the program name rather than a hush-planted
 // marker: hush can't read another user's environment to find such a marker, and
 // "what coding agent is running here" is the honest, privilege-free answer.
-func Detect(procRoot string, match []string, now time.Time) []Session {
+func Detect(procRoot string, match []string, now time.Time, listeners map[string][]netlisten.Binding) []Session {
 	set := make(map[string]struct{}, len(match))
 	for _, m := range match {
 		if m = strings.ToLower(strings.TrimSpace(m)); m != "" {
@@ -217,6 +240,7 @@ func Detect(procRoot string, match []string, now time.Time) []Session {
 		}
 
 		s := Session{PID: pid, Tool: tool, Cmd: sanitizeCmd(args)}
+		resolveServer(&s, args, listeners)
 		if fi, err := os.Stat(path.Join(procRoot, e.Name())); err == nil {
 			if st, ok := fi.Sys().(*syscall.Stat_t); ok {
 				s.User = userName(st.Uid)
@@ -259,6 +283,74 @@ func matchTool(set map[string]struct{}, comm string, args []string) string {
 		}
 	}
 	return ""
+}
+
+// resolveServer marks a session as an `opencode serve` and fills in how far
+// that server is reachable, or leaves the session untouched when it isn't one.
+// It only ever considers opencode: `serve` is opencode's subcommand, and claude
+// has no equivalent headless-server mode, so treating a stray "serve" token in
+// another tool's argv as a server would be a false positive.
+//
+// Reach is resolved from the listener table exactly the way LLM reach is, and
+// for the same reason: a server bound to loopback is running but unreachable
+// from a phone, and the console must be able to tell "there's a server here you
+// can add" from "there's a server here you can't reach yet". The bound address
+// beside the exposure is the kernel's, not an assumption — a wildcard-bound
+// server reports 0.0.0.0 so the address never contradicts the scope. When the
+// port has no matching LISTEN socket (the process is up but not yet bound, or
+// /proc/net was unreadable), exposure is left "unknown" rather than claimed.
+func resolveServer(s *Session, args []string, listeners map[string][]netlisten.Binding) {
+	if s.Tool != "opencode" || !hasArg(args, "serve") {
+		return
+	}
+	s.Server = true
+	port := serverPort(args)
+	if b, ok := netlisten.Widest(listeners[port]); ok {
+		s.Addr = b.Addr(port)
+		s.Exposure = b.Scope
+		return
+	}
+	s.Addr = net.JoinHostPort("0.0.0.0", port)
+	s.Exposure = netlisten.ExposureUnknown
+}
+
+// hasArg reports whether want appears as a standalone argument (not as a
+// substring of another), so "serve" matches `opencode serve` but not a path
+// that merely contains the word.
+func hasArg(args []string, want string) bool {
+	for _, a := range args {
+		if a == want {
+			return true
+		}
+	}
+	return false
+}
+
+// serverPort reads the listen port out of an `opencode serve` argv, honouring
+// both `--port N` / `-p N` and the `--port=N` form, and falls back to
+// DefaultServerPort when the flag is absent (which is how opencode itself
+// behaves). Only a plausible port number is accepted; anything else falls back,
+// so a malformed flag reports the default rather than an address that can't be.
+func serverPort(args []string) string {
+	for i, a := range args {
+		var v string
+		switch {
+		case a == "--port" || a == "-p":
+			if i+1 < len(args) {
+				v = args[i+1]
+			}
+		case strings.HasPrefix(a, "--port="):
+			v = strings.TrimPrefix(a, "--port=")
+		case strings.HasPrefix(a, "-p="):
+			v = strings.TrimPrefix(a, "-p=")
+		default:
+			continue
+		}
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 65535 {
+			return v
+		}
+	}
+	return DefaultServerPort
 }
 
 // readArgs reads /proc/[pid]/cmdline, whose arguments are NUL-separated with a

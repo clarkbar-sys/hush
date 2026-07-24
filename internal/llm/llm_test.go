@@ -6,142 +6,12 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/clarkbar-sys/hush/internal/netlisten"
 	"github.com/clarkbar-sys/hush/internal/vitals"
 )
-
-// TestScopeOfIP pins the classification that decides whether the console says
-// "local only" or "serving". Getting this wrong inverts a safety claim.
-func TestScopeOfIP(t *testing.T) {
-	cases := []struct {
-		ip   string
-		want string
-	}{
-		{"127.0.0.1", vitals.LLMExposureLoopback},
-		{"::1", vitals.LLMExposureLoopback},
-		{"0.0.0.0", vitals.LLMExposureOpen},
-		{"::", vitals.LLMExposureOpen},
-		{"100.87.180.34", vitals.LLMExposureTailnet}, // tailnet CGNAT
-		{"100.63.255.255", vitals.LLMExposureOpen},   // just below 100.64/10
-		{"100.128.0.0", vitals.LLMExposureOpen},      // just above 100.64/10
-		{"192.168.0.30", vitals.LLMExposureOpen},     // LAN is not "safe"
-	}
-	for _, tc := range cases {
-		t.Run(tc.ip, func(t *testing.T) {
-			if got := scopeOfIP(net.ParseIP(tc.ip)); got != tc.want {
-				t.Fatalf("scopeOfIP(%s) = %q, want %q", tc.ip, got, tc.want)
-			}
-		})
-	}
-}
-
-// TestDecodeAddr pins the little-endian /proc decoding. The encodings are
-// asserted literally rather than round-tripped, so a byte-order regression
-// can't pass by being wrong consistently in both directions.
-func TestDecodeAddr(t *testing.T) {
-	cases := []struct {
-		hex  string
-		want string
-	}{
-		{"0100007F", "127.0.0.1"},
-		{"00000000", "0.0.0.0"},
-		{"22B45764", "100.87.180.34"},
-		{"1E00A8C0", "192.168.0.30"},
-		{"00000000000000000000000001000000", "::1"},
-		{strings.Repeat("0", 32), "::"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.hex, func(t *testing.T) {
-			ip, err := decodeAddr(tc.hex)
-			if err != nil {
-				t.Fatalf("decodeAddr(%q): %v", tc.hex, err)
-			}
-			if got := ip.String(); got != tc.want {
-				t.Fatalf("decodeAddr(%q) = %s, want %s", tc.hex, got, tc.want)
-			}
-		})
-	}
-
-	for _, bad := range []string{"zz", "0100007", "00"} {
-		if _, err := decodeAddr(bad); err == nil {
-			t.Errorf("decodeAddr(%q) succeeded, want error", bad)
-		}
-	}
-}
-
-// writeTable writes a synthetic /proc/net/tcp table with the given
-// "hexaddr:hexport" LISTEN entries.
-func writeTable(t *testing.T, entries ...string) string {
-	t.Helper()
-	var b strings.Builder
-	b.WriteString("  sl  local_address rem_address   st\n")
-	for i, e := range entries {
-		b.WriteString("   " + string(rune('0'+i)) + ": " + e + " 00000000:0000 0A\n")
-	}
-	path := filepath.Join(t.TempDir(), "tcp")
-	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
-// TestParseListenersWidestWins checks that a port bound both to loopback and to
-// a tailnet address reports the tailnet scope — the reachable truth, not the
-// reassuring half of it.
-func TestParseListenersWidestWins(t *testing.T) {
-	path := writeTable(t,
-		"0100007F:1F9B", // 127.0.0.1:8091
-		"22B45764:1F9B", // 100.87.180.34:8091
-		"0100007F:2CEE", // 127.0.0.1:11502
-	)
-	got := parseListeners(path)
-
-	b, ok := widest(got["8091"])
-	if !ok {
-		t.Fatal("port 8091 not found")
-	}
-	if b.scope != vitals.LLMExposureTailnet {
-		t.Errorf("port 8091 scope = %q, want %q", b.scope, vitals.LLMExposureTailnet)
-	}
-	if !hasLoopback(got["8091"]) {
-		t.Error("port 8091 should still report a loopback binding alongside the tailnet one")
-	}
-
-	b2, _ := widest(got["11502"])
-	if b2.scope != vitals.LLMExposureLoopback {
-		t.Errorf("port 11502 scope = %q, want %q", b2.scope, vitals.LLMExposureLoopback)
-	}
-}
-
-// TestParseListenersUndecodableIsOpen guards the fail-loud direction: a socket
-// whose address can't be decoded must widen the port's reported scope, never
-// silently vanish and leave the port looking safer than it is.
-func TestParseListenersUndecodableIsOpen(t *testing.T) {
-	path := writeTable(t,
-		"0100007F:1F9B", // 127.0.0.1:8091
-		"zzzzzzzz:1F9B", // undecodable, same port
-	)
-	b, ok := widest(parseListeners(path)["8091"])
-	if !ok {
-		t.Fatal("port 8091 not found")
-	}
-	if b.scope != vitals.LLMExposureOpen {
-		t.Fatalf("scope = %q, want %q — an undecodable bind must not read as safe", b.scope, vitals.LLMExposureOpen)
-	}
-	if got := b.addr("8091"); got != "0.0.0.0:8091" {
-		t.Errorf("addr = %q, want the wildcard it was scored as", got)
-	}
-}
-
-func TestParseListenersUnreadable(t *testing.T) {
-	if got := parseListeners("/nonexistent/proc/net/tcp"); len(got) != 0 {
-		t.Fatalf("unreadable table yielded %v, want nothing", got)
-	}
-}
 
 // TestProbeIdentifiesRuntimes checks that each runtime is told apart by the API
 // shape that answers, and that its models come back sorted.
@@ -256,23 +126,23 @@ func TestDetectDisabled(t *testing.T) {
 func TestTargetsUsesBindAddress(t *testing.T) {
 	cases := []struct {
 		name         string
-		bindings     []binding
+		bindings     []netlisten.Binding
 		wantProbe    string
 		wantBind     string
 		wantExposure string
 	}{
 		{
 			name:         "tailnet only is probed at its bind address",
-			bindings:     []binding{{ip: net.ParseIP("100.87.180.34"), scope: vitals.LLMExposureTailnet}},
+			bindings:     []netlisten.Binding{{IP: net.ParseIP("100.87.180.34"), Scope: vitals.LLMExposureTailnet}},
 			wantProbe:    "100.87.180.34:8091",
 			wantBind:     "100.87.180.34:8091",
 			wantExposure: vitals.LLMExposureTailnet,
 		},
 		{
 			name: "loopback alongside tailnet is probed over loopback, reported as tailnet",
-			bindings: []binding{
-				{ip: net.ParseIP("127.0.0.1"), scope: vitals.LLMExposureLoopback},
-				{ip: net.ParseIP("100.87.180.34"), scope: vitals.LLMExposureTailnet},
+			bindings: []netlisten.Binding{
+				{IP: net.ParseIP("127.0.0.1"), Scope: vitals.LLMExposureLoopback},
+				{IP: net.ParseIP("100.87.180.34"), Scope: vitals.LLMExposureTailnet},
 			},
 			wantProbe:    "127.0.0.1:8091",
 			wantBind:     "100.87.180.34:8091",
@@ -280,7 +150,7 @@ func TestTargetsUsesBindAddress(t *testing.T) {
 		},
 		{
 			name:         "wildcard is probed over loopback, reported as open",
-			bindings:     []binding{{ip: net.ParseIP("0.0.0.0"), scope: vitals.LLMExposureOpen}},
+			bindings:     []netlisten.Binding{{IP: net.ParseIP("0.0.0.0"), Scope: vitals.LLMExposureOpen}},
 			wantProbe:    "127.0.0.1:8091",
 			wantBind:     "0.0.0.0:8091",
 			wantExposure: vitals.LLMExposureOpen,
@@ -288,22 +158,22 @@ func TestTargetsUsesBindAddress(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			b, ok := widest(tc.bindings)
+			b, ok := netlisten.Widest(tc.bindings)
 			if !ok {
 				t.Fatal("no bindings")
 			}
-			probeAddr := b.addr("8091")
-			if b.wildcard() || hasLoopback(tc.bindings) {
+			probeAddr := b.Addr("8091")
+			if b.Wildcard() || netlisten.HasLoopback(tc.bindings) {
 				probeAddr = net.JoinHostPort("127.0.0.1", "8091")
 			}
 			if probeAddr != tc.wantProbe {
 				t.Errorf("probe address = %q, want %q", probeAddr, tc.wantProbe)
 			}
-			if got := b.addr("8091"); got != tc.wantBind {
+			if got := b.Addr("8091"); got != tc.wantBind {
 				t.Errorf("bind address = %q, want %q", got, tc.wantBind)
 			}
-			if b.scope != tc.wantExposure {
-				t.Errorf("exposure = %q, want %q", b.scope, tc.wantExposure)
+			if b.Scope != tc.wantExposure {
+				t.Errorf("exposure = %q, want %q", b.Scope, tc.wantExposure)
 			}
 		})
 	}

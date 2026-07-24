@@ -301,7 +301,8 @@ the console and can be updated by re-running the one-line installer.
 | `cmd/hush-agent` | one static Go binary per machine; reports vitals as JSON |
 | `cmd/hush-control` | control plane on the NAS; fans out to agents, serves the UI |
 | `internal/vitals` | Linux vitals collection (`/proc`, systemd, `nvidia-smi`) |
-| `internal/sessions` | read-only detection of running coding agents (opencode/claude) for the console's Sessions view (see [`docs/SESSIONS.md`](./docs/SESSIONS.md)) |
+| `internal/sessions` | read-only detection of running coding agents (opencode/claude) for the console's Sessions view (see [`docs/SESSIONS.md`](./docs/SESSIONS.md)), including headless `opencode serve` servers you add in opencode mobile (see [`docs/OPENCODE-SERVER.md`](./docs/OPENCODE-SERVER.md)) |
+| `internal/netlisten` | shared read of the kernel listener table (`/proc/net/tcp{,6}`) classifying a socket's reach (loopback/tailnet/open); used by LLM-runtime and opencode-server detection |
 | `web/` | the console — a single static page, assembled from per-app source under `web/src/` (see [`web/src/README.md`](./web/src/README.md)) |
 | `docs/mockups/` | interactive UX reference (open directly for the demo fleet) |
 | `systemd/` | unit files for running the binaries as services |
