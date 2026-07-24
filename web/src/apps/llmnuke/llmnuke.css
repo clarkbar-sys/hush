@@ -55,26 +55,8 @@
   .nuke-blink { animation:nuke-blink 1s steps(1) infinite; }
   @keyframes nuke-blink { 50%{opacity:0} }
 
-  /* ---- LIVE coming-soon crest ---- */
-  .nuke-soon { margin:auto; text-align:center; padding:20px; max-width:440px; }
-  .nuke-crest { width:150px; height:150px; filter:drop-shadow(0 0 14px rgba(57,255,20,.6));
-    animation:nuke-pulse 2.6s ease-in-out infinite; }
-  @keyframes nuke-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
-  .nuke-soon-title { margin-top:6px; font-size:16px; letter-spacing:.16em; color:var(--nk-dim); }
-  .nuke-soon-title b { display:block; font-size:30px; color:var(--nk-green); letter-spacing:.1em;
-    text-shadow:0 0 12px rgba(57,255,20,.7); }
-  .nuke-soon-note { margin:16px 0 10px; font-size:11.5px; line-height:1.8; color:var(--nk-dim); }
-  .nuke-soon-see { font-size:11px; color:var(--nk-green); opacity:.75; }
-  .nuke-mono { color:var(--nk-amber); }
-  .nuke-soon-back { margin-top:18px; font-family:var(--nk-mono); font-size:12px; letter-spacing:.1em;
-    color:var(--nk-green); background:var(--nk-face); border:0; padding:9px 18px; cursor:pointer;
-    box-shadow:inset 1px 1px 0 var(--nk-lite), inset -2px -2px 0 var(--nk-dark); }
-  .nuke-soon-back:active { box-shadow:inset -1px -1px 0 var(--nk-lite), inset 2px 2px 0 var(--nk-dark); }
-
   /* ===== windows (Win95 bevel, toxic) ===== */
   .nuke-desk { flex:1; min-height:0; display:flex; }
-  .nuke-desk.term-open .nuke-home { display:none; }
-  .nuke-desk:not(.term-open) .nuke-term { display:none; }
   .nuke-win {
     display:flex; flex-direction:column; flex:1; min-height:0;
     width:100%; max-width:520px; margin:0 auto;
@@ -152,48 +134,13 @@
   .nuke-me b { color:var(--nk-green); }
   .nuke-badge { margin-left:auto; font-size:8.5px; font-weight:700; letter-spacing:.14em; color:var(--nk-mag);
     border:1px solid var(--nk-mag); padding:2px 6px; text-shadow:0 0 6px rgba(255,43,214,.5); }
-
-  /* ---- terminal / agent chat window ---- */
-  .nuke-route { flex:0 0 auto; padding:5px 9px; font-size:10.5px; color:var(--nk-amber);
-    background:var(--nk-blk); border-bottom:1px solid var(--nk-deep); white-space:nowrap;
-    overflow:hidden; text-overflow:ellipsis; text-shadow:0 0 6px rgba(255,210,63,.3); }
-  .nuke-route b { color:var(--nk-green); }
-  .nuke-log { flex:1; min-height:0; overflow:auto; padding:10px 11px; background:var(--nk-blk);
-    font-size:12.5px; line-height:1.65; box-shadow:inset 0 0 0 2px var(--nk-dark); }
-  .nuke-line { margin-bottom:7px; white-space:pre-wrap; word-break:break-word; }
-  .nuke-line.me { color:#d6ffce; }
-  .nuke-line.me::before { content:"you@w4r3z:~$ "; color:var(--nk-mag); }
-  .nuke-line.agent { color:var(--nk-green); text-shadow:0 0 5px rgba(57,255,20,.35); }
-  .nuke-line.tool { color:var(--nk-dim); font-size:11.5px; }
-  .nuke-line.tool::before { content:"▸ "; color:var(--nk-amber); }
-  .nuke-line.sys { color:var(--nk-amber); opacity:.85; font-size:11px; }
-  .nuke-cursor { display:inline-block; width:8px; background:var(--nk-green); animation:nuke-blink 1s steps(1) infinite;
-    box-shadow:0 0 6px rgba(57,255,20,.6); }
-  .nuke-typing { flex:0 0 auto; min-height:16px; padding:0 11px 4px; font-size:10.5px; color:var(--nk-dim); }
-
-  .nuke-cwrap { flex:0 0 auto; padding:7px; background:var(--nk-panel);
-    box-shadow:inset 0 1px 0 var(--nk-dark); }
-  .nuke-input {
-    width:100%; resize:none; font-family:var(--nk-mono); font-size:12.5px; color:var(--nk-green);
-    background:var(--nk-blk); border:0; padding:8px; caret-color:var(--nk-green);
-    box-shadow:inset 1px 1px 0 #000, inset -1px -1px 0 var(--nk-lite);
-  }
-  .nuke-input::placeholder { color:var(--nk-deep); }
-  .nuke-input:focus { outline:1px solid var(--nk-dim); }
-  .nuke-crow { display:flex; align-items:center; gap:8px; margin-top:6px; }
-  .nuke-warn { flex:1; font-size:10px; color:var(--nk-amber); min-height:12px; }
-  .nuke-send { flex:0 0 auto; font-family:var(--nk-mono); font-size:12px; font-weight:700; letter-spacing:.06em;
-    color:var(--nk-green); background:linear-gradient(#0f3a06,#061c02); border:0; padding:9px 14px; cursor:pointer;
-    box-shadow:inset 1px 1px 0 var(--nk-lite), inset -2px -2px 0 #000; text-shadow:0 0 5px rgba(57,255,20,.5); }
-  .nuke-send:active { box-shadow:inset -1px -1px 0 var(--nk-lite), inset 2px 2px 0 #000; }
-  .nuke-send:disabled { opacity:.5; cursor:default; }
-  .nuke-rr { color:var(--nk-mag); }
+  .nuke-badge.live { color:var(--nk-green); border-color:var(--nk-green); text-shadow:0 0 6px rgba(57,255,20,.5); }
 
   /* ===== target selector (wizard) ===== */
   .nuke-dialog { position:absolute; inset:0; z-index:50; display:none;
     align-items:center; justify-content:center; padding:16px;
     background:rgba(1,6,0,.72); }
-  #nukePick:not([hidden]) { display:flex; }
+  #nukePick:not([hidden]), #nukeCmd:not([hidden]) { display:flex; }
   .nuke-pick { max-width:400px; max-height:88%; }
   .nuke-steps { flex:0 0 auto; display:flex; gap:2px; padding:6px; background:var(--nk-panel); }
   .nuke-step { flex:1; display:flex; align-items:center; justify-content:center; gap:5px;
@@ -232,12 +179,16 @@
     color:var(--nk-amber); border:1px solid var(--nk-deep); padding:2px 5px; }
   .nuke-tag.uid0 { color:var(--nk-red); border-color:var(--nk-red); }
 
-  /* group filter chips (user step) */
-  .nuke-chips { display:flex; flex-wrap:wrap; gap:5px; padding:2px 4px 8px; }
-  .nuke-chip { font-size:10px; font-weight:700; letter-spacing:.04em; color:var(--nk-dim);
-    background:var(--nk-panel); border:1px solid var(--nk-deep); padding:4px 9px; cursor:pointer; text-transform:uppercase; }
-  .nuke-chip.on { color:#031400; background:var(--nk-green); border-color:var(--nk-green);
-    box-shadow:0 0 8px rgba(57,255,20,.5); }
+  /* ===== command sheet (spawn / stop) — the compose-only "you run it" panel ===== */
+  .nuke-cmdwin { max-width:420px; max-height:88%; }
+  .nuke-cmd-body { flex:1; min-height:0; overflow:auto; padding:12px; background:var(--nk-blk);
+    box-shadow:inset 0 0 0 2px var(--nk-dark); }
+  .nuke-cmd-note { margin:0 0 10px; font-size:11.5px; line-height:1.7; color:var(--nk-dim); }
+  .nuke-cmdbox { background:var(--nk-panel); border:1px solid var(--nk-deep); padding:9px;
+    box-shadow:inset 1px 1px 0 rgba(57,255,20,.08); }
+  .nuke-cmdbox code { display:block; white-space:pre-wrap; word-break:break-word;
+    font-size:11.5px; line-height:1.6; color:var(--nk-green); text-shadow:0 0 4px rgba(57,255,20,.3); }
+  .nuke-cmd-hint { margin:10px 0 0; font-size:10.5px; line-height:1.7; color:var(--nk-dim); }
 
   .nuke-pick-foot { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:7px;
     background:var(--nk-panel); border-top:1px solid #000; }
