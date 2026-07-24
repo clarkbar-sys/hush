@@ -335,9 +335,16 @@
     background:var(--accent-soft); border-radius:6px; padding:2px 7px; }
   .oc-export { align-self:flex-start; }
   /* the generated opencode.json, previewed inside its export sheet */
-  .oc-json { font-family:var(--mono); font-size:11.5px; line-height:1.5; color:var(--text);
-    background:var(--panel-2); border:1px solid var(--border); border-radius:10px;
-    padding:11px 12px; margin:0 0 14px; max-height:44vh; overflow:auto; white-space:pre; }
+   .oc-json { font-family:var(--mono); font-size:11.5px; line-height:1.5; color:var(--text);
+     background:var(--panel-2); border:1px solid var(--border); border-radius:10px;
+     padding:11px 12px; margin:0 0 14px; max-height:44vh; overflow:auto; white-space:pre; }
+
+   /* ---- opencode server section: the addable URL and its copy button ---- */
+   .ocs-url { display:flex; align-items:center; gap:8px; margin-top:8px; }
+   .ocs-url-t { flex:1; min-width:0; font-family:var(--mono); font-size:12px; color:var(--accent);
+     background:var(--accent-soft); border-radius:6px; padding:4px 8px; overflow:auto; white-space:nowrap; }
+   /* the start-server sheet's side-by-side port + password row */
+   .field.svrow { flex-direction:row; gap:10px; }
 
   /* ---- sessions section (machine view): running coding agents ---- */
   .se-sec { display:flex; flex-direction:column; gap:9px; }
@@ -4539,7 +4546,7 @@
   // BUILD_SHA is stamped in by scripts/build-web-preview.sh for static builds
   // (GitHub Pages / PR previews) that have no hush-control backend and thus no
   // api/version. Left blank here for real deployments.
-  const BUILD_SHA = "9330506";
+  const BUILD_SHA = "054eb96";
 
   let M = [];                      // current fleet
   let MODE = "connecting";         // connecting | live | demo | lost
@@ -5273,6 +5280,86 @@
     return rows ? `<div class="tl-strip">${rows}</div>` : "";
   }
 
+  // serverSessions returns the detected `opencode serve` processes on a box —
+  // the headless servers an opencode mobile client attaches to, as distinct
+  // from the interactive sessions above. The agent flags them (session.server)
+  // and resolves their reach, so this is a plain filter of the last read.
+  function serverSessions(host){
+    const list = (SESSIONS[host] && SESSIONS[host].sessions) || [];
+    return list.filter(s=>s.server);
+  }
+
+  // serverURL turns a reachable server's reported bind address into the URL you
+  // paste into opencode mobile's "add server". A wildcard bind (0.0.0.0 / ::,
+  // what an "open" server reports) is not a dialable host, so the box's tailnet
+  // IP stands in — the same substitution ocConfig makes for a wildcard runtime.
+  // A loopback-only or unknown-reach server has no off-box URL and returns "":
+  // the console must never hand out an address a phone can't actually reach.
+  function serverURL(m, s){
+    if(!s || (s.exposure!=="tailnet" && s.exposure!=="open")) return "";
+    const { host, port } = splitAddr(s.addr);
+    let h = host;
+    if(h==="0.0.0.0" || h==="::" || h==="") h = m.ip || h;
+    if(!h) return "";
+    const hostPart = h.includes(":") ? `[${h}]` : h;
+    return `http://${hostPart}${port?":"+port:""}`;
+  }
+
+  // serverSection renders the machine view's opencode-server block, above
+  // Sessions. It answers the one question opencode mobile asks — "what URL do I
+  // add?" — from what the box already reports: a reachable `opencode serve`
+  // shows its URL with a Copy button; a running-but-loopback server is shown as
+  // present-but-unreachable (so you know it's there and why you can't add it);
+  // and when none is running, a Start button composes the sandboxed launch
+  // command (see buildServerCmd). Like Sessions, hush only reads and composes —
+  // it never starts or stops the server itself.
+  function serverSection(m){
+    const st = SESSIONS[m.id];
+    const servers = serverSessions(m.id);
+    let body;
+    if(!m.online && MODE!=="demo"){
+      body = `<div class="empty">machine unreachable — bring it online to see its opencode server</div>`;
+    } else if(st && st.err==="old-agent"){
+      body = `<div class="empty">this agent is too old to report an opencode server — update hush-agent</div>`;
+    } else if(servers.length){
+      body = servers.map(s=>{
+        const url = serverURL(m, s);
+        const meta = LLM_SCOPE[s.exposure] || LLM_SCOPE.unknown;
+        const up = fmtUptime(s.uptime);
+        if(url){
+          return `<div class="oc-rt good">
+            <div class="oc-rt-hd">
+              <span class="oc-gly">${meta.glyph}</span>
+              <span class="oc-kind">opencode server</span>
+              <span class="oc-scope">${meta.word}${up?` · ${up}`:""}</span>
+            </div>
+            <div class="ocs-url"><code class="ocs-url-t">${esc(url)}</code>
+              <button class="btn ocs-copy" data-url="${esc(url)}">Copy URL</button></div>
+            <div class="hint">add this in opencode mobile → Servers → add — it exposes the fleet's models this box was pointed at</div>
+          </div>`;
+        }
+        return `<div class="oc-rt warn">
+          <div class="oc-rt-hd">
+            <span class="oc-gly">▲</span>
+            <span class="oc-kind">opencode server</span>
+            <span class="oc-addr">${esc(s.addr||"")}</span>
+            <span class="oc-scope">local only${up?` · ${up}`:""}</span>
+          </div>
+          <div class="hint">running but bound to loopback — a phone can't reach it. Restart it bound to the tailnet (Start below) to get a URL.</div>
+        </div>`;
+      }).join("");
+    } else {
+      body = `<div class="empty">no opencode server running — start one to add this box in opencode mobile and work against the fleet's models</div>`;
+    }
+    return `<div class="sec-title">opencode server${servers.length?` <span class="n">${servers.length}</span>`:""}</div>
+      <div class="oc-sec">
+        ${body}
+        <div class="sheet-actions">
+          <button class="btn primary ocs-start" id="ocs-start">＋ Start opencode server</button>
+        </div>
+      </div>`;
+  }
+
   // sessionsSection renders the machine view's Sessions block: which coding
   // agents are installed system-wide (the tools strip), the ones running now
   // (each with a Stop button that opens its sudo kill command) and a Spawn
@@ -5372,6 +5459,10 @@
   const spawnScrim = $("#spawnScrim");
   const spawnBody = $("#spawnSheetBody");
   let spHost=null, spTool="opencode", spUser="", spTarget="";
+  // server-sheet state: the box, run-as user, chosen LLM target, port and the
+  // generated password. Kept beside the spawn state because both sheets share
+  // the one scrim/body and the same "compose a command you paste" posture.
+  let svUser="", svTarget="", svPort="4096", svPass="";
   function closeSpawn(){ spawnScrim.classList.remove("open"); }
   spawnScrim.addEventListener("click", e=>{ if(e.target===spawnScrim) closeSpawn(); });
 
@@ -5497,6 +5588,160 @@
     });
     $("#spClose").addEventListener("click", closeSpawn);
     // keep focus in the user field across the initial paint so you can just type
+    if(document.activeElement !== ui) ui.focus();
+  }
+
+  /* ---------- start opencode server sheet ----------
+     The server is the thing opencode mobile "adds": a headless `opencode serve`
+     that exposes, over the tailnet, whatever fleet LLM this box was pointed at.
+     This sheet composes the one sudo command that stands it up — sandboxed and
+     reboot-surviving — and hands it to you to paste, the same read-only posture
+     as spawn: hush never runs it. */
+
+  // genPassword makes a short, URL-safe server password from the browser CSPRNG
+  // so a copyable OPENCODE_SERVER_PASSWORD is filled in by default. It's the
+  // credential opencode mobile sends on connect; the operator can overwrite it.
+  function genPassword(){
+    const bytes = new Uint8Array(12);
+    (self.crypto||window.crypto).getRandomValues(bytes);
+    const abc = "abcdefghijkmnpqrstuvwxyz23456789"; // no look-alikes (0/o, 1/l)
+    let out = "";
+    for(const b of bytes) out += abc[b % abc.length];
+    return out;
+  }
+
+  // buildServerCmd composes the single sudo command that starts a hardened
+  // opencode server on the box. Every clause maps to a requirement:
+  //
+  //   • sudo -u <user> is the whole preflight — a missing user fails it loudly.
+  //   • A per-user, hush-owned work tree (/var/lib/hush/opencode/<user>) is the
+  //     server's world: created up front, and bwrap binds it as the sandbox's
+  //     "/" so the served filesystem is that folder and nothing else on the box.
+  //     bubblewrap is the jail; the command checks for it and fails with a clear
+  //     line if it's absent rather than silently running unconfined.
+  //   • The chosen LLM's opencode.json (the same export the Inference section
+  //     builds) is written into that tree's ~/.config/opencode, base64-piped so
+  //     the JSON's quotes can't collide with the command's own quoting — so the
+  //     moment a phone adds the server it sees the fleet's models.
+  //   • A system systemd unit (not a login-shell tmux, not `nohup`) runs
+  //     `opencode serve --hostname 0.0.0.0 --port <port>` with the password in
+  //     OPENCODE_SERVER_PASSWORD, enabled so it survives a reboot. This is the
+  //     "reuse systemd, not a homebrew launcher" the workflow asked for.
+  //
+  // The command is idempotent: re-pasting it rewrites the unit and restarts the
+  // server (systemctl enable --now), so tweaking the port or password is just a
+  // re-paste. It binds 0.0.0.0 inside the jail; tailscale on the host is what
+  // makes that reachable as the box's tailnet address, which is the URL the
+  // server section then shows once detection sees the new bind.
+  function buildServerCmd(){
+    const u = svUser.trim();
+    if(!USER_RE.test(u)) return { cmd:"", err:"enter a Linux username to run as" };
+    const port = String(parseInt(svPort,10)||4096);
+    const pass = svPass || "";
+    const work = `/var/lib/hush/opencode/${u}`;
+    const unit = "opencode-server";
+    const t = svTarget && byId(svTarget);
+    let cfg = "";
+    if(t){
+      const json = JSON.stringify(ocConfig(t, 0), null, 2);
+      const b64 = btoa(unescape(encodeURIComponent(json)));
+      cfg =
+        `  install -d -o ${u} -g ${u} -m 700 "${work}/.config/opencode" &&\n` +
+        `  printf %s "${b64}" | base64 -d > "${work}/.config/opencode/opencode.json" &&\n` +
+        `  chown ${u}:${u} "${work}/.config/opencode/opencode.json" &&\n`;
+    }
+    // A here-doc'd unit file: HOME points opencode at the jailed config tree,
+    // and ExecStart wraps `opencode serve` in bwrap so its filesystem root IS
+    // the work tree. --dev-bind of the essentials keeps the runtime usable
+    // (dns, certs, the opencode binary) without widening the writable root.
+    const cmd =
+`sudo bash -c '
+  command -v bwrap >/dev/null 2>&1 || { echo "bubblewrap (bwrap) is required — install it, then re-run" >&2; exit 1; }
+  id ${u} >/dev/null 2>&1 || { echo "user ${u} does not exist" >&2; exit 1; }
+  install -d -o ${u} -g ${u} -m 700 "${work}" &&
+${cfg ? cfg.replace(/^/gm,"") : ""}  cat > /etc/systemd/system/${unit}.service <<UNIT &&
+[Unit]
+Description=opencode server (hush) for ${u}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=${u}
+Environment=HOME=${work}
+Environment=OPENCODE_SERVER_PASSWORD=${pass}
+ExecStart=/usr/bin/bwrap \\
+  --bind ${work} / --dev /dev --proc /proc --tmpfs /tmp \\
+  --ro-bind /nix /nix --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib \\
+  --ro-bind /etc/resolv.conf /etc/resolv.conf --ro-bind /etc/ssl /etc/ssl \\
+  --setenv HOME / --setenv OPENCODE_SERVER_PASSWORD ${pass} \\
+  opencode serve --hostname 0.0.0.0 --port ${port}
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload &&
+  systemctl enable --now ${unit}.service'`;
+    return { cmd, err:"" };
+  }
+
+  function openServerSheet(host){
+    spHost = host; svUser = ""; svPort = "4096"; svPass = genPassword();
+    const ts = spawnTargets();
+    const here = ts.find(x=>x.id===host);
+    svTarget = here ? here.id : (ts[0] ? ts[0].id : "");
+    renderServerSheet();
+    spawnScrim.classList.add("open");
+  }
+
+  function renderServerSheet(){
+    const ts = spawnTargets();
+    const targetField = ts.length
+      ? `<div class="field">
+           <label for="svTarget">expose models from</label>
+           <select id="svTarget">${ts.map(x=>`<option value="${esc(x.id)}"${x.id===svTarget?" selected":""}>${esc(x.id)} · ${ocReachable(x).reduce((n,r)=>n+((r.models||[]).length),0)} models</option>`).join("")}</select>
+           <div class="hint">writes that box's tailnet LLM into the server's opencode.json, so opencode mobile sees those models the moment it connects</div>
+         </div>`
+      : `<div class="field-note">no tailnet-reachable LLM on the fleet — the server will start with an empty config. Expose a runtime (a machine's Inference section) to give the phone models to talk to.</div>`;
+    const { cmd, err } = buildServerCmd();
+    spawnBody.innerHTML = `
+      <h3>Start opencode server <span class="sd" style="font-family:var(--mono)">${esc(spHost)}</span></h3>
+      <p class="sd">compose the command, then paste it into a root shell on ${esc(spHost)} (JuiceSSH) — hush never runs it for you</p>
+      <div class="field">
+        <label for="svUser">run as user</label>
+        <input id="svUser" type="text" autocapitalize="off" autocomplete="off" spellcheck="false"
+          placeholder="e.g. josh" value="${esc(svUser)}">
+        <div class="hint">the server runs as this user, jailed to <span style="font-family:var(--mono)">/var/lib/hush/opencode/${esc(svUser.trim()||"&lt;user&gt;")}</span> (that folder is its whole filesystem)</div>
+      </div>
+      <div class="field svrow">
+        <div style="flex:1"><label for="svPort">port</label>
+          <input id="svPort" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="${esc(svPort)}"></div>
+        <div style="flex:2"><label for="svPass">password</label>
+          <input id="svPass" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" value="${esc(svPass)}"></div>
+      </div>
+      <div class="hint">opencode mobile sends this password on connect — it's set as <span style="font-family:var(--mono)">OPENCODE_SERVER_PASSWORD</span>; hush composes it into the command and never stores it</div>
+      ${targetField}
+      <div class="cmdbox"><code id="svCmd">${esc(cmd||err)}</code><button class="btn" id="svCopy">Copy</button></div>
+      <div class="field-note">Installs a <span style="font-family:var(--mono)">systemd</span> unit (<span style="font-family:var(--mono)">opencode-server.service</span>) — enabled, so it survives a reboot — that runs <span style="font-family:var(--mono)">opencode serve</span> inside a <span style="font-family:var(--mono)">bubblewrap</span> jail rooted at the work folder. Once it's up and bound to the tailnet, this box's URL appears above to add in opencode mobile. Re-paste to change the port or password.</div>
+      <div class="sheet-actions"><button class="btn primary" id="svClose" style="flex:1">Close</button></div>`;
+
+    const code = $("#svCmd"), copy = $("#svCopy");
+    const refresh = ()=>{ const r = buildServerCmd(); code.textContent = r.cmd || r.err; copy.disabled = !r.cmd; };
+    copy.disabled = !cmd;
+    const ui = $("#svUser"), pi = $("#svPort"), pw = $("#svPass");
+    ui.addEventListener("input", ()=>{ svUser = ui.value; refresh(); });
+    pi.addEventListener("input", ()=>{ svPort = pi.value; refresh(); });
+    pw.addEventListener("input", ()=>{ svPass = pw.value; refresh(); });
+    const sel = $("#svTarget");
+    if(sel) sel.addEventListener("change", ()=>{ svTarget = sel.value; refresh(); });
+    copy.addEventListener("click", async ()=>{
+      const r = buildServerCmd(); if(!r.cmd) return;
+      try { await navigator.clipboard.writeText(r.cmd); toast("copied — paste into JuiceSSH on "+spHost); }
+      catch(e){ toast("couldn't copy — select and copy manually"); }
+    });
+    $("#svClose").addEventListener("click", closeSpawn);
     if(document.activeElement !== ui) ui.focus();
   }
 
@@ -5639,11 +5884,17 @@
   // spawn sheet and the stop sheet all render without a live agent.
   function demoSessions(id){
     if(id==="citadel") return [
+      // a reachable opencode server (server:true, tailnet) — the preview shows
+      // its addable URL; the rest are ordinary interactive sessions.
+      { pid:40771, user:"josh", tool:"opencode", cmd:"opencode serve --hostname 0.0.0.0 --port 4096", uptime:9000, server:true, addr:"100.71.8.9:4096", exposure:"tailnet" },
       { pid:48213, user:"josh", tool:"opencode", cmd:"opencode", uptime:5400 },
       { pid:52140, user:"josh", tool:"claude",   cmd:"claude",   uptime:640 },
       { pid:52881, user:"ci",   tool:"opencode", cmd:"opencode run --agent build", uptime:210 },
     ];
     if(id==="forge") return [
+      // a loopback-only server: present but not addable from a phone, so the
+      // preview shows the "running but local only" state.
+      { pid:22030, user:"ci", tool:"opencode", cmd:"opencode serve --port 4096", uptime:800, server:true, addr:"127.0.0.1:4096", exposure:"loopback" },
       { pid:11902, user:"ci", tool:"opencode", cmd:"opencode run --agent build", uptime:120 },
     ];
     return [];
@@ -6226,6 +6477,8 @@
             </div>`;
         })()}
 
+        ${serverSection(m)}
+
         ${sessionsSection(m)}
 
         ${usersSection(m)}
@@ -6255,6 +6508,14 @@
     if(ocx) ocx.addEventListener("click", ()=>openOcSheet(m.id));
     const spawn = $("#se-spawn");
     if(spawn) spawn.addEventListener("click", ()=>openSpawnSheet(m.id));
+    const ocsStart = $("#ocs-start");
+    if(ocsStart) ocsStart.addEventListener("click", ()=>openServerSheet(m.id));
+    app.querySelectorAll(".ocs-copy").forEach(b=>{
+      b.addEventListener("click", async ()=>{
+        try { await navigator.clipboard.writeText(b.dataset.url); toast("server URL copied — add it in opencode mobile"); }
+        catch(e){ toast("couldn't copy — select and copy manually"); }
+      });
+    });
     const adduser = $("#us-adduser");
     if(adduser) adduser.addEventListener("click", ()=>openUserSheet(m.id));
     app.querySelectorAll(".se-stop").forEach(b=>{
