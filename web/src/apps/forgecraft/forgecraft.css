@@ -1,0 +1,32 @@
+  /* ---- forgecraft app: a stub. Reuses the gh-app slide-in shell but re-skins it
+     as a forge — an ember-lit backdrop behind a 90s-RTS crest (crossed
+     sledgehammers over a molten FORGE / CRAFT wordmark) and a riveted
+     COMING SOON plate. Nothing to hand off to yet. ---- */
+  .forge-app { background: radial-gradient(120% 75% at 50% 12%, #3a1c0c 0%, #1a0d08 52%, #070403 100%); }
+  .forge-list { align-items:center; justify-content:center; gap:14px; padding:14px 16px 26px; }
+  .forge-crest { width:100%; max-width:320px; }
+  .forge-logo { display:block; width:100%; height:auto;
+    filter: drop-shadow(0 6px 18px rgba(255,90,20,.28)); }
+
+  /* riveted COMING SOON plate, ember-lit */
+  .forge-soon { position:relative; padding:9px 22px; border-radius:8px;
+    background:linear-gradient(#2a2420,#0f0b09);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.12), inset 0 0 0 1px rgba(255,150,60,.28),
+      0 3px 10px rgba(0,0,0,.5); }
+  .forge-soon span { font-size:15px; font-weight:800; letter-spacing:.34em;
+    text-transform:uppercase; padding-left:.34em;
+    background:linear-gradient(#ffe9a8,#ff7a1e); -webkit-background-clip:text;
+    background-clip:text; color:transparent;
+    filter: drop-shadow(0 1px 0 rgba(0,0,0,.6));
+    animation: forge-ember 2.4s ease-in-out infinite; }
+  /* rivets in the plate corners */
+  .forge-soon::before, .forge-soon::after { content:""; position:absolute; top:50%;
+    width:4px; height:4px; margin-top:-2px; border-radius:50%;
+    background:radial-gradient(#ffcf8a,#6a3a16); box-shadow:0 0 2px rgba(0,0,0,.6); }
+  .forge-soon::before { left:8px; }
+  .forge-soon::after { right:8px; }
+  @keyframes forge-ember { 0%,100% { opacity:.82; } 50% { opacity:1; } }
+  @media (prefers-reduced-motion: reduce) { .forge-soon span { animation:none; } }
+
+  .forge-note { padding:6px 18px 0; }
+
