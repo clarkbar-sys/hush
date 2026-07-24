@@ -1,0 +1,153 @@
+<!-- LLMNUKE.EXE — a Win95-cracktro console for agent sessions. Where payphone
+     chats a local model, LLMNUKE arms an *agent*: you pick a fleet machine, the
+     Unix user to run as (filtered by group), and a model, and drop into a
+     terminal-style session running opencode as that user. It's the same "hush
+     composes, you run" spirit as docs/SESSIONS.md — the demo desktop below
+     test-drives the whole UX with fabricated fleet data; against a live
+     hush-control backend the app shows a LIVE-coming-soon crest instead (the
+     real spawn path is deliberately not wired yet). See launcher JS. -->
+<div id="llmnukeScreen" role="dialog" aria-label="LLMNUKE.EXE" aria-modal="true">
+  <div class="nuke-crt">
+
+    <!-- detect splash: probes /api/fleet to decide demo vs live before painting -->
+    <div class="nuke-boot" id="nukeBoot" aria-live="polite">
+      <pre class="nuke-boot-art" aria-hidden="true">      ▄▄▄▄▄▄▄
+    ▄█▓▓▒▒░░▒▓█▄
+   █▓▒░  ☢  ░▒▓█
+   █▓▒░░    ░▒▓█
+    ▀█▓▒▒░░▒▓█▀
+      ▀▀▀▀▀▀▀</pre>
+      <div class="nuke-boot-txt">ARM1NG W4RH34D<span class="nuke-blink">_</span></div>
+      <div class="nuke-boot-sub" id="nukeBootSub">pr0b1ng th3 fl33t . . .</div>
+    </div>
+
+    <!-- LIVE crest: shown when a real hush-control backend answers /api/fleet.
+         The live spawn path isn't wired yet, so the app parks here on purpose. -->
+    <div class="nuke-soon" id="nukeSoon" hidden>
+      <svg class="nuke-crest" viewBox="0 0 240 240" role="img" aria-label="LLMNUKE">
+        <defs>
+          <radialGradient id="nkGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stop-color="#39ff14" stop-opacity=".55"/>
+            <stop offset="1" stop-color="#39ff14" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="nkTox" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#d6ffce"/>
+            <stop offset=".5" stop-color="#39ff14"/>
+            <stop offset="1" stop-color="#0f7a06"/>
+          </linearGradient>
+        </defs>
+        <circle cx="120" cy="120" r="110" fill="url(#nkGlow)"/>
+        <!-- radioactive trefoil -->
+        <g transform="translate(120 120)" fill="url(#nkTox)" stroke="#052b00" stroke-width="3" stroke-linejoin="round">
+          <circle r="15"/>
+          <path d="M0 0 L34 -59 A68 68 0 0 1 68 0 Z" transform="rotate(0)"/>
+          <path d="M0 0 L34 -59 A68 68 0 0 1 68 0 Z" transform="rotate(120)"/>
+          <path d="M0 0 L34 -59 A68 68 0 0 1 68 0 Z" transform="rotate(240)"/>
+        </g>
+      </svg>
+      <div class="nuke-soon-title">L1V3 M0D3<br><b>C0M1NG S00N</b></div>
+      <p class="nuke-soon-note">
+        LLMNUKE se3z a l1v3 hush-control backend — s0 it'z st4nd1ng d0wn.<br>
+        Th3 r34l spawn p4th (opencode az a fl33t us3r 0v3r ssh) 1z st1ll 0n th3 b3nch;<br>
+        f0r n0w th1z 1z a UX pr3v13w — run 1t 0n th3 st4t1c d3m0 t0 t3st dr1v3.
+      </p>
+      <p class="nuke-soon-see">
+        Th3 c0mp0s3-th3-c0mm4nd m0d3l 1t'z built 0n → <span class="nuke-mono">docs/SESSIONS.md</span>
+      </p>
+      <button class="nuke-soon-back" id="nukeSoonBack" type="button">‹ 3XIT</button>
+    </div>
+
+    <!-- ===== DEMO DESKTOP ===== -->
+    <div class="nuke-desk" id="nukeDesk" hidden>
+
+      <!-- home window: your Active Sessions (resume any time) -->
+      <div class="nuke-win nuke-home" id="nukeHome">
+        <div class="nuke-tbar">
+          <span class="nuke-tico" aria-hidden="true">☢</span>
+          <span class="nuke-t-txt">ACT1V3 S3SS10NZ</span>
+          <span class="nuke-tbtn" id="nukeHomeMin" role="button" tabindex="0" aria-label="Minimize">_</span>
+          <span class="nuke-tbtn" id="nukeHomeClose" role="button" tabindex="0" aria-label="Close">×</span>
+        </div>
+        <div class="nuke-home-bar">
+          <button class="nuke-newbtn" id="nukeNew" type="button"><span aria-hidden="true">☢</span> NUK3 N3W S3SS10N</button>
+        </div>
+        <div class="nuke-sesswrap">
+          <div class="nuke-list" id="nukeSessList" role="tree" aria-label="Active agent sessions"></div>
+          <div class="nuke-home-foot">
+            <span class="nuke-me">j4ck3d 1n az <b>gU3st@clarkbar</b></span>
+            <span class="nuke-badge">0WNZ0R3D</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- agent terminal / chat window -->
+      <div class="nuke-win nuke-term" id="nukeTerm" role="dialog" aria-label="Agent session" aria-modal="false">
+        <div class="nuke-tbar">
+          <span class="nuke-tico" aria-hidden="true">⌁</span>
+          <span class="nuke-t-txt" id="nukeTermTitle">opencode</span>
+          <span class="nuke-tbtn" id="nukeTermMin" role="button" tabindex="0" aria-label="Back to sessions">_</span>
+          <span class="nuke-tbtn" id="nukeTermClose" role="button" tabindex="0" aria-label="Kill session">×</span>
+        </div>
+        <div class="nuke-route" id="nukeRoute" aria-hidden="true"></div>
+        <div class="nuke-log" id="nukeLog" aria-live="polite" aria-atomic="false"></div>
+        <div class="nuke-typing" id="nukeTyping" aria-live="polite"></div>
+        <div class="nuke-cwrap">
+          <textarea class="nuke-input" id="nukeInput" rows="2" placeholder="t3ll th3 4g3nt wh4t 2 d0…" aria-label="Message the agent"></textarea>
+          <div class="nuke-crow">
+            <span class="nuke-warn" id="nukeWarn"></span>
+            <button class="nuke-send" id="nukeSend" type="button"><span class="nuke-rr">»</span> TR4NSM1T</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===== TARGET SELECTOR (new session wizard) ===== -->
+    <div class="nuke-dialog" id="nukePick" role="dialog" aria-modal="true" aria-labelledby="nukePickTitle" hidden>
+      <div class="nuke-win nuke-pick">
+        <div class="nuke-tbar">
+          <span class="nuke-tico" aria-hidden="true">☢</span>
+          <span class="nuke-t-txt" id="nukePickTitle">T4RG3T S3L3CT0R</span>
+          <span class="nuke-tbtn" id="nukePickX" role="button" tabindex="0" aria-label="Cancel">×</span>
+        </div>
+        <div class="nuke-steps" id="nukeSteps" role="tablist" aria-label="Session target steps">
+          <span class="nuke-step" data-step="0"><i>1</i> M4CH1N3</span>
+          <span class="nuke-step" data-step="1"><i>2</i> US3R</span>
+          <span class="nuke-step" data-step="2"><i>3</i> M0D3L</span>
+        </div>
+        <div class="nuke-pick-hint" id="nukePickHint">P1ck a b0x 0n th3 fl33t 2 0wn.</div>
+        <div class="nuke-pick-body" id="nukePickBody" role="tree" aria-label="Targets"></div>
+        <div class="nuke-pick-foot">
+          <button class="nuke-pick-back" id="nukePickBack" type="button" hidden>‹ B4CK</button>
+          <span class="nuke-pick-sum" id="nukePickSum"></span>
+          <button class="nuke-pick-go" id="nukePickGo" type="button" disabled>☢ 4RM S3SS10N »</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Win95 taskbar (all client-side theatre) ===== -->
+    <div class="nuke-startmenu" id="nukeStartMenu" role="menu" aria-label="Start menu">
+      <div class="nuke-sm-rail" aria-hidden="true"><span>LLMNUKE&nbsp;<i>98</i></span></div>
+      <div class="nuke-sm-list">
+        <button class="nuke-sm-item" type="button" role="menuitem" data-nuke-sm="new"><span class="nuke-sm-ico">☢</span>N3w S3ss10n</button>
+        <button class="nuke-sm-item" type="button" role="menuitem" data-nuke-sm="noop"><span class="nuke-sm-ico">📁</span>Pr0gr4mz</button>
+        <button class="nuke-sm-item" type="button" role="menuitem" data-nuke-sm="noop"><span class="nuke-sm-ico">💾</span>W4r3z</button>
+        <button class="nuke-sm-item" type="button" role="menuitem" data-nuke-sm="noop"><span class="nuke-sm-ico">⚙️</span>S3tt1ngz</button>
+        <div class="nuke-sm-sep"></div>
+        <button class="nuke-sm-item" type="button" role="menuitem" data-nuke-sm="shutdown"><span class="nuke-sm-ico">🖥️</span>Sh<u>u</u>t D0wn…</button>
+      </div>
+    </div>
+    <div class="nuke-taskbar">
+      <button class="nuke-start" id="nukeStartBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="nukeStartMenu">
+        <span class="nuke-start-rad" aria-hidden="true">☢</span>NUK3
+      </button>
+      <span class="nuke-tb-sep"></span>
+      <div class="nuke-tray">
+        <span class="nuke-tray-net" aria-hidden="true">▲ tailnet</span>
+        <span class="nuke-clock" id="nukeClock" aria-hidden="true">--:--</span>
+        <button class="nuke-back" id="nukeBack" type="button" aria-label="Back to launcher"><span class="nuke-back-ar">⬅</span>3XIT</button>
+      </div>
+    </div>
+
+  </div>
+</div>
