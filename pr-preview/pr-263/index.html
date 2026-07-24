@@ -1877,11 +1877,11 @@
       </div>
       <div class="home-edit-hint" id="homeEditHint" aria-hidden="true">Drag to rearrange · tap the wallpaper when you're done</div>
       <div class="home-dots" aria-hidden="true"><i class="on"></i></div>
-      <div class="gh-app" id="githubApp" role="dialog" aria-label="clarkbar.sys on GitHub" aria-modal="true">
+      <div class="gh-app" id="githubApp" role="dialog" aria-label="kruddage on GitHub" aria-modal="true">
         <div class="gh-top">
           <button class="gh-back" id="githubBack" type="button" aria-label="Back to launcher">‹ Home</button>
-          <span class="gh-top-title">clarkbar.sys</span>
-          <a class="gh-org" id="githubOrgLink" href="https://github.com/clarkbar-sys" target="_blank" rel="noopener" aria-label="Open the clarkbar.sys organization on GitHub">↗</a>
+          <span class="gh-top-title">kruddage</span>
+          <a class="gh-org" id="githubOrgLink" href="https://github.com/kruddage" target="_blank" rel="noopener" aria-label="Open the kruddage organization on GitHub">↗</a>
         </div>
         <div class="gh-list" id="githubList" aria-live="polite"></div>
       </div>
@@ -3513,13 +3513,13 @@
       else closePayphone(); }
   });
 
-  /* github app — opens a springboard "app" listing the clarkbar.sys org's
+  /* github app — opens a springboard "app" listing the kruddage org's
      public repos; each row hands off to that repo on GitHub in a new tab. The
      list is pulled from the public GitHub API the first time the app opens and
      then cached for the session. Works the same on the live console and on the
      static GitHub Pages build (the service worker ignores cross-origin GETs),
      showing only public repos since the request is unauthenticated. */
-  const GH_ORG = "clarkbar-sys";
+  const GH_ORG = "kruddage";
   const githubApp = $("#githubApp");
   const githubList = $("#githubList");
   let ghLoaded = false;            // repos fetched successfully at least once
@@ -3543,7 +3543,7 @@
       ${lang}</a>`;
   }
   const ghFallback = `<p class="gh-note">Couldn't reach GitHub.<br>
-    <a href="https://github.com/${GH_ORG}" target="_blank" rel="noopener">Open clarkbar.sys on GitHub ↗</a></p>`;
+    <a href="https://github.com/${GH_ORG}" target="_blank" rel="noopener">Open kruddage on GitHub ↗</a></p>`;
 
   async function loadGithubRepos(){
     if(ghLoaded || ghLoading) return;
@@ -3558,7 +3558,7 @@
         .sort((a,b) => String(b.pushed_at||"").localeCompare(String(a.pushed_at||"")));
       if(!repos.length){
         githubList.innerHTML = `<p class="gh-note">No public repositories yet.<br>
-          <a href="https://github.com/${GH_ORG}" target="_blank" rel="noopener">Open clarkbar.sys on GitHub ↗</a></p>`;
+          <a href="https://github.com/${GH_ORG}" target="_blank" rel="noopener">Open kruddage on GitHub ↗</a></p>`;
       } else {
         githubList.innerHTML = repos.map(ghRow).join("");
       }
@@ -4088,7 +4088,7 @@
   // BUILD_SHA is stamped in by scripts/build-web-preview.sh for static builds
   // (GitHub Pages / PR previews) that have no hush-control backend and thus no
   // api/version. Left blank here for real deployments.
-  const BUILD_SHA = "29b8818";
+  const BUILD_SHA = "79cba61";
 
   let M = [];                      // current fleet
   let MODE = "connecting";         // connecting | live | demo | lost
