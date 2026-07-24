@@ -1,10 +1,10 @@
-  /* github app — opens a springboard "app" listing the clarkbar.sys org's
+  /* github app — opens a springboard "app" listing the kruddage org's
      public repos; each row hands off to that repo on GitHub in a new tab. The
      list is pulled from the public GitHub API the first time the app opens and
      then cached for the session. Works the same on the live console and on the
      static GitHub Pages build (the service worker ignores cross-origin GETs),
      showing only public repos since the request is unauthenticated. */
-  const GH_ORG = "clarkbar-sys";
+  const GH_ORG = "kruddage";
   const githubApp = $("#githubApp");
   const githubList = $("#githubList");
   let ghLoaded = false;            // repos fetched successfully at least once
@@ -28,7 +28,7 @@
       ${lang}</a>`;
   }
   const ghFallback = `<p class="gh-note">Couldn't reach GitHub.<br>
-    <a href="https://github.com/${GH_ORG}" target="_blank" rel="noopener">Open clarkbar.sys on GitHub ↗</a></p>`;
+    <a href="https://github.com/${GH_ORG}" target="_blank" rel="noopener">Open kruddage on GitHub ↗</a></p>`;
 
   async function loadGithubRepos(){
     if(ghLoaded || ghLoading) return;
@@ -43,7 +43,7 @@
         .sort((a,b) => String(b.pushed_at||"").localeCompare(String(a.pushed_at||"")));
       if(!repos.length){
         githubList.innerHTML = `<p class="gh-note">No public repositories yet.<br>
-          <a href="https://github.com/${GH_ORG}" target="_blank" rel="noopener">Open clarkbar.sys on GitHub ↗</a></p>`;
+          <a href="https://github.com/${GH_ORG}" target="_blank" rel="noopener">Open kruddage on GitHub ↗</a></p>`;
       } else {
         githubList.innerHTML = repos.map(ghRow).join("");
       }
