@@ -14,12 +14,14 @@
   let agents = new Map(); // agent_id → {id, name, status, progress, cpu, mem, elapsed}
 
   function openForge(){
+    enterApp();
     forgeApp.classList.add("on");
     try { $("#forgeBack").focus({ preventScroll:true }); } catch(_){}
     poll();
   }
   function closeForge(){
     forgeApp.classList.remove("on");
+    exitToHome();
     try { $("#homeForge").focus({ preventScroll:true }); } catch(_){}
   }
 
