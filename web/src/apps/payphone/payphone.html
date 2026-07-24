@@ -59,6 +59,29 @@
 
   </div>
 
+  <!-- "Start a new session?" dialog: clicking a live model asks first rather
+       than dropping straight into a chat, so a new session is deliberate and an
+       existing chat with that model is one tap to resume. Hidden until asked;
+       a classic Win95 message box over the teal desktop. -->
+  <div class="pay-dialog" id="paySessDlg" role="dialog" aria-modal="true" aria-labelledby="paySessDlgTitle" hidden>
+    <div class="pay-dlg-win">
+      <div class="aim-tbar">
+        <svg class="aim-runner" viewBox="0 0 24 24" aria-hidden="true"><path fill="#ffd400" stroke="#000" stroke-width="1" stroke-linejoin="round" d="M13.6 2.6a2 2 0 1 1-2.8 2.8 2 2 0 0 1 2.8-2.8zM10.7 7.2l3-.2c.7 0 1.3.4 1.6 1l1.2 2.3 2.9 1.1-.7 1.8-3.4-1.3-1-1.9-1 3.3 2.5 2.4.5 4.6-1.9.2-.5-3.9-2.2 2-1.6 3.6-1.8-.8 1.9-4.3.5-2.6-2.1 1.3-1.4 2.9L4 12l.6-1.8 2.6.6 2.1-2.5c.3-.4.8-.8 1.4-1.1z"/></svg>
+        <span class="aim-t-txt" id="paySessDlgTitle">New Session</span>
+        <span class="aim-tbtn" id="paySessDlgX" role="button" tabindex="0" aria-label="Cancel">×</span>
+      </div>
+      <div class="pay-dlg-body">
+        <div class="pay-dlg-ico" aria-hidden="true">💬</div>
+        <div class="pay-dlg-msg" id="paySessDlgMsg"></div>
+      </div>
+      <div class="pay-dlg-btns">
+        <button class="pay-dlg-btn def" id="paySessNew" type="button">Start session</button>
+        <button class="pay-dlg-btn" id="paySessResume" type="button" hidden>Resume last</button>
+        <button class="pay-dlg-btn" id="paySessCancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Win95 taskbar: Start menu on the left (its "Shut Down…" clears the app
        and returns to the launcher); a live clock and a thumb-reachable Back
        button in the tray on the right. All client-side theatre, same joke. -->

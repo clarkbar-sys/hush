@@ -377,6 +377,15 @@ func buildMux(store *agentStore, discoverer *discoverer, dialer *agentDialer, we
 	// an instant, offline-safe first paint.
 	layout := newLauncherLayout(launcherLayoutPath(store.path))
 	mux.HandleFunc("/api/launcher/layout", handleLauncherLayout(layout))
+	// Payphone chat sessions are console state too — saved transcripts of the
+	// buddy-list IM windows — so they live in their own payphone.json beside the
+	// fleet config and get their own store. GET lists every saved chat (the same
+	// global list every tailnet browser sees), PUT mirrors one up after each turn,
+	// and DELETE forgets one. See payphone.go for why this stays read-only-in-
+	// spirit: the transcript lives on control, never on a fleet box.
+	paySessions := newPayphoneStore(payphoneStorePath(store.path))
+	mux.HandleFunc("/api/payphone/sessions", handlePayphoneSessions(paySessions))
+	mux.HandleFunc("/api/payphone/sessions/{id}", handlePayphoneSession(paySessions))
 	if webDir != "" {
 		mux.Handle("/", http.FileServer(http.Dir(webDir)))
 	} else {
