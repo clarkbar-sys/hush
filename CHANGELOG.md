@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.19.0](https://github.com/clarkbar-sys/hush/compare/v2.18.0...v2.19.0) (2026-07-24)
+
+
+### Features
+
+* **web:** make LLMNUKE.EXE real — compose+copy spawn/stop, no more fake chat ([#265](https://github.com/clarkbar-sys/hush/issues/265)) ([9330506](https://github.com/clarkbar-sys/hush/commit/9330506b36ae708c9b3ae3917203d66098c6d66f))
+
 ## [2.18.0](https://github.com/clarkbar-sys/hush/compare/v2.17.0...v2.18.0) (2026-07-24)
 
 
